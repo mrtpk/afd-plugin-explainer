@@ -1,0 +1,30 @@
+{
+  "_about": "Owner: batch S2 (tours/life-of-a-request, reference/afd-config). Search all glossary files before you add a term; reuse ids from core.json and s1.json.",
+
+  "ffn-server-loop": {
+    "term": "FFN server loop",
+    "short": "The connector-driven daemon thread on the FFN worker. It waits for DP metadata, then runs the FFN compute for one step. No scheduler drives it.",
+    "long": "Started in <code>AFDFFNWorker.start_ffn_server_loop</code> ({{cite afd_plugin/v1/worker/ffn_worker.py:133}}); the loop body is <code>_run_ffn_server_loop</code> ({{cite afd_plugin/v1/worker/ffn_worker.py:160}}).",
+    "aliases": ["FFN loop", "server loop"],
+    "page": "tours/life-of-a-request"
+  },
+  "dp-metadata": {
+    "term": "DP metadata",
+    "short": "The per-step data-parallel metadata the attention side sends to the FFN side on the control plane. It carries the per-stage token counts that set the tensor shapes.",
+    "aliases": ["data-parallel metadata"],
+    "page": "concepts/control-plane"
+  },
+  "connector-extra-config": {
+    "term": "connector_extra_config",
+    "short": "A mapping of connector-specific options inside the AFD config. Each connector declares which keys it accepts, and rejects the rest.",
+    "long": "Parsed by each connector's <code>parse_extra_config</code> class method ({{cite afd_plugin/connectors/base.py:64-72}}).",
+    "aliases": ["connector extra config"],
+    "page": "reference/afd-config"
+  },
+  "rendezvous": {
+    "term": "rendezvous",
+    "short": "The host and port where the two roles meet to set up the connector process groups. Both servers use the same host and port.",
+    "long": "The connector opens a TCP store at <code>host:port</code> ({{cite afd_plugin/connectors/gpu/p2p.py:271}}).",
+    "page": "reference/afd-config"
+  }
+}

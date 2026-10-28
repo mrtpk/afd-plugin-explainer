@@ -1,7 +1,7 @@
 # AFD Plugin Explainer — Progress
 
 Last update: 2026-10-28
-Current phase: **1b Samples S2** — S1 fact-checked and committed; usage pause; next: W-S2.
+Current phase: **1c Fact check S2** — W-S2 committed (fact check pending); usage pause; next: FC-S2.
 
 This file is the memory of the project. A new session must be able to continue from it alone.
 Update it after every subagent finishes and after every user decision.
@@ -22,7 +22,7 @@ Update it after every subagent finishes and after every user decision.
 |---|---|---|---|
 | F1 Foundation | done (186k tokens) | done in FC-S1 | yes |
 | S1 Samples (home, learn/vllm-plugins, code/index, code/init-py) | done (239k tokens) | done (6 defects, 208k tokens) | yes |
-| S2 Samples (tour life-of-a-request, reference/afd-config) | – | – | – |
+| S2 Samples (tour life-of-a-request, reference/afd-config) | done (260k tokens) | – | yes (pending) |
 | B1 Basics + boundary | – | – | – |
 | B2 Roles, topology, connectors | – | – | – |
 | B3 Model split + execution | – | – | – |
@@ -47,6 +47,8 @@ Update it after every subagent finishes and after every user decision.
 
 ## Done
 
+- 2026-10-28: W-S2 done: tours/life-of-a-request (12 stops, 2 diagrams, request-stepper visual), reference/afd-config (generated tables + hand tables, worked example from 2a2f_eager_dbo_dp1tp2.sh), tools/gen_afd_config.py (ast, --check green), diagrams s2_*, s2.json (4 terms). Supervisor browser test: stepper works with click and keyboard at 1280 and 390, buttons >= 40 px, aria-live updates, 0 JS errors, 0 overflow; afd-config page 0 overflow. No suspected bugs. Observation: async connector accepts camelCase key `dynamicQuant` (async_cam.py ~:83, :183) → FAQ.
+- FINAL-PASS TODO (supervisor): request-stepper.js injects its CSS with a <style> element; move to assets/viz/viz.css for consistency (optional). Delete unused assets/viz/example_stepper.js.
 - 2026-10-28: FC-S1 done (full): ~120 claims, 6 defects fixed (call order: control plane once per step, not per layer; Qwen table; monkey-patch precision; UniProc simplification note; topology citation; diagram label). Writer notes #1, #2, #4, #6 confirmed. Supervisor fixed: tools/gen_folder_tree.py binary detection (whole-file NUL scan; repo total 164,972 → 139,046 lines; connectors/ 30,259 → 4,333); core.json full-decode-only (GPU: cuda_graph.py:20-21; NPU accepts FULL too). Accuracy lessons 7-10 added to notes/brief-writer.md. Facts merged.
 - IDEA (skill): the kit's templates/tools/gen_folder_tree.py has the same first-4-KB binary sniff; tell the user (not changed: skill files are out of scope).
 - FINAL-PASS TODO: concepts/control-plane, concepts/wire-data, tours/one-decode-step, tours/life-of-a-request must say control plane once per step, data plane once per layer and stage (source: facts.md "Added after the S1 fact check").
@@ -66,7 +68,7 @@ Update it after every subagent finishes and after every user decision.
 
 ## Next step
 
-Usage pause after FC-S1. Then writer W-S2 (plan §12 1b-2): tours/life-of-a-request + visual assets/viz/request-stepper.js, reference/afd-config + tools/gen_afd_config.py (generated table between markers, --check mode). Model pages: concepts/connector-contract (concept), code/init-py (module), learn/vllm-plugins (basics). Then build, commit "S2 (fact check pending)", pause, FC-S2.
+Usage pause after W-S2. Then FC-S2 (full): tours/life-of-a-request, assets/viz/request-stepper.js (rules in its header), reference/afd-config (hand tables + generator output; run tools/gen_afd_config.py --check), diagrams s2_*, src/glossary/s2.json. Then commit "S2 fact-checked", pause; then Phase 1d: supervisor site check of all sample pages, update the "model page" line in notes/brief-writer.md, then the full build (B1).
 
 ## Questions for the user
 
@@ -79,6 +81,7 @@ Usage pause after FC-S1. Then writer W-S2 (plan §12 1b-2): tours/life-of-a-requ
 - DONE (supervisor, tooling): two-repo support in build.py (2026-10-28).
 - FACT-CHECK FOCUS: worker selection only when `worker_cls == "auto"`; explicit wrong worker is rejected later (`validation.py:357-367`).
 - FACT-CHECK FOCUS: "every connector has a control plane" is false (async CAM has none).
+- FACT-CHECK FOCUS (FC-S2): tour stop 7 wording (wrapper subclasses native model; where the proxy replaces the MLP: deepseek_v2.py ~:375, ~:725); stop 2 cites a whole vLLM file with no line; async_dp "where read" (config.py:303-308 vs compat/npu/runtime.py:51-55); compute_gate_on_attention → FFN runs expert layers only (ffn_model_runner.py ~:211-215).
 - FACT-CHECK FOCUS (FC-S1, learn/vllm-plugins): process of arg_utils.py:839 (EngineArgs.__post_init__) — is EngineArgs also built in EngineCore?; the "plugin cannot change already-imported references" claim (general Python, no citation); diagram s1_plugin_processes "spawns" simplification; home fact table "Qwen3.6" (README only).
 - FACT-CHECK FOCUS (FC-S1, connector-contract): INFERRED DeepSeek-V2-Lite hidden_size 2048/bf16 and the 32,768-byte figure; "each FFN rank owns one attention peer" for 2A2F (check build_rank_mapping, topology.py:118); the call order in the "full call order" deep dive (writer did not read the runner loops).
 - FACT-CHECK FOCUS: vLLM plugin load moments (5 call sites); which process runs each.
@@ -93,3 +96,4 @@ Usage pause after FC-S1. Then writer W-S2 (plan §12 1b-2): tours/life-of-a-requ
 | 2026-10-28 | explainer-worker: F1 foundation (template B) | done, 186k tokens, 83 tool calls; 0 errors |
 | 2026-10-28 | explainer-worker: W-S1 writer | done, 239k tokens, 73 tool calls; 0 errors, 44 expected link warnings |
 | 2026-10-28 | explainer-worker: FC-S1 fact check (full) | done, 208k tokens, 73 tool calls; ~120 claims, 6 defects |
+| 2026-10-28 | explainer-worker: W-S2 writer | done, 260k tokens, 76 tool calls; 0 errors |

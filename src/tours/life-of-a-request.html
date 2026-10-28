@@ -1,0 +1,251 @@
+---
+title: Tour: Life of a request
+nav_title: Life of a request
+level: Intermediate
+prerequisites: concepts/roles, concepts/connector-contract
+related: concepts/attention-runtime, concepts/ffn-runtime, concepts/control-plane, reference/afd-config, code/ffn-worker
+summary: Follow one request from the HTTP call to the sampled token, across the attention server and the FFN server, stop by stop. The control plane runs once per step; the data plane runs once per layer and stage.
+scripts: viz/request-stepper.js
+---
+<x-sentence>Follow one request from the HTTP call to the first token. It stays on the
+{{term attention-server | attention server}} and reaches the {{term ffn-server | FFN server}} only through the
+{{term connector}}.</x-sentence>
+
+<h2>The idea</h2>
+<p>A client sends a request to one server. The {{term attention-role | attention}} server owns the API, the
+scheduler and the {{term enginecore | EngineCore}}. The {{term ffn-role | FFN}} server owns no API for requests;
+a connector loop drives it. So the whole request path lives on the attention side, and the FFN side answers one
+piece of each model layer.</p>
+<p>This tour uses the simplest GPU recipe: one attention server, one FFN server, and the GPU
+{{term connector | P2P connector}}
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh:7-29}}).
+Each server runs two ranks (<code>--tensor-parallel-size 2</code>), so the topology is 2A2F. Rank A0 maps to
+rank F0 ({{cite afd_plugin/distributed/topology.py:135-136}}). We follow A0 and F0.</p>
+<p>Keep one timing rule in mind. The {{term control-plane | control plane}} publishes {{term dp-metadata}}
+<strong>once per step</strong>, before the layer loop. The {{term data-plane | data plane}} sends tensors
+<strong>once per layer and {{term stage}}</strong>. With {{term dbo | DBO}} there are two stages per layer.</p>
+<x-note title="The prefill/decode proxy is a different thing"><p>Some recipes start
+<code>tools/proxy_server.py</code>, a load-balance proxy copied from vLLM-Ascend
+({{cite tools/proxy_server.py:1}}). It splits prefill and decode across servers in the <code>2p1a1f</code>
+recipes ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:110-118}}).
+It is not part of the attention/FFN split, and this tour does not use it.</p></x-note>
+
+<h2>The picture</h2>
+<p>The two diagrams split the path in half. The first shows the attention server, from the HTTP call to the
+connector. The second shows the connector and the FFN server loop. The control-plane arrow runs once per step;
+the data-plane arrows run per layer and stage.</p>
+<x-diagram name="s2_request_attention" alt="A vertical pipeline for the attention server. From top: box 1, HTTP request to the attention API server, tagged vLLM, with a note that requests go only here. Box 2, EngineCore and scheduler, tagged vLLM, attention side only. Box 3, executor to AFDAttentionWorker, tagged afd. Box 4, AFDAttentionModelRunnerV2.execute_model, tagged afd. Box 5, control-plane publish of DP metadata, tagged afd, in violet, with an arrow to a callout that reads once per step, before the layer loop, to the FFN server. Box 6, decoder layer: attention then FFN proxy, tagged afd, in emerald, with an arrow to a callout that reads per layer and stage, send hidden states and receive FFN output. A legend marks vLLM native, control plane, and data plane." caption="Figure: half 1. vLLM native code carries the request to the AFD runner. The plugin publishes DP metadata once per step, then sends hidden states per layer and stage. Sampling runs after the last layer on the attention side." />
+<x-diagram name="s2_request_ffn" alt="Two panels for the FFN side. Panel 1, what crosses the connector: an attention server box A0 on the left and an FFN server box F0 on the right. Three arrows between them: DP metadata on the control plane once per step in violet; hidden states on the data plane per layer and stage in emerald; and the FFN output back on the data plane. Panel 2, the FFN server loop: box one, no request and no scheduler, execute_model raises; arrow to box two, receive DP metadata once per step; arrow to box three, _ffn_forward over layers and stages. Below, a labelled inner loop: recv_attn_output, then FFN or MoE compute, then send_ffn_output. A legend marks control plane, data plane, and no AFD transport." caption="Figure: half 2. The FFN server runs no scheduler. A connector-driven thread waits for DP metadata, then answers each layer and stage with recv_attn_output, compute, send_ffn_output." />
+
+<x-viz id="request-stepper" title="Step through the request" caption="Click <em>Next</em>, or press Tab then Enter. Each stop shows the active server and process, what crosses the connector, and the file and function.">
+<p>This interactive visual steps through the stops of the tour. It needs JavaScript. The stops below say the
+same thing in text.</p>
+</x-viz>
+<x-simplified><p>The visual and the diagrams show one attention rank and one FFN rank. They leave out the KV
+cache, the per-peer split, CUDA graphs, and the second DBO stage. The stops and the deep dives give the full
+detail, with citations.</p></x-simplified>
+
+<x-stop n="1" title="The client calls the attention API server">
+<p>A client sends an HTTP request to the attention server. Clients must send requests only there. The FFN
+server is connector-driven ({{cite README.md:258-260}}).</p>
+<x-code file="README.md" lines="258-260" caption="The README: send requests only to the attention API server." />
+<p>The API server is native vLLM ({{cite vllm:vllm/entrypoints/openai/api_server.py | api_server.py}}). AFD
+changes nothing here. The request now enters the engine.</p>
+</x-stop>
+
+<x-stop n="2" title="EngineCore and the scheduler batch the request">
+<p>The attention server's {{term enginecore | EngineCore}} and scheduler are native vLLM
+({{cite vllm:vllm/v1/engine/core.py | v1/engine/core.py}}). The scheduler puts the request into a step and
+calls the executor.</p>
+<p>The FFN server has no such loop for requests. Its worker runs a connector loop instead
+({{cite afd_plugin/v1/worker/ffn_worker.py:32-38}}). So the scheduler lives on the attention side only. See
+{{link concepts/roles}}.</p>
+</x-stop>
+
+<x-stop n="3" title="The executor calls the AFD attention worker">
+<p>This is the first plugin code on the path. The {{term worker-cls | worker_cls}} was rewritten to the AFD
+attention worker at start-up, so the native executor now builds and calls
+<code>AFDAttentionWorker</code>. Its <code>init_device</code> checks the stack, then constructs the AFD runner
+({{cite afd_plugin/v1/worker/attention_worker.py:60-88}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_worker.py" lines="60-88" highlight="64,82,83" caption="AFDAttentionWorker.init_device: validate, then swap the runner class in for native construction." />
+<p>The worker validates the role and the runner config ({{cite afd_plugin/v1/worker/attention_worker.py:64-73}}),
+then substitutes <code>AFDAttentionModelRunnerV2</code> for the native runner class while the native setup runs
+({{cite afd_plugin/v1/worker/attention_worker.py:82-87}}). See {{link concepts/worker-selection}}.</p>
+</x-stop>
+
+<x-stop n="4" title="The AFD runner wraps native execute_model">
+<p>For each step, the executor calls the runner's <code>execute_model</code>. The AFD runner does not copy the
+native method. It wraps it in an AFD execution context, then delegates
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:570-594}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="580-594" highlight="582,586" caption="execute_model: scope the AFD context, then call native execute_model." />
+<p>Native <code>execute_model</code> still does all the request, attention, KV and sampling work. The wrapper
+only installs AFD state around it ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:555-568}}).</p>
+</x-stop>
+
+<x-stop n="5" title="The execution context installs the metadata provider">
+<p>The context sets up two things that matter for AFD: a metadata provider that binds AFD metadata to the
+forward context, and, for DBO, a prepare seam on the ubatch runner
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:317-349}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="340-349" caption="_use_afd_execution_context: the metadata provider and the ubatch prepare seam." />
+<p>The metadata provider is <code>install_afd_metadata_on_forward_context</code>
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:345-347}}). It runs when native code builds the
+forward context, and it is where the control plane publish happens. See {{link concepts/attention-runtime}}.</p>
+</x-stop>
+
+<x-stop n="6" title="The control plane publishes DP metadata (once per step)">
+<p>Before the layer loop, the attention side sends the {{term dp-metadata | DP metadata}} to the FFN side. The
+prepare seam calls <code>send_dp_metadata</code> once ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:156-157}}).
+That call updates the local control state, then sends one payload
+({{cite afd_plugin/v1/worker/attention_metadata.py:115-116}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_metadata.py" lines="108-116" highlight="115,116" caption="send_dp_metadata: update the control state, then send one payload per step." />
+<p>This payload is the first thing that crosses the connector each step. It carries the per-stage token counts
+that set the tensor shapes. See {{link concepts/control-plane}}.</p>
+<x-deepdive title="Why 'once per step', and the two code paths">
+<p>Accuracy note from the fact checks: a per-step call must not be folded into the per-layer sequence. The
+publish runs before any layer sends data.</p>
+<p>There are two paths to the same publish. With DBO, the ubatch prepare seam calls
+<code>send_dp_metadata</code> after it slices the step into stages
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:153-157}}). Without ubatching, the metadata provider
+calls it from <code>install_afd_metadata_on_forward_context</code>
+({{cite afd_plugin/v1/worker/attention_metadata.py:252-257}}). Either way, one publish per step, before the
+layer loop.</p>
+<p>The FFN side waits for exactly one payload per step. Its server loop calls
+<code>recv_dp_metadata_list</code> once ({{cite afd_plugin/v1/worker/ffn_worker.py:176}}), then applies it
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:194-203}}).</p>
+</x-deepdive>
+</x-stop>
+
+<x-stop n="7" title="The native model forward runs the decoder layers">
+<p>Native <code>execute_model</code> runs the model forward. The AFD {{term model-wrapper | model wrapper}}
+subclasses the native model, so the attention of each layer runs locally. Only the FFN stage of each layer is
+replaced ({{cite afd_plugin/model_executor/models/deepseek_v2.py:117-125}}).</p>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="117-125" caption="RemoteFFNProxy: a parameter-free module that stands in for the FFN stage." />
+<p>The replacement is a {{term remote-ffn-proxy | RemoteFFNProxy}}. It holds no weights. Its
+<code>forward</code> sends and receives through the connector instead of computing the FFN. The loop over layers
+is native vLLM.</p>
+</x-stop>
+
+<x-stop n="8" title="The attention side sends hidden states (per layer and stage)">
+<p>Inside each layer, the proxy sends its hidden states to the FFN side, then waits for the result. This runs
+once per layer, and once per {{term stage}} ({{cite afd_plugin/model_executor/models/deepseek_v2.py:127-158}}).</p>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="140-158" highlight="146,155" caption="_send_and_receive: send_attn_output, a DBO yield, then recv_ffn_output." />
+<p>The call to <code>send_attn_output</code> ({{cite afd_plugin/model_executor/models/deepseek_v2.py:146}}) is
+the hidden-state tensor crossing the connector (the data plane). The matching
+<code>recv_ffn_output</code> comes later in the same call
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:155}}).</p>
+<x-deepdive title="The shapes on the wire">
+<p>The tensor is <code>hidden_states</code> of shape <code>[num_tokens, hidden_size]</code> in the model dtype
+({{cite afd_plugin/connectors/gpu/p2p.py:331-335}}). The transfer metadata records the layer index, the stage
+index and the sequence lengths ({{cite afd_plugin/connectors/metadata.py:188-190}}). For DeepSeek-V2-Lite the
+hidden size is 2048, which is <em>inferred</em> from the checkpoint config. With 8 decode tokens the tensor is
+<code>[8, 2048]</code>. See {{link concepts/wire-data}}.</p>
+</x-deepdive>
+</x-stop>
+
+<x-stop n="9" title="The FFN server loop receives the step">
+<p>The FFN worker runs a daemon thread, the {{term ffn-server-loop | FFN server loop}}. No scheduler drives it.
+The loop waits for one DP-metadata payload, then runs the model
+({{cite afd_plugin/v1/worker/ffn_worker.py:160-196}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_worker.py" lines="168-196" highlight="176,191" caption="_run_ffn_server_loop: receive DP metadata, then execute the model (or capture a graph)." />
+<p>If the native scheduler ever calls the FFN worker's <code>execute_model</code>, it raises at once, so a
+misrouted request fails fast ({{cite afd_plugin/v1/worker/ffn_worker.py:122-131}}). The GPU FFN side also
+needs a control plane; a connector without one is rejected here
+({{cite afd_plugin/v1/worker/ffn_worker.py:169-174}}).</p>
+</x-stop>
+
+<x-stop n="10" title="The FFN runner computes each layer and stage">
+<p><code>_ffn_forward</code> loops over the layers, and over the stages inside each layer. For each pair it
+receives the hidden states, runs the FFN or MoE compute, and sends the result back
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:222-269}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_model_runner.py" lines="230-269" highlight="236,263,268" caption="The inner loop: recv_attn_output, FFN/MoE compute, send_ffn_output." />
+<ol>
+  <li><strong>Line 236.</strong> <code>recv_attn_output</code> returns the hidden states and the transfer
+    context ({{cite afd_plugin/v1/worker/ffn_model_runner.py:236}}).</li>
+  <li><strong>Line 263.</strong> <code>_execute_eager_mode</code> runs the FFN and MoE for this layer
+    ({{cite afd_plugin/v1/worker/ffn_model_runner.py:263}}).</li>
+  <li><strong>Line 268.</strong> <code>send_ffn_output</code> sends the result back to the attention side
+    ({{cite afd_plugin/v1/worker/ffn_model_runner.py:268}}).</li>
+</ol>
+</x-stop>
+
+<x-stop n="11" title="The attention side receives the FFN output and continues the layer">
+<p>Back on the attention side, <code>recv_ffn_output</code> returns the FFN result into the proxy's output
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:155-158}}). The native layer then adds the residual
+and goes to the next layer.</p>
+<p>Stops 8 to 11 repeat for every decoder layer. With DBO they repeat for both stages of each layer. The
+control plane does not publish again inside this loop.</p>
+</x-stop>
+
+<x-stop n="12" title="The attention side samples the token and returns it">
+<p>After the last layer, native <code>execute_model</code> computes the logits and samples the token. The AFD
+runner delegated all of this to native vLLM ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:586-594}}).
+So sampling runs on the attention side.</p>
+<x-code file="afd_plugin/v1/worker/ffn_model_runner.py" lines="405-406" caption="The FFN runner never samples: sample_tokens raises." />
+<p>The FFN runner has no sampler; its <code>sample_tokens</code> raises
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}}). The attention server returns the token to the
+client over the same HTTP response. The request is done for this step.</p>
+</x-stop>
+
+<h2>The loop</h2>
+<p>One request is many steps. Prefill runs one step for the prompt. Then decode runs one step per new token.
+Each step runs the whole path again: one control-plane publish, then every layer and stage of send and receive.</p>
+<table>
+  <thead><tr><th>Frequency</th><th>What runs</th><th>Where</th></tr></thead>
+  <tbody>
+    <tr><td>Once per step</td><td>control-plane publish of DP metadata</td>
+      <td>{{cite afd_plugin/v1/worker/attention_metadata.py:115-116}} / {{cite afd_plugin/v1/worker/ffn_worker.py:176}}</td></tr>
+    <tr><td>Once per layer and stage</td><td>send_attn_output, recv_ffn_output</td>
+      <td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:146}}, {{cite afd_plugin/model_executor/models/deepseek_v2.py:155}}</td></tr>
+    <tr><td>Once per layer and stage</td><td>recv_attn_output, FFN compute, send_ffn_output</td>
+      <td>{{cite afd_plugin/v1/worker/ffn_model_runner.py:236}}, {{cite afd_plugin/v1/worker/ffn_model_runner.py:268}}</td></tr>
+    <tr><td>Once per step (last step of the request)</td><td>logits and sampling (attention side)</td>
+      <td>{{cite afd_plugin/v1/worker/attention_model_runner_v2.py:586-594}}</td></tr>
+  </tbody>
+</table>
+
+<h2>What can go wrong</h2>
+<ul>
+  <li><strong>Requests sent to the FFN server.</strong> The FFN worker is connector-driven. A
+    scheduler-driven <code>execute_model</code> raises at once
+    ({{cite afd_plugin/v1/worker/ffn_worker.py:122-131}}).</li>
+  <li><strong>A connector with no control plane on GPU.</strong> The GPU FFN loop supports only
+    control-plane-driven connectors, and raises otherwise
+    ({{cite afd_plugin/v1/worker/ffn_worker.py:169-174}}).</li>
+  <li><strong>A shape that does not match the metadata.</strong> The send call checks the leading dimension
+    against the token count, and raises when it differs (skipped while <code>torch.compile</code> traces)
+    ({{cite afd_plugin/connectors/gpu/p2p.py:347-353}}).</li>
+  <li><strong>A host or port mismatch between the two servers.</strong> Both roles meet at the same
+    {{term rendezvous}} ({{cite afd_plugin/connectors/gpu/p2p.py:271}}). Different values make the group setup
+    hang until the timeout ({{cite afd_plugin/connectors/gpu/p2p.py:275}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The attention side owns the request, and the FFN side answers only pieces of
+each layer. If a request reaches the FFN server, or the two roles do not meet, the step cannot complete.</p>
+
+<x-quiz>
+  <x-q level="easy">Which server do clients send requests to, and why not the other one?
+    <x-a><p>The attention API server. The FFN server is connector-driven and has no request path; a
+      scheduler-driven FFN <code>execute_model</code> fails fast ({{cite README.md:258-260}},
+      {{cite afd_plugin/v1/worker/ffn_worker.py:122-131}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">What drives the model on the FFN server?
+    <x-a><p>A connector-driven daemon loop, the FFN server loop, not a scheduler. It waits for DP metadata, then
+      runs the model ({{cite afd_plugin/v1/worker/ffn_worker.py:160-196}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">How many times does the control plane publish per step, and when?
+    <x-a><p>Once, before the layer loop. The attention side sends one DP-metadata payload
+      ({{cite afd_plugin/v1/worker/attention_metadata.py:115-116}}); the FFN loop receives one
+      ({{cite afd_plugin/v1/worker/ffn_worker.py:176}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Which side samples the token?
+    <x-a><p>The attention side. Native <code>execute_model</code> computes the logits and samples
+      ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:586-594}}). The FFN runner's
+      <code>sample_tokens</code> raises ({{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">List the data-plane calls for one layer and stage, in order, across both servers.
+    <x-a><p>Attention <code>send_attn_output</code> ({{cite afd_plugin/model_executor/models/deepseek_v2.py:146}});
+      FFN <code>recv_attn_output</code> ({{cite afd_plugin/v1/worker/ffn_model_runner.py:236}}); FFN compute;
+      FFN <code>send_ffn_output</code> ({{cite afd_plugin/v1/worker/ffn_model_runner.py:268}}); attention
+      <code>recv_ffn_output</code> ({{cite afd_plugin/model_executor/models/deepseek_v2.py:155}}). The data
+      plane runs once per layer and stage; the control plane ran once before the loop.</p></x-a>
+  </x-q>
+</x-quiz>
