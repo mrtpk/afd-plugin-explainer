@@ -35,6 +35,26 @@ BEGIN, END = "<!-- BEGIN GENERATED folder-tree -->", "<!-- END GENERATED folder-
 # Optional page link: "folder": ("Description.", "code/page-id")
 DESCRIPTIONS: dict[str, str | tuple[str, str]] = {
     "": "The repository root.",
+    # --- the plugin itself (in scope) ---
+    "afd_plugin": "Shared. The plugin Python package that vLLM loads. Holds the GPU and NPU code.",
+    "afd_plugin/compat": "Shared. Compat patches that replace vLLM functions at load time. The npu/ subfolder is NPU.",
+    "afd_plugin/connectors": ("Mixed. The connector contract and factory (shared); gpu/ is GPU and npu/ is NPU.", "code/connectors-core"),
+    "afd_plugin/distributed": "Shared. The AFD process group, the topology and the role-rank helpers.",
+    "afd_plugin/model_executor": "Mixed. The AFD model wrappers (shared/GPU); the npu/ subfolder is NPU.",
+    "afd_plugin/v1": "Mixed. The role workers, the model runners, DBO and the CUDA graph code; worker/npu is NPU.",
+    # --- out of scope: C/C++ kernels ---
+    "csrc": "Out of scope. C/C++ kernel sources. gpu/ is a GPU stub; npu/ is the Ascend operator sources.",
+    "csrc/gpu": "GPU. A stub (one file).",
+    "csrc/npu": "NPU (Ascend). The prebuilt operator sources. Out of scope: only how the Python code loads them.",
+    # --- recipes, docs, tests, tools ---
+    "recipe": "Launch scripts per connector and model. gpu/ is GPU and npu/ is NPU.",
+    "recipe/gpu": "GPU. Launch scripts for the P2P connector.",
+    "recipe/npu": "NPU (Ascend). Launch scripts for the CAM connectors.",
+    "docs": "Design notes and user guides. Written against an older commit: use as hints, not as a source.",
+    "docs/gpu": "GPU. The P2P connector user guide.",
+    "docs/npu": "NPU (Ascend). The CAM connector user guides and notes.",
+    "tests": "Source of facts only. e2e/ and unit/ are shared; npu/ is NPU.",
+    "tools": "Shared. Repository tooling: benchmarks, datasets and pre-commit checks.",
 }
 
 

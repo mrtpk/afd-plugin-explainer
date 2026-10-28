@@ -1,10 +1,11 @@
 {
-  "_owner": "Basics writer. Page ids are fixed; create src/learn/<id>.html to make an entry live. List ALL planned pages here in Phase 1.",
+  "_owner": "Basics writer. Page ids are fixed; create src/learn/<id>.html to make an entry live.",
   "section": "learn",
   "title": "Learn the basics",
   "order": 1,
   "pages": [
-    {"id": "learn/example-basics", "title": "Example basics page"},
-    {"id": "learn/second-basics", "title": "A planned basics page"}
+    {"id": "learn/what-is-afd", "title": "What is AFD?"},
+    {"id": "learn/vllm-plugins", "title": "How vLLM plugins work"},
+    {"id": "learn/vllm-v1-map", "title": "The vLLM v1 map"}
   ]
 }

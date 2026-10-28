@@ -1,11 +1,12 @@
-# <Project> Explained — Writer's guide
-
-> Template note: replace `<Project>`, `<project>`, the sample page names, the vocabulary table (section 6)
-> and the out-of-scope list (section 7, rule 5) for your project. Keep the rest.
+# AFD Plugin Explained — Writer's guide
 
 This guide is for everyone who writes pages, glossary entries or diagrams for the site.
-Read all of it before you write your first page. Then copy the sample page
-`src/concepts/example-concept.html` (replace it with the Phase 1 reference page) — it uses every part of this guide.
+Read all of it before you write your first page. Then copy the Phase 1 reference page
+`src/concepts/connector-contract.html` — it uses every part of this guide.
+
+The site explains **afd-plugin** (a vLLM external plugin for Attention-FFN Disaggregation) at the pinned
+commit in `explainer.json`. It also cites **vLLM** (v0.30.0) at its own pinned commit. See section 5 for
+the `vllm:` citation prefix.
 
 Contents
 
@@ -27,7 +28,7 @@ Contents
 ## 1. Quick start
 
 ```bash
-cd <project>-explainer
+cd afd-plugin-explainer
 python3 build.py                 # build site/ (runs stale diagram scripts first)
 python3 build.py --strict        # also fail on warnings (use before hand-in)
 python3 build.py --force-diagrams
@@ -45,7 +46,7 @@ Open `site/index.html` with a double-click. The site works from disk (`file://`)
 ## 2. Files, folders and ownership
 
 ```
-<project>-explainer/
+afd-plugin-explainer/
   explainer.json         project name, target repo path and URL, pinned commit (owner: supervisor)
   build.py               the generator (owner: foundation; do not edit without asking the supervisor)
   STYLE.md               this guide
@@ -95,12 +96,12 @@ A page is an HTML fragment with a front matter block at the top:
 
 ```html
 ---
-title: The request flow: from the API call to the result
-nav_title: The request flow
+title: The connector contract: the Attention/FFN transport
+nav_title: The connector contract
 level: Intermediate
-prerequisites: learn/example-basics
-related: tours/example-tour, code/engine
-summary: One request goes through four parts of <Project>. This page shows each part and the file that implements it.
+prerequisites: concepts/roles
+related: concepts/control-plane, code/connectors-core
+summary: One connector moves hidden states between the attention role and the FFN role. This page shows the contract and the files that implement it.
 ---
 <x-sentence>...</x-sentence>
 <h2>The idea</h2>
@@ -109,7 +110,7 @@ summary: One request goes through four parts of <Project>. This page shows each 
 
 | Key | Required | Meaning |
 |---|---|---|
-| `title` | yes | Page title (h1 and browser tab: "Title · <Project> Explained"). |
+| `title` | yes | Page title (h1 and browser tab: "Title · AFD Plugin Explained"). |
 | `summary` | yes | One or two sentences. Used by search, related-page cards and `<meta description>`. |
 | `level` | learn, concepts, tours | `Beginner`, `Intermediate` or `Advanced`. Optional elsewhere. |
 | `prerequisites` | template pages | Comma-separated page ids, or `none`. Makes the "Before you read" box. |
@@ -142,7 +143,7 @@ Use these parts in this order. Use the `<h2>` texts exactly as shown, so every p
 | 3 | In one sentence | `<x-sentence>` — max 25 words |
 | 4 | **The idea** | `<h2>The idea</h2>` — plain explanation, then one everyday comparison (analogy). Say where the analogy stops being true. |
 | 5 | **The picture** | `<h2>The picture</h2>` + `<x-diagram>` + 2-3 sentences on how to read it |
-| 6 | **In the code** | `<h2>In the code</h2>` — `<h3>Step N: ...</h3>` sub-sections, each with real excerpts (`<x-code>`) and citations (`{{cite}}`). Basics pages (`learn/`) use `<h2>In <Project></h2>` instead: a short section at the end with 1–3 cited pointers into the code and links to concept pages. |
+| 6 | **In the code** | `<h2>In the code</h2>` — `<h3>Step N: ...</h3>` sub-sections, each with real excerpts (`<x-code>`) and citations (`{{cite}}`). Basics pages (`learn/`) use `<h2>In afd-plugin</h2>` instead: a short section at the end with 1–3 cited pointers into the code and links to concept pages. |
 | 7 | **Deep dive** | `<h2>Deep dive</h2>` + one or more `<x-deepdive>` blocks. FULL detail (see below). |
 | 8 | **What can go wrong** | `<h2>What can go wrong</h2>` — failure modes with citations, then **Why it matters.** |
 | 9 | Check yourself | `<x-quiz>` with 3-5 questions: mix easy, medium and hard. The heading is automatic. |
@@ -216,6 +217,27 @@ General rules for all custom tags:
 - Plain HTML is allowed everywhere: `<p>`, `<ul>`, `<ol>`, `<table>`, `<code>`, `<strong>`, `<em>`, `<pre>`.
 - Inline tags (`{{...}}`) are not expanded inside `<pre>` blocks and code excerpts.
   To write a literal `{{`, write `\{{`.
+
+### 5.0 Two repositories: the `vllm:` prefix
+
+The site cites two pinned repositories. Without a prefix, a path is in **afd-plugin** (the `repo_path` in
+`explainer.json`). With the prefix `vllm:`, a path is in the pinned **vLLM** checkout (`extra_repos.vllm`).
+Use the vLLM repo only when a fact belongs to vLLM itself (for example a vLLM base class or call site).
+
+```html
+{{cite vllm:vllm/plugins/__init__.py:77-90}}            → link into the pinned vLLM repo
+<x-code repo="vllm" file="vllm/plugins/__init__.py" lines="77-90" />
+{{project vllm_sha}}   {{project vllm_short_sha}}   {{project vllm_date}}
+{{project vllm_subject}}   {{project vllm_name}}
+```
+
+- `{{cite path:line}}` and `<x-code file=...>` with no prefix read **afd-plugin**. This is the default.
+- `{{cite vllm:path:line}}` and `<x-code repo="vllm" file=...>` read **vLLM**. The build fails if the vLLM
+  checkout is not at its pinned commit, the same as for afd-plugin.
+- `{{project vllm_sha}}`, `vllm_short_sha`, `vllm_date`, `vllm_subject` and `vllm_name` give the vLLM
+  commit values, next to the afd-plugin values (`{{project sha}}`, `short_sha`, `date`, `subject`, `name`).
+- Say in the text which repository a line belongs to when it is not obvious. Open every cited line yourself
+  in the right checkout.
 
 ### 5.1 Code excerpt — `<x-code>`
 
@@ -425,15 +447,25 @@ technical names stay as they are.
 
 **Technical words.** Technical names and well-known terms of the domain are allowed, but you must
 define each one at its first use on the page, and link it with `{{term}}`. Use the same word for the
-same thing on every page. Fill in this table for your project (the rows are examples from an ML
-inference engine; replace them):
+same thing on every page. This is the fixed vocabulary for this project: one word per thing, and the
+words not to use for it.
 
-| Use | Do not use (for this meaning) |
+| Use (one meaning) | Do not use (for this meaning) |
 |---|---|
-| request (what a user sends) / sequence (the engine object for it) | job, query, prompt (for the object) |
-| step (one main-loop iteration) | iteration, tick, round |
-| rank (one process) / device (one GPU) | worker, node, card (for these meanings) |
-| block (one cache block) | page, chunk (for this meaning) |
+| attention role / FFN role (in prose: which side a process plays) | A node / E node / expert node; "A side / F side" in prose |
+| attention server / FFN server (the `vllm serve` process of a role) | instance, node, endpoint, server for a different meaning |
+| connector (the Attention↔FFN transport object) | channel, link, transport (as a noun for the object), pipe |
+| control plane (the DP metadata path) | metadata channel, side channel |
+| data plane (the hidden-state tensor path) | main channel, tensor channel |
+| stage (the DBO ubatch index on the wire) | ubatch (on the wire), microbatch index, phase, step |
+| step (one decode/prefill iteration) | iteration, tick, round, cycle |
+| rank (one process in a group) / role rank (rank within a role group) | worker, node, card (for these meanings) |
+| worker (the vLLM worker object that owns a device) | rank, process (for this object) |
+| model runner (the vLLM Model Runner object) | executor, runner (bare), engine (for this object) |
+| model wrapper (the `AFD<arch>` model class) | model patch, wrapped model, shim (for this object) |
+| patch (a compat module that replaces a vLLM function) | hack, override, hook (as a noun for the module) |
+| plugin (afd-plugin as a whole, loaded by vLLM) | extension, add-on, package (for this meaning) |
+| xAyF (a topology name, e.g. `2A2F`) | xAyF in prose for roles; write "attention role" / "FFN role" |
 
 **Word substitutions**
 
@@ -478,9 +510,16 @@ numbers over an abstract sentence.
    an `__init__.py` dispatches kernels. It was empty. Another file dispatched.)
 3. Cite the **narrowest** line range that proves the claim.
 4. Mark each simplification with `<x-simplified>` and say what the full truth is.
-5. **Out-of-scope code** (list it here: vendored libraries, git submodules that are not checked out,
-   third-party frameworks). Explain only how <Project> calls them (arguments, shapes, which
-   function, when). Do not describe their insides.
+5. **Out-of-scope code.** Explain only how the Python code calls these; do not describe their insides.
+   - `csrc/` internals (the C/C++ kernel sources). Explain only how the Python code selects, builds,
+     loads and calls kernels.
+   - Vendored NPU binaries (the prebuilt Ascend operators under the connector `bin/` folders). Explain
+     only how the Python code loads them.
+   - NPU (Ascend) code. Only the overview page `concepts/npu-overview` covers it. Other pages may name the
+     NPU variant in one line with a citation.
+   - vLLM itself. Cite it with the `vllm:` prefix (section 5.0) only where a vLLM fact is needed. Do not
+     re-explain vLLM internals; say how afd-plugin uses them.
+   - Tests. Source of facts only. Do not write pages about tests.
 6. Numbers from `doc/` and `README.md` are allowed; cite the line.
 7. **Comments in another language**: translate them when they help. Always say they are translated
    (`<x-tr>` does this automatically).

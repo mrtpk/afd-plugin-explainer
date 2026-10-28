@@ -1,0 +1,228 @@
+---
+title: The connector contract: the Attention/FFN transport
+nav_title: The connector contract
+level: Intermediate
+prerequisites: concepts/roles
+related: concepts/control-plane, concepts/wire-data, code/connectors-core, code/p2p-py
+summary: One base class sets the contract that every AFD connector follows. This page shows the lifecycle, the four data-path calls, the optional control plane, the config hook and the factory.
+---
+<x-sentence>A {{term connector}} moves hidden states between the {{term attention-role | attention role}} and the {{term ffn-role | FFN role}}. One abstract base class sets its contract.</x-sentence>
+
+<h2>The idea</h2>
+<p>{{term afd}} splits a model into two server processes. The attention side computes attention and must hand
+its hidden states to the FFN side. The FFN side runs the feed-forward and MoE experts, then hands the result
+back. A connector owns this exchange.</p>
+<p>Every connector subclasses one abstract base class, <code>AFDConnectorBase</code>
+({{cite afd_plugin/connectors/base.py:37}}). The base class fixes three jobs: set up and release the
+transport, move hidden states each way, and apply the optional {{term control-plane | control plane}}. Each
+connector picks its own transport, but the call names and the order stay the same.</p>
+<p><strong>An everyday comparison.</strong> Think of a courier contract. The sender hands over a parcel; the
+courier delivers it and brings back a reply. The comparison stops here: a connector also sets up and tears
+down its own transport, and it runs this exchange once per model layer.</p>
+
+<h2>The picture</h2>
+<x-diagram name="f1_connector_contract" alt="Three panels. Panel 1: four boxes in a cycle. The attention side calls send_attn_output (top left) and recv_ffn_output (top right), in blue. The FFN side calls recv_attn_output (bottom left) and send_ffn_output (bottom right), in emerald. A blue arrow carries hidden states down from send_attn_output to recv_attn_output; a dashed violet arrow carries the optional control plane; an emerald arrow carries the FFN output up from send_ffn_output to recv_ffn_output. Panel 2: the lifecycle, init_afd_connector then the data path many times then close. Panel 3: three connector boxes with device, sync or async, and control plane yes or none." caption="Figure: the attention side sends then receives; the FFN side receives, computes, then sends. The control plane is optional." />
+<p>Read panel 1 as a cycle. The blue calls run on the attention side, the emerald calls on the FFN side.
+The solid arrows are hidden-state tensors (the {{term data-plane | data plane}}). The dashed violet arrow is
+the optional control plane. Panels 2 and 3 show the lifecycle and the three connectors.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: One base class, three jobs</h3>
+<p>The base class docstring names the three jobs of every connector ({{cite afd_plugin/connectors/base.py:37-54}}).</p>
+<x-code file="afd_plugin/connectors/base.py" lines="37-54" caption="The connector base class and its three responsibilities." />
+
+<h3>Step 2: The lifecycle</h3>
+<p>The owning worker creates the connector, calls <code>init_afd_connector</code> once, uses the data path
+many times, then calls <code>close</code>. <code>is_initialized</code> is true between the two.
+<code>init_afd_connector</code> is a collective call: every attention and FFN rank must run it
+({{cite afd_plugin/connectors/base.py:124}}).</p>
+<x-code file="afd_plugin/connectors/base.py" lines="113-139" highlight="114,125,137" caption="close, init_afd_connector and is_initialized." />
+
+<h3>Step 3: The attention-side calls</h3>
+<x-warning title="The tensor shape must match the metadata">
+<p>Before you read the send call: the leading dimension of the hidden-state tensor must equal
+<code>context.metadata.total_tokens</code>. If it does not, the call raises <code>ValueError</code>
+({{cite afd_plugin/connectors/base.py:167-170}}).</p>
+</x-warning>
+<p>The attention side calls <code>send_attn_output</code> to send its hidden states, then
+<code>recv_ffn_output</code> to get the FFN result back. <code>recv_ffn_output</code> takes a preallocated
+<code>ref_tensor</code>, because the backends cannot always allocate their own output
+({{cite afd_plugin/connectors/base.py:185-192}}).</p>
+<x-code file="afd_plugin/connectors/base.py" lines="145-179" highlight="146,174" caption="The two attention-side calls (signatures and the start of each docstring)." />
+<x-note title="The GPU connector uses vLLM's NCCL wrapper"><p>The GPU connector,
+<code>P2pNcclAFDConnector</code>, implements these calls with vLLM's <code>PyNcclCommunicator</code>
+({{cite vllm:vllm/distributed/device_communicators/pynccl.py:91}}), wrapped in custom ops so the transfers
+stay usable under CUDA graph capture ({{cite afd_plugin/connectors/gpu/p2p.py:36-39}}). See
+{{link code/p2p-py}}.</p></x-note>
+
+<h3>Step 4: The FFN-side calls</h3>
+<p>The FFN side calls <code>recv_attn_output</code> to get the hidden states, runs the FFN compute, then
+calls <code>send_ffn_output</code> to send the result back. <code>recv_attn_output</code> returns both the
+tensor and the transfer context that the matching send needs
+({{cite afd_plugin/connectors/base.py:216-227}}).</p>
+<x-code file="afd_plugin/connectors/base.py" lines="206-235" highlight="207,230" caption="The two FFN-side calls." />
+
+<h3>Step 5: The optional control plane</h3>
+<p>The base class holds an optional <code>control_plane</code> attribute. When it is set, the per-stage token
+counts travel over the control plane, and the arrival of a payload drives each FFN step. When it is
+<code>None</code>, the connector has no control plane and the receive loop drives the FFN side
+({{cite afd_plugin/connectors/base.py:56-60}}).</p>
+<x-code file="afd_plugin/connectors/base.py" lines="56-60" highlight="60" caption="The optional control-plane attribute." />
+<p>A control plane is itself an abstract class, <code>AFDControlPlane</code>, with three calls: apply a
+payload locally, send a payload, and receive one ({{cite afd_plugin/connectors/base.py:258}}). The
+{{link concepts/control-plane}} page covers it.</p>
+<x-code file="afd_plugin/connectors/base.py" lines="258-266" highlight="258,262" caption="The control-plane base class and its first call." />
+
+<h3>Step 6: The config hook</h3>
+<p>Each connector parses its own options through <code>parse_extra_config</code>, a class method on the base
+class ({{cite afd_plugin/connectors/base.py:64-72}}). The base <code>__init__</code> calls it and stores the
+result on <code>extra_info</code> ({{cite afd_plugin/connectors/base.py:105-107}}). The raw values come from
+<code>connector_extra_config</code> inside the AFD config
+({{cite afd_plugin/config.py:282-286 | connector_extra_config_from_source}}).</p>
+<x-code file="afd_plugin/connectors/base.py" lines="64-72" highlight="66" caption="The per-connector config hook." />
+
+<h3>Step 7: The factory</h3>
+<p>The factory maps a connector name to a class and builds the instance. <code>create_connector</code> reads
+the name from the AFD config, resolves the {{term role-rank | role rank}}, and constructs the connector
+({{cite afd_plugin/connectors/factory.py:49-68}}). An unknown name raises
+<code>ValueError</code> ({{cite afd_plugin/connectors/factory.py:58-59}}).</p>
+<x-code file="afd_plugin/connectors/factory.py" lines="49-68" highlight="57,58,60-61" caption="create_connector: name to instance." />
+<p>Three connectors are registered at import time ({{cite afd_plugin/connectors/factory.py:88-102}}). The
+default name is <code>"P2pNcclAFDConnector"</code> ({{cite afd_plugin/config.py:52}}).</p>
+<x-code file="afd_plugin/connectors/factory.py" lines="88-102" caption="The three registered connectors." />
+
+<h2>Deep dive</h2>
+<p>The blocks below give the full call order, a worked example with real shapes, and the differences between
+the three connectors.</p>
+
+<x-deepdive title="The full call order, side by side">
+<p>One layer and one {{term stage}} run like this. The data-plane calls are in bold.</p>
+<ol>
+  <li><strong>Attention side:</strong> the model produces hidden states for the layer.</li>
+  <li>The control plane sends the per-stage token counts, when the connector has one
+      ({{cite afd_plugin/connectors/base.py:279-283}}).</li>
+  <li><strong>Attention side:</strong> <code>send_attn_output(hidden_states, context)</code>
+      ({{cite afd_plugin/connectors/base.py:145}}).</li>
+  <li>The FFN side applies the control-plane payload, when present, to size its buffers
+      ({{cite afd_plugin/connectors/base.py:261-266}}).</li>
+  <li><strong>FFN side:</strong> <code>recv_attn_output(ubatch_idx)</code> returns the hidden states and the
+      context ({{cite afd_plugin/connectors/base.py:206}}).</li>
+  <li><strong>FFN side:</strong> runs the FFN and MoE compute (not in the connector).</li>
+  <li><strong>FFN side:</strong> <code>send_ffn_output(ffn_output, context)</code>
+      ({{cite afd_plugin/connectors/base.py:229}}).</li>
+  <li><strong>Attention side:</strong> <code>recv_ffn_output(ref_tensor, ubatch_idx)</code> returns the
+      result, which continues through the rest of the layer ({{cite afd_plugin/connectors/base.py:173}}).</li>
+</ol>
+<p>The {{term stage}} is the {{term dbo | DBO}} ubatch index. With DBO the connector runs two stages per
+layer. See {{link concepts/dbo}}.</p>
+</x-deepdive>
+
+<x-deepdive title="Worked example: hidden-state shapes for DeepSeek-V2-Lite, 2A2F">
+<p>Take a 2A2F topology: two attention ranks (A0, A1) and two FFN ranks (F0, F1). Each FFN rank owns one
+attention peer, so A0 maps to F0 and A1 maps to F1 ({{cite afd_plugin/connectors/gpu/p2p.py:11-20}}).</p>
+<p>The hidden size comes from the model config, <code>hf_text_config.hidden_size</code>
+({{cite afd_plugin/connectors/gpu/p2p.py:195-197}}). For DeepSeek-V2-Lite this is <strong>2048</strong>.
+This value is <em>inferred</em> from the DeepSeek-V2-Lite checkpoint config; it is not stored in either
+repository.</p>
+<p>Take one decode step with 8 tokens on A0. The numbers:</p>
+<ul>
+  <li><strong>Tensor:</strong> <code>hidden_states</code> of shape <code>[8, 2048]</code>, in the model
+      dtype (bf16, inferred from the recipe).</li>
+  <li><strong>Metadata:</strong> <code>seq_lens = [8]</code>, so <code>total_tokens = 8</code>
+      ({{cite afd_plugin/connectors/metadata.py:198-200}}). The send call checks
+      <code>shape[0] == 8</code> ({{cite afd_plugin/connectors/metadata.py:230-231}}).</li>
+  <li><strong>On the wire (A0 to F0):</strong> one tensor of <code>8 × 2048 × 2 bytes = 32,768 bytes</code>
+      per layer, per direction.</li>
+  <li><strong>FFN side:</strong> F0 receives <code>[8, 2048]</code>, runs the FFN, and sends back
+      <code>[8, 2048]</code>. A0 gets it through <code>recv_ffn_output</code>.</li>
+</ul>
+<p>When one FFN rank owns more than one attention peer, it concatenates the inputs. For 2A1F with 8 tokens
+each, F0 would receive two tensors, concatenate them to <code>[16, 2048]</code>, and split the output back by
+the recorded sequence lengths ({{cite afd_plugin/connectors/gpu/p2p.py:21-25}}).</p>
+</x-deepdive>
+
+<x-deepdive title="The three connectors, compared">
+<p>The factory registers three connectors ({{cite afd_plugin/connectors/factory.py:88-102}}). They differ by
+device, by send/receive timing, and by whether they use a control plane.</p>
+<table>
+  <thead>
+    <tr><th>Connector</th><th>Device</th><th>Timing</th><th>Control plane</th><th>Transport</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>P2pNcclAFDConnector</code></td>
+      <td>GPU (CUDA)</td>
+      <td>sync</td>
+      <td>yes ({{cite afd_plugin/connectors/gpu/p2p.py:222}})</td>
+      <td>{{term pynccl | PyNcclCommunicator}} point-to-point</td>
+    </tr>
+    <tr>
+      <td><code>CAMP2pAFDConnector</code></td>
+      <td>NPU (Ascend)</td>
+      <td>sync ({{cite afd_plugin/connectors/npu/camp2p.py:3-8}})</td>
+      <td>yes ({{cite afd_plugin/connectors/npu/camp2p.py:385}})</td>
+      <td>{{term cam | CAM}} P2P operators, HCCL + Gloo</td>
+    </tr>
+    <tr>
+      <td><code>CAMAsyncAFDConnector</code></td>
+      <td>NPU (Ascend)</td>
+      <td>async</td>
+      <td>none ({{cite afd_plugin/connectors/npu/async_cam.py:283}})</td>
+      <td>CAM dispatch/combine operators</td>
+    </tr>
+  </tbody>
+</table>
+<p>The config hook also differs. The GPU connector accepts no options, so it rejects a non-empty
+<code>connector_extra_config</code> ({{cite afd_plugin/connectors/gpu/p2p.py:150-157}}). The async NPU
+connector parses typed fields and rejects unknown ones
+({{cite afd_plugin/connectors/npu/async_cam.py:286-291}}). The NPU connectors are covered on the
+{{link concepts/npu-overview}} page.</p>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<x-simplified><p>This page shows the contract, not a full transport. It leaves out the per-peer split and
+concatenation, the custom-op wrapping and the rank mapping. The {{link concepts/wire-data}} and
+{{link code/p2p-py}} pages give those.</p></x-simplified>
+<ul>
+  <li><strong>Shape mismatch.</strong> A hidden-state tensor whose leading dimension is not
+      <code>total_tokens</code> raises <code>ValueError</code> in the send call (skipped while
+      <code>torch.compile</code> traces) ({{cite afd_plugin/connectors/gpu/p2p.py:347-353}}).</li>
+  <li><strong>Unknown connector name.</strong> A name that is not registered raises <code>ValueError</code>
+      in the factory ({{cite afd_plugin/connectors/factory.py:58-59}}).</li>
+  <li><strong>Options for a connector that takes none.</strong> A non-empty
+      <code>connector_extra_config</code> for the GPU connector raises <code>ValueError</code>
+      ({{cite afd_plugin/connectors/gpu/p2p.py:154-157}}).</li>
+  <li><strong>Wrong device.</strong> The GPU connector needs CUDA and NCCL. It has no automatic fallback to
+      another transport on NPU ({{cite afd_plugin/connectors/gpu/p2p.py:46-48}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The two roles must agree on the contract, the shapes and the connector
+name, or the collective setup fails or the first transfer raises.</p>
+
+<x-quiz>
+  <x-q level="easy">Which two calls does the attention side make, and in which order?
+    <x-a><p>First <code>send_attn_output</code>, then <code>recv_ffn_output</code>
+      ({{cite afd_plugin/connectors/base.py:145}}, {{cite afd_plugin/connectors/base.py:173}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">Which connector is the default?
+    <x-a><p><code>P2pNcclAFDConnector</code>, the GPU connector. The default is set in the AFD config
+      ({{cite afd_plugin/config.py:52}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">One connector sets <code>control_plane = None</code>. Which one, and what drives its FFN
+    steps then?
+    <x-a><p>The async NPU connector, <code>CAMAsyncAFDConnector</code>
+      ({{cite afd_plugin/connectors/npu/async_cam.py:283}}). With no control plane, the connector receive
+      loop drives the FFN side ({{cite afd_plugin/connectors/base.py:56-60}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Why does <code>recv_ffn_output</code> take a preallocated <code>ref_tensor</code>?
+    <x-a><p>The backends cannot always allocate their own output tensor. The P2P connector also uses it as a
+      stable buffer for CUDA graph capture ({{cite afd_plugin/connectors/base.py:185-192}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">On DeepSeek-V2-Lite with 8 decode tokens, what tensor shape does the attention side send,
+    and which value checks it?
+    <x-a><p>Shape <code>[8, 2048]</code>: 8 tokens by the hidden size 2048 (the 2048 is inferred from the
+      checkpoint). The metadata <code>total_tokens</code> is 8, and the send checks
+      <code>shape[0] == total_tokens</code> ({{cite afd_plugin/connectors/metadata.py:198-200}},
+      {{cite afd_plugin/connectors/metadata.py:230-231}}).</p></x-a>
+  </x-q>
+</x-quiz>

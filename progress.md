@@ -1,7 +1,7 @@
 # AFD Plugin Explainer — Progress
 
 Last update: 2026-10-28
-Current phase: **1a Foundation** — plan approved; Phase 1a-0 (supervisor tooling) done; next: subagent F1 after the usage pause.
+Current phase: **1b Samples** — F1 done and committed (fact check pending, part of FC-S1); usage pause; next: writer W-S1.
 
 This file is the memory of the project. A new session must be able to continue from it alone.
 Update it after every subagent finishes and after every user decision.
@@ -20,7 +20,7 @@ Update it after every subagent finishes and after every user decision.
 
 | Batch | Writer | Fact check | Committed |
 |---|---|---|---|
-| F1 Foundation | – | – | – |
+| F1 Foundation | done (186k tokens) | in FC-S1 | yes (pending) |
 | S1 Samples (home, learn/vllm-plugins, code/index, code/init-py) | – | – | – |
 | S2 Samples (tour life-of-a-request, reference/afd-config) | – | – | – |
 | B1 Basics + boundary | – | – | – |
@@ -47,6 +47,8 @@ Update it after every subagent finishes and after every user decision.
 
 ## Done
 
+- 2026-10-28: F1 done: STYLE.md adapted (§5.0 vllm: prefix, vocabulary, out-of-scope), nav with 41 pages (7 concept groups), core.json 33 terms, home stub, concepts/connector-contract + diagrams/f1_connector_contract.py, folder descriptions in tools/gen_folder_tree.py; example pages deleted. Build 0 errors, 7 expected warnings. Facts merged into notes/facts.md as [W]. Supervisor checked the reported suspected bug: gpu/p2p.py:196 stores a 1-element tuple, but nothing reads the attribute and a unit test asserts (40,) → observation for the user, not on pages.
+- 2026-10-28: TOOLING: browser check: node 20 + cached playwright-core 1.56.1 (~/.npm/_npx/d537ee5ee2a13f03) + ~/.cache/ms-playwright/chromium-1234 exist, but Chromium fails: missing libnspr4.so (system libs). Needs `sudo` (user). Screenshot script: scratchpad shot.js (executablePath = chromium-1234/chrome-linux64/chrome).
 - 2026-10-28: Phase 1a-0 (supervisor): starter kit copied (cp -n; plan/progress/briefs kept), git init (main), author Thomas Paul <contact@thomaspaul.dev> repo-local, `site/` in .gitignore, explainer.json filled (afd-plugin 7452d52 + extra_repos.vllm ced6857a). build.py: `extra_repos` support: `{{cite vllm:path:line}}`, `<x-code repo="vllm">`, commit check for every repo, `{{project vllm_sha}}` etc., both commits in version line, footer and `<x-version />`. Tested: vLLM links, out-of-range vLLM line = error, wrong vLLM pin = error. Example pages build with 0 errors.
 - 2026-10-28: New session (user exited and resumed). No-tools re-test: agent reports "AFD Plugin Explained", the right folder, both repos read only, model claude-opus-4-8. PASS.
 - 2026-10-28: USER DECISION: "defaults ok" → plan approved (plan.md §11). NPU = one overview page; budget mode all items; claude-opus-4-8 high; no separate Phase 1 stop; site/ not committed.
@@ -57,11 +59,11 @@ Update it after every subagent finishes and after every user decision.
 
 ## Next step
 
-Usage pause (user checks /usage). Then start subagent F1 (template B, Phase 1a): STYLE.md for this project (incl. the `vllm:` citation syntax in §5), nav files with all 41 page ids of plan.md §4, core glossary, sample page concepts/connector-contract + diagram, folder descriptions in code/index; replace the example pages. Then build, commit "Phase 1a (fact check pending)", pause.
+Usage pause after F1. Then writer W-S1 (plan §12 1b-1): home page (system map, Start here, `#code-version` with both commits), learn/vllm-plugins, code/index text (tree exists), code/init-py; copy the model page concepts/connector-contract. Then build, commit "S1 (fact check pending)", pause, then FC-S1 (also checks concepts/connector-contract, core.json, code/index descriptions).
 
 ## Questions for the user
 
-(none open)
+- 2026-10-28: install Chromium system libraries for the site check (needs sudo).
 
 ## Issues log
 
@@ -70,6 +72,7 @@ Usage pause (user checks /usage). Then start subagent F1 (template B, Phase 1a):
 - DONE (supervisor, tooling): two-repo support in build.py (2026-10-28).
 - FACT-CHECK FOCUS: worker selection only when `worker_cls == "auto"`; explicit wrong worker is rejected later (`validation.py:357-367`).
 - FACT-CHECK FOCUS: "every connector has a control plane" is false (async CAM has none).
+- FACT-CHECK FOCUS (FC-S1, connector-contract): INFERRED DeepSeek-V2-Lite hidden_size 2048/bf16 and the 32,768-byte figure; "each FFN rank owns one attention peer" for 2A2F (check build_rank_mapping, topology.py:118); the call order in the "full call order" deep dive (writer did not read the runner loops).
 - FACT-CHECK FOCUS: vLLM plugin load moments (5 call sites); which process runs each.
 
 ## Subagent log
@@ -79,3 +82,4 @@ Usage pause (user checks /usage). Then start subagent F1 (template B, Phase 1a):
 | 2026-10-28 | explainer-worker: no-tools config test | model accepted; stale definition loaded (needs session restart) |
 | 2026-10-28 | explainer-worker: survey (template A) | done, 238k tokens, 62 tool calls; notes/survey/*.md |
 | 2026-10-28 | explainer-worker: no-tools re-test (new session) | PASS, 28k tokens |
+| 2026-10-28 | explainer-worker: F1 foundation (template B) | done, 186k tokens, 83 tool calls; 0 errors |

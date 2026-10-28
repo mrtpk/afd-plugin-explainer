@@ -4,8 +4,11 @@
   "title": "Reference",
   "order": 5,
   "pages": [
+    {"id": "reference/afd-config", "title": "AFD config reference"},
     {"id": "reference/env-vars", "title": "Environment variables"},
-    {"id": "reference/glossary", "title": "Glossary"},
-    {"id": "reference/faq", "title": "FAQ"}
+    {"id": "reference/recipes", "title": "Recipes"},
+    {"id": "reference/compat-patches", "title": "Compat patches"},
+    {"id": "reference/faq", "title": "FAQ"},
+    {"id": "reference/glossary", "title": "Glossary"}
   ]
 }

@@ -7,8 +7,15 @@
     {"title": "Overview", "pages": [
       {"id": "code/index", "title": "Folder tree"}
     ]},
-    {"title": "Core", "pages": [
-      {"id": "code/engine", "title": "pkg/engine.py"}
+    {"title": "Modules", "pages": [
+      {"id": "code/init-py", "title": "afd_plugin/__init__.py"},
+      {"id": "code/config-py", "title": "config.py"},
+      {"id": "code/validation-py", "title": "config_validation.py"},
+      {"id": "code/connectors-core", "title": "connectors/base.py"},
+      {"id": "code/p2p-py", "title": "connectors/gpu/p2p.py"},
+      {"id": "code/attention-worker", "title": "attention_worker.py"},
+      {"id": "code/ffn-worker", "title": "ffn_worker.py"},
+      {"id": "code/deepseek-v2-py", "title": "deepseek_v2.py"}
     ]}
   ]
 }

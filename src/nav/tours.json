@@ -1,9 +1,12 @@
 {
-  "_owner": "Tour writers. Tour 1 is always 'Life of a request' (or the main data path of the project).",
+  "_owner": "Tour writers. Tour 2 (life-of-a-request) is the main data path.",
   "section": "tours",
   "title": "Guided tours",
   "order": 3,
   "pages": [
-    {"id": "tours/example-tour", "title": "Example tour"}
+    {"id": "tours/start-up", "title": "Start-up"},
+    {"id": "tours/life-of-a-request", "title": "Life of a request"},
+    {"id": "tours/one-decode-step", "title": "One decode step"},
+    {"id": "tours/run-a-recipe", "title": "Run a recipe"}
   ]
 }

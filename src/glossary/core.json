@@ -1,14 +1,189 @@
 {
   "_about": "General terms used on many pages. Owner: supervisor. Other writers: reuse these ids; do not redefine them. Each batch adds its own terms in src/glossary/<batch>.json.",
-  "kv-store": {
-    "term": "KV store",
-    "short": "A store that keeps values under keys. You put a value with a key, and get it back with the same key.",
-    "aliases": ["key-value store"],
-    "page": "learn/example-basics"
+
+  "afd": {
+    "term": "AFD",
+    "short": "Attention-FFN Disaggregation. The attention part and the feed-forward (FFN/MoE) part of a model run in separate server processes and exchange hidden states.",
+    "aliases": ["Attention-FFN Disaggregation", "attention-ffn disaggregation"],
+    "page": "learn/what-is-afd"
   },
+  "plugin": {
+    "term": "afd-plugin",
+    "short": "The vLLM external plugin that adds AFD. vLLM loads it; it changes no vLLM source file.",
+    "aliases": ["the plugin", "afd plugin"],
+    "page": "index"
+  },
+  "attention-role": {
+    "term": "attention role",
+    "short": "The side that runs attention and sends hidden states to the FFN side. The default role of a process.",
+    "long": "The role is set in <code>AFDConfig.role</code>; the default is <code>\"attention\"</code> ({{cite afd_plugin/config.py:56}}).",
+    "aliases": ["attention side"],
+    "page": "concepts/roles"
+  },
+  "ffn-role": {
+    "term": "FFN role",
+    "short": "The side that runs the feed-forward and MoE experts. It receives hidden states, computes, and sends the result back.",
+    "aliases": ["FFN side"],
+    "page": "concepts/roles"
+  },
+  "attention-server": {
+    "term": "attention server",
+    "short": "The vllm serve process that plays the attention role. It owns the API server, the scheduler and the KV cache.",
+    "page": "concepts/roles"
+  },
+  "ffn-server": {
+    "term": "FFN server",
+    "short": "The vllm serve process that plays the FFN role. It has no API server, no scheduler and no KV cache; a connector loop drives it.",
+    "page": "concepts/roles"
+  },
+  "connector": {
+    "term": "connector",
+    "short": "The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.",
+    "long": "Connectors subclass <code>AFDConnectorBase</code> ({{cite afd_plugin/connectors/base.py:37}}).",
+    "aliases": ["AFD connector"],
+    "page": "concepts/connector-contract"
+  },
+  "control-plane": {
+    "term": "control plane",
+    "short": "The path that carries DP metadata (per-stage token counts) from the attention side to the FFN side. It is optional.",
+    "long": "The control plane is an <code>AFDControlPlane</code> ({{cite afd_plugin/connectors/base.py:258}}); a connector exposes it as <code>control_plane</code>, or sets it to <code>None</code>.",
+    "page": "concepts/control-plane"
+  },
+  "data-plane": {
+    "term": "data plane",
+    "short": "The path that carries the hidden-state tensors between the two roles. It is the connector's send and receive calls.",
+    "page": "concepts/wire-data"
+  },
+  "dbo": {
+    "term": "DBO",
+    "short": "Dual-batch overlap. The step is split into two microbatches so compute and communication overlap. AFD uses exactly two.",
+    "aliases": ["dual-batch overlap"],
+    "page": "concepts/dbo"
+  },
+  "ubatch": {
+    "term": "ubatch",
+    "short": "A microbatch: one of the two token groups that DBO runs at the same time. On the wire its index is the stage.",
+    "aliases": ["microbatch"],
+    "page": "concepts/dbo"
+  },
+  "stage": {
+    "term": "stage",
+    "short": "The DBO ubatch index of one transfer on the wire. A connector sends one transfer per layer and stage.",
+    "long": "The transfer metadata carries <code>stage_idx</code> next to <code>layer_idx</code> ({{cite afd_plugin/connectors/metadata.py:188-190}}).",
+    "page": "concepts/wire-data"
+  },
+  "xayf": {
+    "term": "xAyF",
+    "short": "A topology name: x attention ranks and y FFN ranks, for example 2A2F. Use it only in topology names, not in prose.",
+    "aliases": ["2A2F", "4A4F"],
+    "page": "concepts/topology"
+  },
+  "entry-point": {
+    "term": "entry point",
+    "short": "A Python packaging hook. vLLM reads the vllm.general_plugins entry points and calls each one at start-up.",
+    "long": "afd-plugin declares <code>afd = \"afd_plugin:register_afd\"</code> under <code>vllm.general_plugins</code> ({{cite pyproject.toml:45-46}}).",
+    "page": "learn/vllm-plugins"
+  },
+  "general-plugin": {
+    "term": "general plugin",
+    "short": "A vLLM plugin in the vllm.general_plugins group. vLLM loads it with load_general_plugins in several processes.",
+    "page": "learn/vllm-plugins"
+  },
+  "register-afd": {
+    "term": "register_afd()",
+    "short": "The plugin entry function. It applies the compat patches and registers the routing strategy, the DBO op and the model wrappers.",
+    "long": "Defined in the package init ({{cite afd_plugin/__init__.py:142}}); it guards against a second run.",
+    "aliases": ["register_afd"],
+    "page": "concepts/plugin-entry-point"
+  },
+  "additional-config": {
+    "term": "additional_config",
+    "short": "A vLLM config field. The plugin reads its \"afd\" key for the role, the connector, the topology sizes and the host/port.",
+    "aliases": ["--additional-config"],
+    "page": "concepts/afd-config"
+  },
+  "afd-config": {
+    "term": "AFDConfig",
+    "short": "The plugin's own configuration object. It holds the role, the connector name, the topology sizes and the rendezvous host/port.",
+    "long": "A dataclass defined in <code>config.py</code> ({{cite afd_plugin/config.py:42}}).",
+    "page": "concepts/afd-config"
+  },
+  "worker-cls": {
+    "term": "worker_cls",
+    "short": "The vLLM parallel-config field that names the worker class. The plugin rewrites it, but only when it is \"auto\".",
+    "page": "concepts/worker-selection"
+  },
+  "enginecore": {
+    "term": "EngineCore",
+    "short": "The vLLM v1 engine core process. On the FFN role it returns early after the executor is built: no scheduler, no loop.",
+    "page": "concepts/roles"
+  },
+  "model-runner-v2": {
+    "term": "Model Runner V2",
+    "short": "The vLLM v1 model runner, version 2. Both roles need VLLM_USE_V2_MODEL_RUNNER=1. AFD adds a seam over it.",
+    "page": "concepts/attention-runtime"
+  },
+  "model-wrapper": {
+    "term": "model wrapper",
+    "short": "An AFD<arch> model class that makes a model role-aware. On the attention side the FFN stage becomes a remote proxy.",
+    "page": "concepts/model-wrappers"
+  },
+  "remote-ffn-proxy": {
+    "term": "RemoteFFNProxy",
+    "short": "A parameter-free module on the attention side. It replaces the FFN stage of a decoder layer and uses the connector instead.",
+    "long": "Defined for DeepSeek-V2 at {{cite afd_plugin/model_executor/models/deepseek_v2.py:117}}.",
+    "page": "concepts/model-wrappers"
+  },
+  "role-rank": {
+    "term": "role rank",
+    "short": "The rank of a process inside its own role group. It comes from the DP, PCP and TP placement.",
+    "long": "Resolved by <code>resolve_role_rank</code> ({{cite afd_plugin/distributed/topology.py:61}}).",
+    "page": "concepts/topology"
+  },
+  "p2p-subgroup": {
+    "term": "P2P subgroup",
+    "short": "In the GPU P2P connector, one FFN rank plus the attention ranks mapped to it. The FFN rank is subgroup rank 0.",
+    "page": "concepts/topology"
+  },
+  "full-decode-only": {
+    "term": "FULL_DECODE_ONLY",
+    "short": "The one CUDA graph mode that AFD supports. Graphs capture decode steps only; prefill runs eager.",
+    "long": "Enforced in validation ({{cite afd_plugin/validation.py:235-238}}).",
+    "page": "concepts/cuda-graphs"
+  },
+  "custom-op": {
+    "term": "custom op",
+    "short": "A function registered as torch.ops.vllm.* so torch.compile and CUDA graphs can trace it. The P2P sends and receives are custom ops.",
+    "page": "concepts/connector-contract"
+  },
+  "patch": {
+    "term": "patch",
+    "short": "A compat module that replaces a vLLM function at load time. The plugin applies a small set of patches.",
+    "aliases": ["compat patch"],
+    "page": "concepts/compat-patches"
+  },
+  "pynccl": {
+    "term": "PyNccl",
+    "short": "vLLM's thin NCCL wrapper, PyNcclCommunicator. The GPU P2P connector uses it to send and receive tensors.",
+    "long": "The class is defined in vLLM ({{cite vllm:vllm/distributed/device_communicators/pynccl.py:91}}).",
+    "aliases": ["PyNcclCommunicator"],
+    "page": "concepts/connector-contract"
+  },
+  "cam": {
+    "term": "CAM",
+    "short": "The Ascend NPU communication operators used by the NPU connectors. One connector is synchronous, the other asynchronous.",
+    "page": "concepts/npu-overview"
+  },
+  "compute-gate-on-attention": {
+    "term": "compute_gate_on_attention",
+    "short": "An AFD config flag. When true, the attention side computes the MoE gate and sends the router logits to the FFN side.",
+    "long": "The flag defaults to false ({{cite afd_plugin/config.py:66}}).",
+    "page": "concepts/moe-handoff"
+  },
+
   "commit": {
     "term": "commit",
-    "short": "One saved version of a git repository. A 40-character id names it. This site explains one pinned commit.",
+    "short": "One saved version of a git repository. A 40-character id names it. This site explains one pinned commit of each repository.",
     "page": "index"
   },
   "citation": {

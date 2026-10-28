@@ -1,12 +1,41 @@
 {
   "_owner": "Concept writers. Page ids are fixed; do not rename them: other pages link to them.",
   "section": "concepts",
-  "title": "MyProject concepts",
+  "title": "AFD concepts",
   "order": 2,
   "groups": [
-    {"title": "Core", "pages": [
-      {"id": "concepts/example-concept", "title": "Example concept page"},
-      {"id": "concepts/planned-concept", "title": "A planned concept page"}
+    {"title": "Plugin boundary", "pages": [
+      {"id": "concepts/plugin-entry-point", "title": "Plugin entry point"},
+      {"id": "concepts/afd-config", "title": "AFD configuration"},
+      {"id": "concepts/worker-selection", "title": "Worker selection"},
+      {"id": "concepts/model-registration", "title": "Model registration"},
+      {"id": "concepts/compat-patches", "title": "Compat patches"}
+    ]},
+    {"title": "Roles and topology", "pages": [
+      {"id": "concepts/roles", "title": "Attention and FFN roles"},
+      {"id": "concepts/topology", "title": "Topology and role ranks"}
+    ]},
+    {"title": "Connectors", "pages": [
+      {"id": "concepts/connector-contract", "title": "The connector contract"},
+      {"id": "concepts/control-plane", "title": "The control plane"},
+      {"id": "concepts/wire-data", "title": "Data on the wire"}
+    ]},
+    {"title": "Model split", "pages": [
+      {"id": "concepts/model-wrappers", "title": "Model wrappers"},
+      {"id": "concepts/moe-handoff", "title": "The MoE handoff"}
+    ]},
+    {"title": "Execution", "pages": [
+      {"id": "concepts/attention-runtime", "title": "Attention runtime"},
+      {"id": "concepts/ffn-runtime", "title": "FFN runtime"},
+      {"id": "concepts/cuda-graphs", "title": "CUDA graphs"},
+      {"id": "concepts/dbo", "title": "Dual-batch overlap"}
+    ]},
+    {"title": "Deploy and tune", "pages": [
+      {"id": "concepts/deployment-topologies", "title": "Deployment topologies"},
+      {"id": "concepts/tuning", "title": "Tuning"}
+    ]},
+    {"title": "Ascend NPU", "pages": [
+      {"id": "concepts/npu-overview", "title": "Ascend NPU overview"}
     ]}
   ]
 }
