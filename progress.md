@@ -1,7 +1,7 @@
 # AFD Plugin Explainer — Progress
 
 Last update: 2026-10-28
-Current phase: **1b Samples** — F1 done and committed (fact check pending, part of FC-S1); usage pause; next: writer W-S1.
+Current phase: **1c Fact check S1** — F1 + W-S1 committed (fact check pending); usage pause; next: FC-S1.
 
 This file is the memory of the project. A new session must be able to continue from it alone.
 Update it after every subagent finishes and after every user decision.
@@ -21,7 +21,7 @@ Update it after every subagent finishes and after every user decision.
 | Batch | Writer | Fact check | Committed |
 |---|---|---|---|
 | F1 Foundation | done (186k tokens) | in FC-S1 | yes (pending) |
-| S1 Samples (home, learn/vllm-plugins, code/index, code/init-py) | – | – | – |
+| S1 Samples (home, learn/vllm-plugins, code/index, code/init-py) | done (239k tokens) | – | yes (pending) |
 | S2 Samples (tour life-of-a-request, reference/afd-config) | – | – | – |
 | B1 Basics + boundary | – | – | – |
 | B2 Roles, topology, connectors | – | – | – |
@@ -47,6 +47,10 @@ Update it after every subagent finishes and after every user decision.
 
 ## Done
 
+- 2026-10-28: W-S1 done: home (system map, start here, both commits), learn/vllm-plugins, code/index hand parts, code/init-py; diagrams s1_plugin_processes, s1_register_afd_order; s1.json (2 terms); CSS block `/* Home: system map (S1) */`. Build 0 errors. Screenshots 1280/390: 0 overflow, 0 JS errors on all 4 pages. Facts merged [W]. plan.md §3 corrected (78 .py files). No suspected bugs.
+- FINAL-PASS TODO (supervisor CSS): home legend: the "around every step" swatch sits below the text line (assets/site.css S1 block).
+- 2026-10-28: User installed Chromium system libraries (`sudo npx -y playwright@1.56.1 install-deps chromium`). Browser check works: `node tools/shot.js <file-url> <out.png> <width> <height>` (uses cached playwright-core 1.56.1 + chromium-1234). connector-contract: 0 overflow, 0 JS errors at 1280 and 390. Look OK. Diagram nit: "control plane" label touches its dashed arrow (FC-S1 may fix).
+- 2026-10-28: DECISION: W-S1 may append one block `/* Home: system map (S1) */` to assets/site.css (only writer running; no clash).
 - 2026-10-28: F1 done: STYLE.md adapted (§5.0 vllm: prefix, vocabulary, out-of-scope), nav with 41 pages (7 concept groups), core.json 33 terms, home stub, concepts/connector-contract + diagrams/f1_connector_contract.py, folder descriptions in tools/gen_folder_tree.py; example pages deleted. Build 0 errors, 7 expected warnings. Facts merged into notes/facts.md as [W]. Supervisor checked the reported suspected bug: gpu/p2p.py:196 stores a 1-element tuple, but nothing reads the attribute and a unit test asserts (40,) → observation for the user, not on pages.
 - 2026-10-28: TOOLING: browser check: node 20 + cached playwright-core 1.56.1 (~/.npm/_npx/d537ee5ee2a13f03) + ~/.cache/ms-playwright/chromium-1234 exist, but Chromium fails: missing libnspr4.so (system libs). Needs `sudo` (user). Screenshot script: scratchpad shot.js (executablePath = chromium-1234/chrome-linux64/chrome).
 - 2026-10-28: Phase 1a-0 (supervisor): starter kit copied (cp -n; plan/progress/briefs kept), git init (main), author Thomas Paul <contact@thomaspaul.dev> repo-local, `site/` in .gitignore, explainer.json filled (afd-plugin 7452d52 + extra_repos.vllm ced6857a). build.py: `extra_repos` support: `{{cite vllm:path:line}}`, `<x-code repo="vllm">`, commit check for every repo, `{{project vllm_sha}}` etc., both commits in version line, footer and `<x-version />`. Tested: vLLM links, out-of-range vLLM line = error, wrong vLLM pin = error. Example pages build with 0 errors.
@@ -59,11 +63,11 @@ Update it after every subagent finishes and after every user decision.
 
 ## Next step
 
-Usage pause after F1. Then writer W-S1 (plan §12 1b-1): home page (system map, Start here, `#code-version` with both commits), learn/vllm-plugins, code/index text (tree exists), code/init-py; copy the model page concepts/connector-contract. Then build, commit "S1 (fact check pending)", pause, then FC-S1 (also checks concepts/connector-contract, core.json, code/index descriptions).
+Usage pause after W-S1. Then FC-S1 (full check): concepts/connector-contract, index, learn/vllm-plugins, code/index (hand parts), code/init-py, diagrams f1_*/s1_*, src/glossary/core.json + s1.json, the `/* Home: system map (S1) */` CSS block only for wrong facts in labels. Then commit "S1 fact-checked", pause, then W-S2.
 
 ## Questions for the user
 
-- 2026-10-28: install Chromium system libraries for the site check (needs sudo).
+(none open)
 
 ## Issues log
 
@@ -72,6 +76,7 @@ Usage pause after F1. Then writer W-S1 (plan §12 1b-1): home page (system map, 
 - DONE (supervisor, tooling): two-repo support in build.py (2026-10-28).
 - FACT-CHECK FOCUS: worker selection only when `worker_cls == "auto"`; explicit wrong worker is rejected later (`validation.py:357-367`).
 - FACT-CHECK FOCUS: "every connector has a control plane" is false (async CAM has none).
+- FACT-CHECK FOCUS (FC-S1, learn/vllm-plugins): process of arg_utils.py:839 (EngineArgs.__post_init__) — is EngineArgs also built in EngineCore?; the "plugin cannot change already-imported references" claim (general Python, no citation); diagram s1_plugin_processes "spawns" simplification; home fact table "Qwen3.6" (README only).
 - FACT-CHECK FOCUS (FC-S1, connector-contract): INFERRED DeepSeek-V2-Lite hidden_size 2048/bf16 and the 32,768-byte figure; "each FFN rank owns one attention peer" for 2A2F (check build_rank_mapping, topology.py:118); the call order in the "full call order" deep dive (writer did not read the runner loops).
 - FACT-CHECK FOCUS: vLLM plugin load moments (5 call sites); which process runs each.
 
@@ -83,3 +88,4 @@ Usage pause after F1. Then writer W-S1 (plan §12 1b-1): home page (system map, 
 | 2026-10-28 | explainer-worker: survey (template A) | done, 238k tokens, 62 tool calls; notes/survey/*.md |
 | 2026-10-28 | explainer-worker: no-tools re-test (new session) | PASS, 28k tokens |
 | 2026-10-28 | explainer-worker: F1 foundation (template B) | done, 186k tokens, 83 tool calls; 0 errors |
+| 2026-10-28 | explainer-worker: W-S1 writer | done, 239k tokens, 73 tool calls; 0 errors, 44 expected link warnings |

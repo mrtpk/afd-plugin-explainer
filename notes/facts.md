@@ -38,3 +38,11 @@ Paths without a prefix are in afd-plugin; `vllm:` paths are in vLLM.
 
 ## Observations reported to the user (not on pages)
 - 2026-10-28: gpu/p2p.py:196 stores `num_hidden_layers` as a 1-element tuple; no plugin code reads the attribute; tests/unit/connectors/test_p2p_connector.py:136 asserts `== (40,)`. [S]
+
+## Added after S1 (2026-10-28)
+- vLLM load_general_plugins call sites and processes: arg_utils.py:3009 in AsyncEngineArgs.add_cli_args (process 0, CLI parse; comment :3005-3008); arg_utils.py:839 in EngineArgs.__post_init__ (process 0 — FC: confirm EngineArgs is not also built in EngineCore); v1/engine/core.py:119 EngineCore.__init__ (EngineCore process); v1/worker/worker_base.py:271 WorkerBase.init_worker (each worker, before worker_cls is resolved :273-277); model_executor/models/registry.py:1570 `_run` (model-inspection subprocess from _run_in_subprocess :1536-1564). [W]
+- vLLM plugins/__init__.py: 5 groups :16-30; only plugin.load() is in try/except (:68-72); the func() loop :87-90 is not. VLLM_PLUGINS parsed vllm/envs.py:1146-1150: unset → None → all; "" → [""] → no plugin. additional_config field vllm/config/vllm.py:434. register_model lazy form registry.py:1126-1141. [W]
+- register_afd order (afd_plugin/__init__.py): guard 150-153 → force spawn 155 (also at import, :94) → vLLM importable check 157-160 (if not: set _registered, return) → version check 162-170 (strict=False warns only, compat/vllm.py:48-50) → 4 patch imports 172-181 → routing strategy 183-187 → DBO op 189-197 → Ascend patch only when device_type == "npu" 199-209 (:204) → model loop 211-214 → _registered = True 216. try/except around version check, patches, DBO op; NOT around routing strategy, NPU patch, model registration. [W]
+- Model table :96-131, 8 archs registered as "AFD"+arch; DeepseekV32 → AFDDeepseekV3ForCausalLM. README names "Qwen3.5/3.6" but one arch Qwen3_5MoeForConditionalGeneration is registered. [W]
+- AFD_FORCE_SPAWN_MULTIPROCESSING read at __init__.py:60. [W]
+- Sizes at 7452d52: afd_plugin/ = 82 files (78 .py, 20,195 .py lines); split by folder name: NPU 34 files / 9,329, GPU 2 / 1,132, shared 42 / 9,734. Whole repo 595 files / 164,972 text lines. [W] (plan.md corrected 2026-10-28: "82 Python files" → 78.)

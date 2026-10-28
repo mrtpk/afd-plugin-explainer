@@ -40,8 +40,8 @@ Decisions marked **(user)** come from the task text; the rest were proposed defa
 
 ## 3. Facts about the codebase (from the survey, spot-checked)
 
-- afd-plugin: 595 tracked files, 651 commits, no submodules, Git LFS for binaries. `afd_plugin/` = 82 Python
-  files, 20,195 lines: NPU-specific about 9.3k, GPU-specific about 1.4k, shared about 9.5k (the "shared"
+- afd-plugin: 595 tracked files, 651 commits, no submodules, Git LFS for binaries. `afd_plugin/` = 78 Python
+  files (82 files in total), 20,195 lines: NPU-specific about 9.3k, GPU-specific about 1.4k, shared about 9.5k (the "shared"
   runners and model wrappers are CUDA paths in practice). `csrc/` = 45.6k lines C/C++ (out of scope).
   `tests/` = 40.9k lines. `docs/` = 4.7k lines Markdown. `tools/proxy_server.py` = 1,351 lines (copied from
   vLLM-Ascend; a prefill/decode proxy, not the A/F split).

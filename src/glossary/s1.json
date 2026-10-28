@@ -1,0 +1,18 @@
+{
+  "_about": "Batch S1 terms (home, learn/vllm-plugins, code/index, code/init-py). Owner: writer S1. Reuse core.json ids; do not redefine them.",
+
+  "load-general-plugins": {
+    "term": "load_general_plugins",
+    "short": "The vLLM function that loads every plugin in the vllm.general_plugins group, then calls each one. It runs once per process.",
+    "long": "Defined in vLLM ({{cite vllm:vllm/plugins/__init__.py:77-90}}); a guard stops a second run in the same process.",
+    "aliases": ["load_general_plugins()"],
+    "page": "learn/vllm-plugins"
+  },
+  "model-registry": {
+    "term": "ModelRegistry",
+    "short": "vLLM's registry of model architectures. A plugin adds a model with register_model, using a lazy \"module:Class\" string.",
+    "long": "The singleton is defined in vLLM ({{cite vllm:vllm/model_executor/models/registry.py:1523-1531}}); register_afd calls it for each AFD model ({{cite afd_plugin/__init__.py:211-214}}).",
+    "aliases": ["ModelRegistry.register_model"],
+    "page": "concepts/model-registration"
+  }
+}

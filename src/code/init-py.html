@@ -1,0 +1,201 @@
+---
+title: afd_plugin/__init__.py: the plugin entry module
+nav_title: afd_plugin/__init__.py
+level: Intermediate
+prerequisites: learn/vllm-plugins
+related: concepts/plugin-entry-point, concepts/compat-patches, concepts/worker-selection, concepts/model-registration, code/config-py
+summary: The package init holds register_afd (the entry point vLLM calls), the AFD model table, and the opt-in spawn override. This page reads it step by step.
+---
+<x-sentence>This module is the plugin entry point. <code>register_afd</code> applies the compat patches and
+registers the routing strategy, the DBO op and the <code>AFD</code> models.</x-sentence>
+
+<h2>Purpose</h2>
+<p>vLLM calls <code>register_afd</code> once per process through the <code>vllm.general_plugins</code> entry
+point. The function installs AFD and then stops; it runs no model and keeps no connection.</p>
+<table>
+  <tbody>
+    <tr><th>File</th><td><code>afd_plugin/__init__.py</code> (234 lines, afd-plugin).</td></tr>
+    <tr><th>Main functions</th><td><code>register_afd</code> ({{cite afd_plugin/__init__.py:142}}),
+      <code>_force_spawn_multiprocessing_if_requested</code> ({{cite afd_plugin/__init__.py:51}}),
+      <code>__getattr__</code> ({{cite afd_plugin/__init__.py:19}}).</td></tr>
+    <tr><th>Runs in</th><td>Every process that loads general plugins: process 0, the engine core, each worker,
+      and the model-inspection subprocess. See {{link learn/vllm-plugins}}.</td></tr>
+    <tr><th>Called by</th><td>vLLM's <code>load_general_plugins</code>, through the entry point
+      <code>afd = "afd_plugin:register_afd"</code> ({{cite pyproject.toml:45-46}}).</td></tr>
+    <tr><th>Calls</th><td>The four compat patch modules, the routing simulator, the DBO custom op, the NPU
+      Ascend config patch (NPU only), and vLLM's <code>ModelRegistry</code>
+      ({{cite afd_plugin/__init__.py:172-214}}).</td></tr>
+    <tr><th>Not in this file</th><td>The patch bodies, the connector code, and the worker classes. The worker
+      classes are reached lazily through <code>__getattr__</code> ({{cite afd_plugin/__init__.py:19-33}}).</td></tr>
+  </tbody>
+</table>
+
+<h2>Where it sits</h2>
+<x-diagram name="s1_register_afd_order" alt="Two panels showing the ordered steps of register_afd. Panel 1, safety first: step 1 guard returns early if _registered is set; step 2 forces the spawn start method if the environment variable is set; step 3 returns early if vLLM is not importable; step 4 checks the vLLM version with strict False. Panel 2, registration when vLLM is present: step 5 imports the four compat patch modules; step 6 registers the routing strategy; step 7 registers the DBO yield custom op; step 8, NPU only, applies the Ascend config patch; step 9 registers each AFD-prefixed model; step 10 sets _registered to True. A legend marks always, NPU only, check or early exit, and done." caption="Figure: register_afd runs safety checks first (any can return early), then the registration steps in order. Step 8 runs only on NPU." />
+<h3>Who calls it</h3>
+<p>Only vLLM calls it, through the entry point ({{cite pyproject.toml:45-46}}). The call sites and processes
+are on the {{link learn/vllm-plugins}} page.</p>
+<h3>What it calls</h3>
+<p>It imports the four patch modules ({{cite afd_plugin/__init__.py:172-176}}), the routing simulator
+({{cite afd_plugin/__init__.py:183-185}}), the DBO op ({{cite afd_plugin/__init__.py:190}}), and, on NPU, the
+Ascend config patch ({{cite afd_plugin/__init__.py:205-207}}). It ends by calling vLLM's
+<code>ModelRegistry.register_model</code> ({{cite afd_plugin/__init__.py:211-214}}).</p>
+
+<h2>Key classes and functions</h2>
+<table>
+  <thead><tr><th>Name</th><th>Line</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td><code>register_afd</code></td><td>{{cite afd_plugin/__init__.py:142}}</td>
+      <td>The entry point. Applies the patches and registers the models.</td></tr>
+    <tr><td><code>_force_spawn_multiprocessing_if_requested</code></td><td>{{cite afd_plugin/__init__.py:51}}</td>
+      <td>Opt-in: force the <code>spawn</code> start method and redirect <code>forkserver</code>.</td></tr>
+    <tr><td><code>__getattr__</code></td><td>{{cite afd_plugin/__init__.py:19}}</td>
+      <td>Lazy access to the worker classes and <code>assert_compatible_afd_stack</code>.</td></tr>
+    <tr><td><code>_MODEL_REGISTRATIONS</code></td><td>{{cite afd_plugin/__init__.py:133-139}}</td>
+      <td>The read-only map from a vLLM architecture name to an AFD model class.</td></tr>
+    <tr><td><code>__version__</code></td><td>{{cite afd_plugin/__init__.py:36-44}}</td>
+      <td>The package version, with a fallback that never raises.</td></tr>
+  </tbody>
+</table>
+
+<h2>Walk through register_afd</h2>
+<p>The function runs in two parts: safety checks that can return early, then the registration steps.</p>
+
+<h3>Part 1: Guard, import safety and version check</h3>
+<x-code file="afd_plugin/__init__.py" lines="150-170" highlight="151,157,165" caption="The guard, the spawn override, the vLLM check and the version check." />
+<ol>
+  <li><strong>Line 151.</strong> The guard returns if <code>_registered</code> is already set, so the
+    registration body runs once per process ({{cite afd_plugin/__init__.py:150-153}}).</li>
+  <li><strong>Line 155.</strong> It applies the opt-in spawn override again (it also ran at import time).</li>
+  <li><strong>Line 157.</strong> If vLLM is not importable, it sets <code>_registered</code> and returns. So
+    importing the package stays safe on a machine with no vLLM ({{cite afd_plugin/__init__.py:157-160}}).</li>
+  <li><strong>Line 165.</strong> It checks the vLLM version with <code>strict=False</code>, so a mismatch gives
+    a warning, not an error ({{cite afd_plugin/compat/vllm.py:38-50}}). The whole check sits in a
+    <code>try/except</code> ({{cite afd_plugin/__init__.py:162-170}}).</li>
+</ol>
+
+<h3>Part 2: Patches, routing, DBO, the NPU patch and the models</h3>
+<x-code file="afd_plugin/__init__.py" lines="172-197" highlight="187,192" caption="Import the patches, register the routing strategy, then the DBO custom op." />
+<ol>
+  <li><strong>Lines 172-176.</strong> It imports the four patch modules. Importing a patch module applies it.
+    The import sits in a <code>try/except</code> ({{cite afd_plugin/__init__.py:172-181}}).</li>
+  <li><strong>Line 187.</strong> It registers the AFD routing strategy. This call is not wrapped
+    ({{cite afd_plugin/__init__.py:183-187}}).</li>
+  <li><strong>Line 192.</strong> It registers the DBO yield custom op, inside a <code>try/except</code>
+    ({{cite afd_plugin/__init__.py:189-197}}).</li>
+</ol>
+<x-code file="afd_plugin/__init__.py" lines="199-216" highlight="204,214,216" caption="The NPU-only Ascend patch, the model registration loop, and the final flag." />
+<ol start="4">
+  <li><strong>Line 204.</strong> It applies the Ascend config patch only when the platform device type is
+    <code>"npu"</code> ({{cite afd_plugin/__init__.py:202-209}}). This step is not wrapped.</li>
+  <li><strong>Lines 211-214.</strong> It registers each model under its <code>AFD</code>-prefixed name
+    ({{cite afd_plugin/__init__.py:211-214}}).</li>
+  <li><strong>Line 216.</strong> It sets <code>_registered = True</code>, so a later call in the same process
+    returns early.</li>
+</ol>
+
+<h3>The model registration table</h3>
+<p>The map keys are vLLM architecture names; the loop registers each one under the name
+<code>"AFD" + key</code> ({{cite afd_plugin/__init__.py:211-214}}). So <code>DeepseekV2ForCausalLM</code>
+becomes <code>AFDDeepseekV2ForCausalLM</code>.</p>
+<x-code file="afd_plugin/__init__.py" lines="96-117" highlight="109-113" caption="The DeepSeek registrations. DeepseekV4 picks the NPU or GPU class by torch_npu." />
+<table>
+  <thead><tr><th>Registered name</th><th>Resolves to</th><th>Note</th></tr></thead>
+  <tbody>
+    <tr><td><code>AFDDeepseekForCausalLM</code></td><td><code>deepseek_v2:AFDDeepseekForCausalLM</code></td><td></td></tr>
+    <tr><td><code>AFDDeepseekV2ForCausalLM</code></td><td><code>deepseek_v2:AFDDeepseekV2ForCausalLM</code></td><td></td></tr>
+    <tr><td><code>AFDDeepseekV3ForCausalLM</code></td><td><code>deepseek_v2:AFDDeepseekV3ForCausalLM</code></td><td></td></tr>
+    <tr><td><code>AFDDeepseekV32ForCausalLM</code></td><td><code>deepseek_v2:AFDDeepseekV3ForCausalLM</code></td>
+      <td>V3.2 reuses the V3 class ({{cite afd_plugin/__init__.py:106-108}}).</td></tr>
+    <tr><td><code>AFDDeepseekV4ForCausalLM</code></td>
+      <td><code>npu.deepseek_v4:...</code> or <code>deepseek_v4:...</code></td>
+      <td>NPU class when <code>torch_npu</code> is importable, else the GPU class
+      ({{cite afd_plugin/__init__.py:109-113}}).</td></tr>
+    <tr><td><code>AFDGlmMoeDsaForCausalLM</code></td><td><code>deepseek_v2:AFDGlmMoeDsaForCausalLM</code></td><td></td></tr>
+    <tr><td><code>AFDQwen3MoeForCausalLM</code></td><td><code>qwen3_moe:AFDQwen3MoeForCausalLM</code></td><td></td></tr>
+    <tr><td><code>AFDQwen3_5MoeForConditionalGeneration</code></td>
+      <td><code>qwen3_5:AFDQwen3_5MoeForConditionalGeneration</code></td><td></td></tr>
+  </tbody>
+</table>
+
+<h3>The spawn override</h3>
+<p>The override is opt-in through one environment variable. It changes Python's default multiprocessing
+context, for an Ascend async recipe that cannot use <code>forkserver</code>.</p>
+<x-code file="afd_plugin/__init__.py" lines="51-62" highlight="60,62" caption="The guard and the start-method change." />
+<ol>
+  <li><strong>Line 60.</strong> It returns at once unless <code>AFD_FORCE_SPAWN_MULTIPROCESSING</code> is
+    <code>"1"</code> ({{cite afd_plugin/__init__.py:60}}).</li>
+  <li><strong>Line 62.</strong> It forces the default start method to <code>spawn</code>.</li>
+  <li>It then redirects the <code>forkserver</code> context and <code>get_context("forkserver")</code> to the
+    spawn context ({{cite afd_plugin/__init__.py:70-87}}).</li>
+</ol>
+<p>It runs once at import time ({{cite afd_plugin/__init__.py:94}}) and again inside <code>register_afd</code>
+({{cite afd_plugin/__init__.py:155}}). The import-time call reaches the Ascend workers, which import the worker
+class directly and do not call the entry point ({{cite afd_plugin/__init__.py:90-94}}).</p>
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="Error paths: what is caught, and what is not">
+<p>Four steps swallow their own exceptions, and three do not. The difference decides which failures are quiet
+and which stop the process.</p>
+<table>
+  <thead><tr><th>Step</th><th>Lines</th><th>On failure</th></tr></thead>
+  <tbody>
+    <tr><td>Version check</td><td>{{cite afd_plugin/__init__.py:162-170}}</td><td>Caught: logged at debug.</td></tr>
+    <tr><td>Import the 4 patches</td><td>{{cite afd_plugin/__init__.py:172-181}}</td><td>Caught: logged at debug.</td></tr>
+    <tr><td>DBO custom op</td><td>{{cite afd_plugin/__init__.py:189-197}}</td><td>Caught: logged at debug.</td></tr>
+    <tr><td>Routing strategy</td><td>{{cite afd_plugin/__init__.py:183-187}}</td><td>Not caught: the error propagates.</td></tr>
+    <tr><td>NPU Ascend patch</td><td>{{cite afd_plugin/__init__.py:199-209}}</td><td>Not caught: the error propagates.</td></tr>
+    <tr><td>Model registration</td><td>{{cite afd_plugin/__init__.py:211-214}}</td><td>Not caught: the error propagates.</td></tr>
+  </tbody>
+</table>
+<p>The version-check exception is caught twice: the helper warns instead of raising with
+<code>strict=False</code>, and the call also sits in a <code>try/except</code>
+({{cite afd_plugin/compat/vllm.py:48-50}}).</p>
+</x-deepdive>
+
+<x-deepdive title="Import safety and environment variables">
+<p><strong>Import safety.</strong> Importing <code>afd_plugin</code> must not need vLLM, so local CPU tests work.
+Two things make it safe: <code>register_afd</code> returns early when <code>find_spec("vllm")</code> is
+<code>None</code> ({{cite afd_plugin/__init__.py:157-160}}), and <code>__version__</code> falls back to a
+<code>setuptools_scm</code> value or <code>"0.0.0+unknown"</code> ({{cite afd_plugin/__init__.py:36-44}}).</p>
+<table>
+  <thead><tr><th>Variable</th><th>Read at</th><th>Effect</th></tr></thead>
+  <tbody>
+    <tr><td><code>AFD_FORCE_SPAWN_MULTIPROCESSING</code></td><td>{{cite afd_plugin/__init__.py:60}}</td>
+      <td><code>"1"</code> forces the <code>spawn</code> start method and redirects <code>forkserver</code>.
+      Any other value does nothing.</td></tr>
+  </tbody>
+</table>
+</x-deepdive>
+
+<h2>Related concepts</h2>
+<ul>
+  <li>{{link concepts/plugin-entry-point}}</li>
+  <li>{{link concepts/compat-patches}}</li>
+  <li>{{link concepts/worker-selection}}</li>
+  <li>{{link concepts/model-registration}}</li>
+  <li>{{link learn/vllm-plugins}}</li>
+</ul>
+
+<x-quiz>
+  <x-q level="easy">Under what name is <code>DeepseekV2ForCausalLM</code> registered?
+    <x-a><p><code>AFDDeepseekV2ForCausalLM</code>. The loop registers each key under <code>"AFD" + key</code>
+      ({{cite afd_plugin/__init__.py:211-214}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">Which step runs only on NPU?
+    <x-a><p>The Ascend config patch. It runs only when the platform device type is <code>"npu"</code>
+      ({{cite afd_plugin/__init__.py:202-209}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">What happens when <code>register_afd</code> runs on a machine with no vLLM installed?
+    <x-a><p>It sets <code>_registered = True</code> and returns before any registration, so the import stays
+      safe ({{cite afd_plugin/__init__.py:157-160}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">If registering a model raises, does the process keep running? And if the version check
+    raises?
+    <x-a><p>Model registration is not wrapped, so its error propagates
+      ({{cite afd_plugin/__init__.py:211-214}}). The version check is wrapped in a <code>try/except</code>, and
+      with <code>strict=False</code> it only warns, so it does not stop the process
+      ({{cite afd_plugin/__init__.py:162-170}}).</p></x-a>
+  </x-q>
+</x-quiz>

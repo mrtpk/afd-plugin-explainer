@@ -1,0 +1,191 @@
+---
+title: How vLLM plugins work
+nav_title: How vLLM plugins work
+level: Intermediate
+prerequisites: none
+related: concepts/plugin-entry-point, concepts/worker-selection, concepts/compat-patches, learn/vllm-v1-map
+summary: vLLM reads entry points in the vllm.general_plugins group and calls each one at start-up. This page shows that mechanism, so the afd-plugin entry point makes sense.
+---
+<x-sentence>vLLM reads {{term entry-point | entry points}} in the <code>vllm.general_plugins</code> group and calls
+each one at start-up. afd-plugin registers itself there.</x-sentence>
+
+<h2>The idea</h2>
+<p>vLLM can load extra code that is not in its own source tree. The extra code is a
+{{term plugin | plugin}}. A plugin declares an {{term entry-point | entry point}} in its packaging metadata.
+vLLM finds the entry point by its group name and calls it. afd-plugin uses this to add AFD, and it changes no
+vLLM file.</p>
+<p>A {{term general-plugin | general plugin}} is the simplest kind. It is one function. vLLM calls the function
+with no arguments. The function then registers models, patches vLLM functions, or sets up whatever the plugin
+needs. For afd-plugin the function is {{term register-afd}}.</p>
+<p><strong>An everyday comparison.</strong> Think of a start-up checklist with named tasks. The host reads the
+list and runs each task once. The comparison stops here: vLLM runs the list again in every process it starts,
+and each run starts fresh. So one plugin function runs many times, in many processes.</p>
+
+<h2>The picture</h2>
+<x-diagram name="s1_plugin_processes" alt="Two panels. Panel 1 shows four processes. Process 0 (launch and API) spawns the EngineCore process, which spawns each worker process; a model-inspection subprocess branches off process 0. Each box names the call site of load_general_plugins: add_cli_args and __post_init__ in arg_utils.py for process 0, __init__ in v1/engine/core.py for EngineCore, init_worker in worker_base.py for the worker, and _run in registry.py for the subprocess. Panel 2 shows the guard: inside one process a second call returns early because plugins_loaded is True; a new process starts the guard at False, so the plugin runs again and must be idempotent." caption="Figure: vLLM calls load_general_plugins() from 5 call sites, in 4 kinds of process. The guard stops a repeat inside one process, not across processes." />
+<p>Read the top panel left to right. Process 0 starts first, then the engine core, then the workers. Each
+process loads the plugins once. The lower panel shows why a plugin must run safely more than once.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: The five entry-point groups</h3>
+<p>vLLM defines five plugin groups. Each group loads in a different set of processes. The comments in the file
+say where ({{cite vllm:vllm/plugins/__init__.py:16-30}}). afd-plugin uses only the first group,
+<code>vllm.general_plugins</code>.</p>
+<x-code repo="vllm" file="vllm/plugins/__init__.py" lines="16-30" highlight="18" caption="The five plugin groups and where each one loads." />
+<table>
+  <thead><tr><th>Group</th><th>Loaded in</th></tr></thead>
+  <tbody>
+    <tr><td><code>vllm.general_plugins</code></td><td>All processes: process 0, the engine core and the workers
+      ({{cite vllm:vllm/plugins/__init__.py:16-18}}).</td></tr>
+    <tr><td><code>vllm.io_processor_plugins</code></td><td>Process 0 only
+      ({{cite vllm:vllm/plugins/__init__.py:19-20}}).</td></tr>
+    <tr><td><code>vllm.platform_plugins</code></td><td>All processes, when <code>current_platform</code> is first
+      used ({{cite vllm:vllm/plugins/__init__.py:21-23}}).</td></tr>
+    <tr><td><code>vllm.stat_logger_plugins</code></td><td>Process 0 only, in async serving mode
+      ({{cite vllm:vllm/plugins/__init__.py:24-26}}).</td></tr>
+    <tr><td><code>vllm.endpoint_plugins</code></td><td>The API server front-end process only
+      ({{cite vllm:vllm/plugins/__init__.py:27-30}}).</td></tr>
+  </tbody>
+</table>
+
+<h3>Step 2: load_plugins_by_group and load_general_plugins</h3>
+<p>Two functions do the work. <code>load_plugins_by_group</code> finds the entry points of one group, filters
+them, and loads each one ({{cite vllm:vllm/plugins/__init__.py:36-74}}). {{term load-general-plugins}} loads
+the general group, then calls each loaded function ({{cite vllm:vllm/plugins/__init__.py:87-90}}).</p>
+<x-code repo="vllm" file="vllm/plugins/__init__.py" lines="77-90" highlight="83,85,90" caption="load_general_plugins: the guard, then load and call each general plugin." />
+<p>The filter is the <code>VLLM_PLUGINS</code> environment variable. vLLM parses it in <code>envs.py</code>. When
+the variable is not set, the value is <code>None</code> and vLLM loads every plugin
+({{cite vllm:vllm/envs.py:1146-1150}}). When the variable is an empty string, the value is
+<code>[""]</code>, which matches no plugin name, so vLLM loads none
+({{cite vllm:vllm/plugins/__init__.py:63-64}}).</p>
+<x-code repo="vllm" file="vllm/envs.py" lines="1144-1150" caption="VLLM_PLUGINS: unset means all; an empty string means none." />
+
+<h3>Step 3: When and in which processes</h3>
+<p>vLLM calls <code>load_general_plugins()</code> from five call sites. The diagram above shows the four kinds
+of process. Each call site runs in the process that first needs the plugins. The excerpt below is the engine
+core.</p>
+<x-code repo="vllm" file="vllm/v1/engine/core.py" lines="116-119" caption="EngineCore loads the plugins in its own process (v1/engine/core.py)." />
+<p>The deep dive below lists all five call sites and the process of each one.</p>
+
+<h3>Step 4: How a plugin registers models, workers and config</h3>
+<p>A general plugin registers things through vLLM APIs that run in the same process.</p>
+<ul>
+  <li><strong>Models.</strong> The plugin calls {{term model-registry}}'s
+    <code>register_model(name, model_cls)</code>. The class can be a string in the <code>"module:Class"</code>
+    form, so vLLM imports it only when it is needed
+    ({{cite vllm:vllm/model_executor/models/registry.py:1126-1141}}).</li>
+  <li><strong>Workers.</strong> There is no register API for a worker. vLLM reads the worker class name from
+    <code>parallel_config.worker_cls</code> and imports it by its qualified name
+    ({{cite vllm:vllm/v1/worker/worker_base.py:273-277}}). A plugin changes the worker by setting this field.</li>
+  <li><strong>Config.</strong> vLLM has one open config field, <code>additional_config</code>, for out-of-tree
+    config ({{cite vllm:vllm/config/vllm.py:434}}). afd-plugin reads its <code>"afd"</code> key.</li>
+</ul>
+<x-code repo="vllm" file="vllm/model_executor/models/registry.py" lines="1126-1141" highlight="1137-1138" caption="register_model: a class, or a lazy &quot;module:Class&quot; string." />
+
+<h3>Step 5: What a plugin can and cannot change</h3>
+<p>A general plugin runs real Python in the vLLM process. So it <strong>can</strong> change vLLM behaviour by
+monkey-patching: it replaces a vLLM function or method with its own. afd-plugin does this with its
+{{term patch | compat patches}}.</p>
+<p>A plugin <strong>cannot</strong> do some things:</p>
+<ul>
+  <li>It cannot change a value or reference that vLLM already imported and bound. A patch must run before the
+    first use of the target.</li>
+  <li>It cannot change compiled C++ or CUDA code. It can only change the Python that calls it.</li>
+  <li>It cannot add a new command-line flag on its own. The plugin function gets no parser.</li>
+</ul>
+<p>There is one near-exception for the command line. vLLM calls <code>load_general_plugins()</code> at the
+start of <code>add_cli_args</code> ({{cite vllm:vllm/engine/arg_utils.py:3003-3009}}). So a plugin that
+registers a new quantization method or a new platform makes it a valid choice for the existing
+<code>--quantization</code> or <code>--device</code> flag.</p>
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="The 5 call sites, and the process each runs in">
+<p>vLLM calls <code>load_general_plugins()</code> from five places. The guard makes it run at most once per
+process, but a new process resets the guard. So the plugin runs in each of these processes.</p>
+<table>
+  <thead><tr><th>#</th><th>Call site</th><th>Function</th><th>Process</th><th>When</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>{{cite vllm:vllm/engine/arg_utils.py:3009}}</td><td><code>AsyncEngineArgs.add_cli_args</code></td>
+      <td>Process 0 (launch / API)</td><td>While the CLI parser is built, so a plugin can extend it.</td></tr>
+    <tr><td>2</td><td>{{cite vllm:vllm/engine/arg_utils.py:839}}</td><td><code>EngineArgs.__post_init__</code></td>
+      <td>Process 0 (launch / API)</td><td>When the engine config is built from the args.</td></tr>
+    <tr><td>3</td><td>{{cite vllm:vllm/v1/engine/core.py:119}}</td><td><code>EngineCore.__init__</code></td>
+      <td>EngineCore process</td><td>When the engine core starts.</td></tr>
+    <tr><td>4</td><td>{{cite vllm:vllm/v1/worker/worker_base.py:271}}</td><td><code>WorkerBase.init_worker</code></td>
+      <td>Each worker process</td><td>Before the worker class is resolved and built.</td></tr>
+    <tr><td>5</td><td>{{cite vllm:vllm/model_executor/models/registry.py:1570}}</td><td><code>_run</code></td>
+      <td>Model-inspection subprocess</td><td>In the short-lived subprocess that resolves a model class
+      ({{cite vllm:vllm/model_executor/models/registry.py:1536-1564}}).</td></tr>
+  </tbody>
+</table>
+<p>Call sites 1 and 2 are both in process 0. The guard means the second one returns early. The other three
+run in separate processes, so each one loads the plugins again.</p>
+</x-deepdive>
+
+<x-deepdive title="The guard, and why idempotence matters">
+<p>vLLM keeps a module-level flag, <code>plugins_loaded</code>, that starts at <code>False</code>
+({{cite vllm:vllm/plugins/__init__.py:33}}). The first call sets it to <code>True</code>; a later call in the
+same process returns at once ({{cite vllm:vllm/plugins/__init__.py:82-85}}).</p>
+<p>The flag is Python module state. vLLM starts workers with <code>spawn</code> in many setups, which copies no
+Python state. So each new process imports the modules again, the flag is <code>False</code> again, and the
+plugin runs again. The function's own docstring warns about this
+({{cite vllm:vllm/plugins/__init__.py:78-81}}).</p>
+<p>afd-plugin handles it with a second guard of its own, <code>_registered</code>, inside
+<code>register_afd</code> ({{cite afd_plugin/__init__.py:150-153}}). The guard stops repeated work in one
+process; it does not stop the many processes. So the registration steps must be safe to run more than once.</p>
+</x-deepdive>
+
+<h2>In afd-plugin</h2>
+<p>afd-plugin is a single general plugin. Three facts connect it to this page:</p>
+<ul>
+  <li>The entry point is <code>afd = "afd_plugin:register_afd"</code> in the
+    <code>vllm.general_plugins</code> group ({{cite pyproject.toml:45-46}}). See
+    {{link concepts/plugin-entry-point}}.</li>
+  <li>The function <code>register_afd</code> applies the patches and registers the models and the routing
+    strategy ({{cite afd_plugin/__init__.py:142-216}}). See {{link concepts/plugin-entry-point}} and
+    {{link code/init-py}}.</li>
+  <li>One compat patch sets the worker class. It rewrites <code>parallel_config.worker_cls</code>, but only
+    when it is <code>"auto"</code> ({{cite afd_plugin/compat/patches/config_validation.py:60}},
+    {{cite afd_plugin/compat/patches/config_validation.py:92}}). See {{link concepts/worker-selection}} and
+    {{link concepts/compat-patches}}.</li>
+</ul>
+
+<h2>What can go wrong</h2>
+<ul>
+  <li><strong>VLLM_PLUGINS set to empty.</strong> An empty string loads no plugins, so AFD does not activate
+    ({{cite vllm:vllm/envs.py:1146-1150}}).</li>
+  <li><strong>A plugin that is not idempotent.</strong> The function runs in many processes. State kept in one
+    process does not reach the others.</li>
+  <li><strong>A patch that runs too late.</strong> A monkey-patch cannot change a reference that vLLM already
+    imported and bound. The patch must run before the first use.</li>
+</ul>
+<p><strong>Why it matters.</strong> AFD is installed only through this plugin mechanism. If the plugin does not
+load, or a patch runs too late, the two roles do not form and the run fails.</p>
+
+<x-quiz>
+  <x-q level="easy">Which entry-point group does afd-plugin use, and what is its entry point?
+    <x-a><p>The <code>vllm.general_plugins</code> group. The entry point is
+      <code>afd = "afd_plugin:register_afd"</code> ({{cite pyproject.toml:45-46}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">What does <code>VLLM_PLUGINS</code> do when it is set to an empty string?
+    <x-a><p>It loads no plugins. The empty string parses to <code>[""]</code>, which matches no plugin name
+      ({{cite vllm:vllm/envs.py:1146-1150}}, {{cite vllm:vllm/plugins/__init__.py:63-64}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Why must a general plugin be safe to run more than once?
+    <x-a><p>vLLM calls it in several processes (process 0, the engine core, each worker and a model-inspection
+      subprocess). The <code>plugins_loaded</code> guard resets in every new process
+      ({{cite vllm:vllm/plugins/__init__.py:82-85}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">How does a plugin set the worker class, since there is no register API for it?
+    <x-a><p>It sets <code>parallel_config.worker_cls</code>. vLLM reads that field and imports the class by its
+      qualified name ({{cite vllm:vllm/v1/worker/worker_base.py:273-277}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">A plugin cannot add a new CLI flag. How can it still change what
+    <code>--quantization</code> accepts?
+    <x-a><p>vLLM calls <code>load_general_plugins()</code> at the start of <code>add_cli_args</code>. So a
+      plugin that registers a new quantization method before the parser is built makes it a valid choice for
+      the existing flag ({{cite vllm:vllm/engine/arg_utils.py:3003-3009}}).</p></x-a>
+  </x-q>
+</x-quiz>

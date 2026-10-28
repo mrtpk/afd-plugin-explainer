@@ -1,19 +1,88 @@
 ---
-title: Code map: the folder tree
+title: The code map: folders, sizes and dependencies
 nav_title: Folder tree
-related: concepts/connector-contract, code/connectors-core
-summary: Every folder of the repository at the pinned commit, with file and line counts, a short description, and links to the module and concept pages.
+prerequisites: none
+related: code/init-py, code/config-py, code/connectors-core, learn/vllm-plugins
+summary: The folder tree of afd-plugin at the pinned commit, with file and line counts, a GPU/NPU/shared split, and how the folders depend on each other.
 ---
-<!-- TEMPLATE: tools/gen_folder_tree.py writes the tree between the markers. Add folder descriptions in its DESCRIPTIONS dict, not here. -->
+<p>This page maps the repository. It shows the folder tree with counts, which folder depends on which, and how
+much of the Python code is GPU, NPU or shared. The module pages then read the most important files.</p>
+
 <h2>Purpose</h2>
-<p>This page shows every folder of the repository. Click a folder name to open it at the pinned commit. Folders with a module page have a link to it.</p>
-<p>Each description marks the folder as <strong>GPU</strong>, <strong>NPU</strong> (Ascend) or <strong>shared</strong>. Some folders are out of scope; the description says so. The marks are only on the folders the author checked.</p>
+<p>afd-plugin is one Python package, <code>afd_plugin</code>, plus kernels, recipes, docs and tests. The package
+is what vLLM loads. This map helps you find a file and see where it sits before you open a module page.</p>
 
 <h2>The folder tree</h2>
+<p>The tree below is generated from the repository at the pinned commit. The counts are tracked files and text
+lines per folder. Out-of-scope folders are marked.</p>
 <!-- BEGIN GENERATED folder-tree -->
 <p class="ct-total">595 tracked files, 164,972 lines (text files only; counted with <code>git ls-tree</code> at the pinned commit).</p>
 <div class="ct-tree"><ul><li>{{cite .agents/ | .agents/}} <span class="ct-n">95 files · 10,124 lines</span><ul><li>{{cite .agents/skills/ | .agents/skills/}} <span class="ct-n">95 files · 10,124 lines</span></li></ul></li><li>{{cite .buildkite/ | .buildkite/}} <span class="ct-n">9 files · 1,437 lines</span><ul><li>{{cite .buildkite/common/ | .buildkite/common/}} <span class="ct-n">3 files · 1,250 lines</span></li><li>{{cite .buildkite/cuda/ | .buildkite/cuda/}} <span class="ct-n">6 files · 187 lines</span></li></ul></li><li>{{cite .claude/ | .claude/}} <span class="ct-n">1 files · 1 lines</span></li><li>{{cite .github/ | .github/}} <span class="ct-n">9 files · 396 lines</span><ul><li>{{cite .github/ISSUE_TEMPLATE/ | .github/ISSUE_TEMPLATE/}} <span class="ct-n">6 files · 291 lines</span></li><li>{{cite .github/workflows/ | .github/workflows/}} <span class="ct-n">1 files · 51 lines</span></li></ul></li><li>{{cite afd_plugin/ | afd_plugin/}} <span class="ct-n">82 files · 46,140 lines</span> Shared. The plugin Python package that vLLM loads. Holds the GPU and NPU code.<ul><li>{{cite afd_plugin/compat/ | afd_plugin/compat/}} <span class="ct-n">20 files · 3,971 lines</span> Shared. Compat patches that replace vLLM functions at load time. The npu/ subfolder is NPU.</li><li>{{cite afd_plugin/connectors/ | afd_plugin/connectors/}} <span class="ct-n">12 files · 30,259 lines</span> Mixed. The connector contract and factory (shared); gpu/ is GPU and npu/ is NPU. {{link code/connectors-core | page}}</li><li>{{cite afd_plugin/distributed/ | afd_plugin/distributed/}} <span class="ct-n">3 files · 359 lines</span> Shared. The AFD process group, the topology and the role-rank helpers.</li><li>{{cite afd_plugin/model_executor/ | afd_plugin/model_executor/}} <span class="ct-n">20 files · 5,257 lines</span> Mixed. The AFD model wrappers (shared/GPU); the npu/ subfolder is NPU.</li><li>{{cite afd_plugin/v1/ | afd_plugin/v1/}} <span class="ct-n">20 files · 5,036 lines</span> Mixed. The role workers, the model runners, DBO and the CUDA graph code; worker/npu is NPU.</li></ul></li><li>{{cite csrc/ | csrc/}} <span class="ct-n">179 files · 47,057 lines</span> Out of scope. C/C++ kernel sources. gpu/ is a GPU stub; npu/ is the Ascend operator sources.<ul><li>{{cite csrc/gpu/ | csrc/gpu/}} <span class="ct-n">1 files · 3 lines</span> GPU. A stub (one file).</li><li>{{cite csrc/npu/ | csrc/npu/}} <span class="ct-n">177 files · 47,046 lines</span> NPU (Ascend). The prebuilt operator sources. Out of scope: only how the Python code loads them.</li></ul></li><li>{{cite docker/ | docker/}} <span class="ct-n">1 files · 59 lines</span></li><li>{{cite docs/ | docs/}} <span class="ct-n">21 files · 4,975 lines</span> Design notes and user guides. Written against an older commit: use as hints, not as a source.<ul><li>{{cite docs/assets/ | docs/assets/}} <span class="ct-n">3 files · 242 lines</span></li><li>{{cite docs/design/ | docs/design/}} <span class="ct-n">9 files · 2,898 lines</span></li><li>{{cite docs/gpu/ | docs/gpu/}} <span class="ct-n">1 files · 217 lines</span> GPU. The P2P connector user guide.</li><li>{{cite docs/npu/ | docs/npu/}} <span class="ct-n">8 files · 1,618 lines</span> NPU (Ascend). The CAM connector user guides and notes.</li></ul></li><li>{{cite recipe/ | recipe/}} <span class="ct-n">24 files · 2,441 lines</span> Launch scripts per connector and model. gpu/ is GPU and npu/ is NPU.<ul><li>{{cite recipe/gpu/ | recipe/gpu/}} <span class="ct-n">12 files · 1,003 lines</span> GPU. Launch scripts for the P2P connector.</li><li>{{cite recipe/npu/ | recipe/npu/}} <span class="ct-n">11 files · 1,387 lines</span> NPU (Ascend). Launch scripts for the CAM connectors.</li></ul></li><li>{{cite tests/ | tests/}} <span class="ct-n">149 files · 42,186 lines</span> Source of facts only. e2e/ and unit/ are shared; npu/ is NPU.<ul><li>{{cite tests/e2e/ | tests/e2e/}} <span class="ct-n">31 files · 8,199 lines</span></li><li>{{cite tests/npu/ | tests/npu/}} <span class="ct-n">13 files · 6,012 lines</span></li><li>{{cite tests/unit/ | tests/unit/}} <span class="ct-n">103 files · 27,835 lines</span></li></ul></li><li>{{cite tools/ | tools/}} <span class="ct-n">11 files · 2,332 lines</span> Shared. Repository tooling: benchmarks, datasets and pre-commit checks.<ul><li>{{cite tools/benchmarks/ | tools/benchmarks/}} <span class="ct-n">4 files · 506 lines</span></li><li>{{cite tools/datasets/ | tools/datasets/}} <span class="ct-n">1 files · 3 lines</span></li><li>{{cite tools/pre_commit/ | tools/pre_commit/}} <span class="ct-n">4 files · 469 lines</span></li></ul></li></ul></div>
 <!-- END GENERATED folder-tree -->
+<x-note><p>Regenerate this tree with <code>python3 tools/gen_folder_tree.py</code>. The text between the markers
+is generated; do not edit it by hand.</p></x-note>
+
+<h2>How the folders depend on each other</h2>
+<p>The Python imports run in one direction, from the entry point down to the distributed helpers. The main
+edges are:</p>
+<ol>
+  <li><strong>Entry point.</strong> <code>afd_plugin/__init__.py</code> imports the config
+    ({{cite afd_plugin/__init__.py:16}}), then the compat patches, the routing simulator and the DBO op
+    ({{cite afd_plugin/__init__.py:172-192}}).</li>
+  <li><strong>Config and compat.</strong> The <code>config_validation</code> patch reads the AFD config and the
+    validation helpers ({{cite afd_plugin/compat/patches/config_validation.py:20-24}}).</li>
+  <li><strong>Workers and model wrappers.</strong> The runners in <code>v1/worker</code> and the model wrappers
+    in <code>model_executor</code> import the connectors
+    ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:37}},
+    {{cite afd_plugin/model_executor/models/deepseek_v2.py:25}}).</li>
+  <li><strong>Connectors.</strong> The connectors read the config and resolve the role rank from the
+    distributed helpers ({{cite afd_plugin/connectors/factory.py:11-17}}).</li>
+  <li><strong>Distributed.</strong> <code>afd_plugin/distributed</code> holds the process group, the topology
+    and the role-rank helpers; it is at the bottom of the chain.</li>
+</ol>
+<p>So the order is: entry point &#8594; config and compat &#8594; workers and model wrappers &#8594; connectors
+&#8594; distributed.</p>
+
+<h2>The GPU / NPU / shared split</h2>
+<p>About half of the Python is NPU-specific, and only a small part is GPU-specific. The rest is shared.</p>
+<table>
+  <thead><tr><th>Group</th><th>Files (.py)</th><th>Lines</th></tr></thead>
+  <tbody>
+    <tr><td>Shared (not in a <code>gpu/</code> or <code>npu/</code> folder)</td><td>42</td><td>9,734</td></tr>
+    <tr><td>NPU (Ascend)</td><td>34</td><td>9,329</td></tr>
+    <tr><td>GPU (CUDA)</td><td>2</td><td>1,132</td></tr>
+    <tr><td><strong>Total <code>afd_plugin/</code></strong></td><td><strong>78</strong></td><td><strong>20,195</strong></td></tr>
+  </tbody>
+</table>
+<x-note title="What &quot;shared&quot; means here"><p>The split is by folder name. A file counts as GPU or NPU only
+when a path part is <code>gpu</code> or <code>npu</code>. Several "shared" files are CUDA paths in practice: the
+repository groups only the connectors by backend ({{cite afd_plugin/connectors/gpu/}},
+{{cite afd_plugin/connectors/npu/}}), while the shared runners and model wrappers live outside those
+folders.</p></x-note>
 
 <h2>How the numbers were measured</h2>
-<p>The tool lists the tracked files with <code>git ls-tree</code> at the pinned commit. It counts the lines of text files. It does not count binary files.</p>
+<p>The line counts above and in the tree come from the repository at the pinned commit, not from a tool report.
+The method:</p>
+<ol>
+  <li>List tracked files with <code>git ls-tree -r --name-only</code> at the pinned commit.</li>
+  <li>Keep the <code>.py</code> files under <code>afd_plugin/</code> for the split; count the newlines in each
+    one (a file with no trailing newline still counts its last line).</li>
+  <li>Classify each file: NPU when a path part is <code>npu</code>, GPU when a path part is <code>gpu</code>,
+    else shared.</li>
+</ol>
+<p>The folder tree uses the same <code>git ls-tree</code> file list and newline count, over all text files, not
+only Python. The site tool <code>tools/gen_folder_tree.py</code> does this and writes the tree between the
+markers. Binary files count as 0 lines.</p>
+
+<h2>The module pages</h2>
+<p>These eight pages read the most important modules:</p>
+<ul>
+  <li>{{link code/init-py}} — the plugin entry module.</li>
+  <li>{{link code/config-py}} — the AFD config dataclass and parsing.</li>
+  <li>{{link code/validation-py}} — the config validation patch.</li>
+  <li>{{link code/connectors-core}} — the connector base class and factory.</li>
+  <li>{{link code/p2p-py}} — the GPU P2P connector.</li>
+  <li>{{link code/attention-worker}} — the attention worker and runner.</li>
+  <li>{{link code/ffn-worker}} — the FFN worker and runner.</li>
+  <li>{{link code/deepseek-v2-py}} — the DeepSeek-V2 model wrapper.</li>
+</ul>

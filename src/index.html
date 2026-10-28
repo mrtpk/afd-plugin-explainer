@@ -1,17 +1,223 @@
 ---
 summary: A study site for afd-plugin, the vLLM external plugin for Attention-FFN Disaggregation (AFD). It explains the code at two pinned commits.
 ---
-<!-- STUB home page. A later writer writes the real home page (system map, "Start here", "How to use"). Keep the id "code-version": the footer links to it. -->
+<!-- Home page. Keep the id "code-version": the footer links to it. -->
 
-<p><strong>{{project name}}</strong> is a vLLM external {{term plugin | plugin}}. It adds {{term afd}} to
-vLLM v0.30.0 and changes no vLLM source file. This site explains the plugin code at commit
-<code>{{project short_sha}}</code>, and the vLLM code it builds on at commit
+<p><strong>{{project name}}</strong> is a {{term plugin | vLLM external plugin}} for
+{{term afd}}. The attention part and the feed-forward (FFN/MoE) part of a model run in two separate server
+processes, and a {{term connector}} moves hidden states between them. The plugin adds its own worker classes,
+model runners, model wrappers, connectors, config validation and compatibility {{term patch | patches}}, and
+it changes no vLLM source file ({{cite README.md:9-13}}, {{cite README.md:21-24}}). This site explains the
+plugin code at commit <code>{{project short_sha}}</code>, and the vLLM code it builds on at commit
 <code>{{project vllm_short_sha}}</code>. You need to know Python and the basics of LLM serving.</p>
 
-<p>This is a stub home page. A later writer adds the system map, the "Start here" paths and the
-"How to use" section.</p>
+<h2 id="facts">At a glance</h2>
+<table>
+  <tbody>
+    <tr><th>What it is</th><td>A vLLM external plugin for Attention-FFN Disaggregation (AFD)
+      ({{cite README.md:9-13}}).</td></tr>
+    <tr><th>Runs on</th><td>NVIDIA CUDA GPU and Ascend NPU ({{cite README.md:11-13}}). This site explains the
+      GPU paths in full; one page, {{link concepts/npu-overview}}, covers the NPU.</td></tr>
+    <tr><th>Targets</th><td>vLLM <code>v0.30.0</code> at commit <code>{{project vllm_short_sha}}</code>
+      ({{cite README.md:21}}, {{cite pyproject.toml:37}}). Other vLLM versions are not supported on GPU
+      ({{cite README.md:69-70}}).</td></tr>
+    <tr><th>Models</th><td>DeepSeek V2 / V3 / V3.2 / V4, GLM-MoE-DSA, Qwen3-MoE and Qwen3.5 / Qwen3.6-MoE.
+      Each is registered under an <code>AFD</code>-prefixed name
+      ({{cite afd_plugin/__init__.py:96-131}}, {{cite README.md:47-51}}).</td></tr>
+    <tr><th>Connectors</th><td>Three: <code>P2pNcclAFDConnector</code> (CUDA),
+      <code>CAMP2pAFDConnector</code> and <code>CAMAsyncAFDConnector</code> (both NPU)
+      ({{cite afd_plugin/connectors/factory.py:88-102}}).</td></tr>
+    <tr><th>Code size</th><td>About 20,195 lines of Python in <code>afd_plugin/</code>, across 78 files.
+      The C/C++ kernels in <code>csrc/</code> are out of scope. See {{link code/index}} for the breakdown and
+      the method.</td></tr>
+    <tr><th>How to run</th><td>Start two <code>vllm serve</code> processes, one for each role, and give each one
+      <code>--additional-config '{"afd":{ ... }}'</code>. Send requests only to the attention API server
+      ({{cite README.md:218-240}}, {{cite README.md:258-260}}).</td></tr>
+  </tbody>
+</table>
+
+<h2 id="system-map">The system map</h2>
+<p>One decode step runs left to right, then back. The attention server computes attention and hands its hidden
+states to the FFN server through the connector. The FFN server runs the experts and hands the result back. The
+colour stripe shows where the code runs. Each box links to its page and to the file.</p>
+
+<div class="sm">
+  <div class="sm-legend" aria-hidden="true">
+    <span class="sm-k"><span class="sm-sw sm-attn"></span> attention side</span>
+    <span class="sm-k"><span class="sm-sw sm-ffn"></span> FFN side</span>
+    <span class="sm-k"><span class="sm-sw sm-xport"></span> connector (the transport)</span>
+    <span class="sm-k"><span class="sm-sw sm-around"></span> around every step</span>
+    <span class="sm-k"><span class="sm-tag">vLLM</span> vLLM code</span>
+    <span class="sm-k"><span class="sm-tag sm-afd">afd</span> afd-plugin code</span>
+  </div>
+
+  <div class="sm-cols">
+    <section class="sm-col" aria-label="Attention server: one decode step">
+      <h3 class="sm-col-h">Attention server</h3>
+      <ul class="sm-steps">
+        <li class="sm-box sm-attn">
+          <div class="sm-head"><span class="sm-n">1</span>
+            <span class="sm-t">{{link concepts/roles | API server}}</span>
+            <span class="sm-tag">vLLM</span></div>
+          <span class="sm-path">{{cite vllm:vllm/entrypoints/openai/api_server.py | vllm/entrypoints/openai/api_server.py}}</span>
+        </li>
+        <li class="sm-arrow" aria-hidden="true">&#8595;</li>
+        <li class="sm-box sm-attn">
+          <div class="sm-head"><span class="sm-n">2</span>
+            <span class="sm-t">{{link concepts/roles | EngineCore / scheduler}}</span>
+            <span class="sm-tag">vLLM</span></div>
+          <span class="sm-path">{{cite vllm:vllm/v1/engine/core.py | vllm/v1/engine/core.py}}</span>
+        </li>
+        <li class="sm-arrow" aria-hidden="true">&#8595;</li>
+        <li class="sm-box sm-attn">
+          <div class="sm-head"><span class="sm-n">3</span>
+            <span class="sm-t">{{link code/attention-worker | attention worker}}</span>
+            <span class="sm-tag sm-afd">afd</span></div>
+          <span class="sm-path">{{cite afd_plugin/v1/worker/attention_worker.py | afd_plugin/v1/worker/attention_worker.py}}</span>
+        </li>
+        <li class="sm-arrow" aria-hidden="true">&#8595;</li>
+        <li class="sm-box sm-attn">
+          <div class="sm-head"><span class="sm-n">4</span>
+            <span class="sm-t">{{link concepts/attention-runtime | attention model runner}}</span>
+            <span class="sm-tag sm-afd">afd</span></div>
+          <span class="sm-path">{{cite afd_plugin/v1/worker/attention_model_runner_v2.py | afd_plugin/v1/worker/attention_model_runner_v2.py}}</span>
+        </li>
+        <li class="sm-arrow" aria-hidden="true">&#8595;</li>
+        <li class="sm-box sm-attn">
+          <div class="sm-head"><span class="sm-n">5</span>
+            <span class="sm-t">{{link concepts/model-wrappers | model wrapper layer}}</span>
+            <span class="sm-tag sm-afd">afd</span></div>
+          <span class="sm-path">{{cite afd_plugin/model_executor/models/deepseek_v2.py | afd_plugin/model_executor/models/deepseek_v2.py}}</span>
+        </li>
+        <li class="sm-arrow" aria-hidden="true">&#8595;</li>
+        <li class="sm-box sm-attn">
+          <div class="sm-head"><span class="sm-n">6</span>
+            <span class="sm-t">{{link concepts/connector-contract | connector (send / receive)}}</span>
+            <span class="sm-tag sm-afd">afd</span></div>
+          <span class="sm-path">{{cite afd_plugin/connectors/base.py | afd_plugin/connectors/base.py}}</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="sm-col" aria-label="FFN server: the server loop">
+      <h3 class="sm-col-h">FFN server</h3>
+      <ul class="sm-steps">
+        <li class="sm-box sm-ffn">
+          <div class="sm-head"><span class="sm-n">A</span>
+            <span class="sm-t">{{link code/ffn-worker | FFN worker server loop}}</span>
+            <span class="sm-tag sm-afd">afd</span></div>
+          <span class="sm-path">{{cite afd_plugin/v1/worker/ffn_worker.py | afd_plugin/v1/worker/ffn_worker.py}}</span>
+        </li>
+        <li class="sm-arrow" aria-hidden="true">&#8595;</li>
+        <li class="sm-box sm-ffn">
+          <div class="sm-head"><span class="sm-n">B</span>
+            <span class="sm-t">{{link concepts/ffn-runtime | FFN model runner}}</span>
+            <span class="sm-tag sm-afd">afd</span></div>
+          <span class="sm-path">{{cite afd_plugin/v1/worker/ffn_model_runner.py | afd_plugin/v1/worker/ffn_model_runner.py}}</span>
+        </li>
+        <li class="sm-arrow" aria-hidden="true">&#8595;</li>
+        <li class="sm-box sm-ffn">
+          <div class="sm-head"><span class="sm-n">C</span>
+            <span class="sm-t">{{link concepts/moe-handoff | FFN / MoE layer}}</span>
+            <span class="sm-tag sm-afd">afd</span></div>
+          <span class="sm-path">{{cite afd_plugin/model_executor/models/deepseek_v2.py | afd_plugin/model_executor/models/deepseek_v2.py}}</span>
+        </li>
+      </ul>
+    </section>
+  </div>
+
+  <div class="sm-connector">
+    <div class="sm-box sm-xport">
+      <div class="sm-head"><span class="sm-n">&#8644;</span>
+        <span class="sm-t">{{link concepts/connector-contract | The connector between the two servers}}</span>
+        <span class="sm-tag sm-afd">afd</span></div>
+      <span class="sm-path">{{cite afd_plugin/connectors/gpu/p2p.py | afd_plugin/connectors/gpu/p2p.py}} ·
+        {{cite afd_plugin/connectors/base.py | base.py}}</span>
+      <p style="margin:.4rem 0 0;font-size:.86rem;">Step 6 sends the hidden states to the FFN server (the
+      {{term data-plane | data plane}}), and the per-stage token counts travel on the
+      {{term control-plane | control plane}}. The FFN output comes back the same way.</p>
+    </div>
+  </div>
+
+  <section class="sm-around">
+    <h3 class="sm-col-h">Around every step</h3>
+    <ul class="sm-steps">
+      <li class="sm-box sm-around">
+        <div class="sm-head"><span class="sm-t">{{link concepts/compat-patches | Config + patches at start-up}}</span>
+          <span class="sm-tag sm-afd">afd</span></div>
+        <span class="sm-path">{{cite afd_plugin/config.py | afd_plugin/config.py}} ·
+          {{cite afd_plugin/compat/patches/ | compat/patches/}}</span>
+      </li>
+      <li class="sm-box sm-around">
+        <div class="sm-head"><span class="sm-t">{{link concepts/plugin-entry-point | Plugin entry point}}</span>
+          <span class="sm-tag sm-afd">afd</span></div>
+        <span class="sm-path">{{cite afd_plugin/__init__.py:142 | afd_plugin/__init__.py register_afd}}</span>
+      </li>
+      <li class="sm-box sm-around">
+        <div class="sm-head"><span class="sm-t">{{link concepts/topology | Topology and role ranks}}</span>
+          <span class="sm-tag sm-afd">afd</span></div>
+        <span class="sm-path">{{cite afd_plugin/distributed/topology.py | afd_plugin/distributed/topology.py}}</span>
+      </li>
+    </ul>
+  </section>
+</div>
+
+<x-simplified><p>The map shows one decode step on a simple one-attention, one-FFN topology. It leaves out data
+parallelism, the per-peer split and concatenation, {{term dbo | DBO}} (two {{term stage | stages}} per layer)
+and the CUDA graph replay. The connector runs once per model layer, not once per step. The tours and the
+concept pages give the full detail.</p></x-simplified>
+
+<h2 id="start-here">Start here</h2>
+<p>Pick the path that fits what you know.</p>
+<ul>
+  <li><strong>Path A — new to AFD.</strong> Start with {{link learn/what-is-afd}}, then
+    {{link learn/vllm-plugins}} and {{link learn/vllm-v1-map}}. Then read {{link concepts/roles}} and the tour
+    {{link tours/life-of-a-request}}.</li>
+  <li><strong>Path B — you know vLLM internals.</strong> Go straight to {{link concepts/plugin-entry-point}},
+    {{link concepts/worker-selection}} and {{link concepts/connector-contract}}. Then follow
+    {{link tours/one-decode-step}}.</li>
+  <li><strong>Path C — you want to deploy.</strong> Read {{link concepts/deployment-topologies}} and
+    {{link concepts/tuning}}, then {{link tours/run-a-recipe}} and the {{link reference/recipes}} table.</li>
+</ul>
+
+<h2 id="how-to-use">How to use this site</h2>
+<ul>
+  <li><strong>Levels.</strong> Each page shows a level dot: Beginner, Intermediate or Advanced.</li>
+  <li><strong>Two depths.</strong> Each page starts simple, then has a <em>Deep dive</em> with shapes, numbers
+    and a line-by-line code reading. Use "Open all deep dives" to expand them.</li>
+  <li><strong>Check yourself.</strong> Most pages end with a short quiz.</li>
+  <li><strong>Search.</strong> Press <kbd>/</kbd> to search. Hover a glossary term for its tooltip.</li>
+  <li><strong>Code links.</strong> Every <code>file:line</code> link opens the exact code at the pinned
+    commit.</li>
+  <li><strong>Grey "soon" entries</strong> in the sidebar are pages that are not written yet.</li>
+</ul>
+
+<h2 id="not-in-this-release">What is not in this release</h2>
+<p>This site has limits of scope, and the plugin itself states limits.</p>
+<p><strong>Out of the site's scope.</strong></p>
+<ul>
+  <li>The C/C++ kernel sources in <code>csrc/</code>. The site explains only how the Python code selects,
+    builds, loads and calls them.</li>
+  <li>The Ascend NPU code, except the one overview page {{link concepts/npu-overview}}. Other pages name the
+    NPU variant in one line only.</li>
+  <li>The tests. They are a source of facts, not a page topic.</li>
+</ul>
+<p><strong>What the repository calls experimental or limited.</strong></p>
+<ul>
+  <li>The project is experimental and needs more large-scale testing ({{cite README.md:17-19}}).</li>
+  <li>The GPU target is exactly vLLM <code>0.30.0</code>; other versions are not supported on GPU
+    ({{cite README.md:69-70}}).</li>
+  <li>GPU CUDA graphs are limited to <code>FULL_DECODE_ONLY</code> ({{cite README.md:86}}).</li>
+  <li>Native {{term dbo | DBO}} is limited to exactly two {{term ubatch | ubatches}} ({{cite README.md:87}}).</li>
+  <li>Qwen3-MoE rejects attention-side gate placement, sequence-parallel MoE, EPLB, pipeline parallelism,
+    speculative decoding, LoRA and NPU ({{cite README.md:91-92}}).</li>
+  <li>The GPU and NPU end-to-end tests are opt-in and need real hardware and model weights
+    ({{cite README.md:85}}).</li>
+</ul>
 
 <h2 id="code-version">The code version this site explains</h2>
 <p>This site explains one exact {{term commit}} of each repository. Use these versions when you study the
-code with the site.</p>
+code with the site. The plugin pins vLLM to one release: <code>vllm==0.30.0</code> ({{cite pyproject.toml:37}}),
+and the README names the exact commit ({{cite README.md:21}}). So every line number on this site is stable
+only at these two commits.</p>
 <x-version />
