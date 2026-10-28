@@ -27,9 +27,9 @@ contract itself is on {{link concepts/connector-contract}}; this page reads the 
 <h2>Where it sits</h2>
 <h3>Who calls it</h3>
 <p>The factory loads this module by name and builds the connector for a runner
-({{cite afd_plugin/connectors/factory.py:88-92}}). The runner then calls <code>init_afd_connector</code> once,
-the four data calls per layer and stage, and <code>close</code> at shutdown
-({{cite afd_plugin/v1/worker/ffn_model_runner.py:108-109}}).</p>
+({{cite afd_plugin/connectors/factory.py:88-92}}). The runner then calls <code>init_afd_connector</code> once
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:108-109}}), then the four data calls per layer and stage, and
+<code>close</code> at shutdown ({{cite afd_plugin/v1/worker/ffn_model_runner.py:455}}).</p>
 <h3>What it calls</h3>
 <p>The data transfers go through vLLM's <code>PyNcclCommunicator.send</code> and <code>recv</code>
 ({{cite vllm:vllm/distributed/device_communicators/pynccl.py:91}}). The process groups come from the plugin's

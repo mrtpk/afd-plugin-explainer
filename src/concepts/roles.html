@@ -62,7 +62,7 @@ executor and then returns, before the KV cache and the scheduler are set up
 <x-code file="afd_plugin/compat/patches/engine_core.py" lines="56-69" highlight="59,68" caption="The FFN EngineCore stops after the executor is built." />
 <p>The FFN EngineCore sets the KV block counts to zero and installs a no-op scheduler. The no-op scheduler is
 not <code>None</code>, because a native readiness handshake calls a method on it
-({{cite afd_plugin/compat/patches/engine_core.py:605}},
+({{cite afd_plugin/compat/patches/engine_core.py:605-606}},
 {{cite afd_plugin/compat/patches/engine_core.py:608-614}}).</p>
 
 <h3>Step 3: The FFN worker has no KV cache and does not sample</h3>

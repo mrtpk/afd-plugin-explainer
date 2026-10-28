@@ -24,8 +24,8 @@ Update it after every subagent finishes and after every user decision.
 | S1 Samples (home, learn/vllm-plugins, code/index, code/init-py) | done (239k tokens) | done (6 defects, 208k tokens) | yes |
 | S2 Samples (tour life-of-a-request, reference/afd-config) | done (260k tokens) | done (6 defects) | yes |
 | B1 Basics + boundary | done (280k) | done (6 defects, 215k) | yes |
-| B2 Roles, topology, connectors | done (277k) | running | yes (pending) |
-| B3 Model split + execution | – | – | – |
+| B2 Roles, topology, connectors | done (277k) | done (2 defects) | yes |
+| B3 Model split + execution | running | – | – |
 | B4 Graphs, DBO, patches | – | – | – |
 | B5 Deploy, NPU, reference | – | – | – |
 | F Final | – | – | – |
@@ -51,6 +51,10 @@ Update it after every subagent finishes and after every user decision.
 
 ## Done
 
+- 2026-10-28: FC-B2 done: ~70 claims, 2 citation defects (p2p-py lifecycle cite split; roles engine_core.py:605-606). Mapper re-derived for A = F, F+1, 2F, 2F+1 and A < F: all match the code. Sampled: code/connectors-core, code/p2p-py. No suspected bugs.
+- BUDGET NOTE: sample-checked (not full): code/connectors-core, code/p2p-py (B2). List in README.
+- FINAL-PASS TODO: concepts/model-wrappers (B3) must give the full construction branch set (deepseek_v2.py:493-517 incl. GateOnlyRemoteMoE :502 and dense MLP :509 for compute_gate_on_attention; FFN role :519-561) so it matches the simplified table on concepts/roles.
+- FINAL-PASS TODO: concepts/npu-overview (B5) must own and cite the async CAM "receive loop drives the FFN side" mechanism that concepts/control-plane (step 6, quiz) states in one line.
 - 2026-10-28: B2 writer done: concepts roles, topology (+ topology-mapper visual, CSS in viz.css), control-plane, wire-data; code/connectors-core, code/p2p-py; 4 diagrams; b2.json (afd-world). Build 0 errors; site check 22 pages 0 problems; mapper tested (click, 40 px, aria-live, 390 px). Supervisor added core.json term `step`. No suspected bugs.
 - 2026-10-28: FC-B1 done: ~120 claims; 6 defects (4 line counts; "VLLM_USE_V2_MODEL_RUNNER set/not set" → "V2 runner on/off" in 6 places; patch-guard wording). Sampled: code/config-py, code/validation-py (sections listed in the FC report: first screen, key tables, every default/number/order, ~1 in 3 prose). Supervisor verified the V2 default in vLLM (config/vllm.py:675-722), fixed core.json model-runner-v2 term and a weak citation on plugin-entry-point (line 89: cite two call sites instead of the func() loop). Lessons 15-17 added. No suspected bugs.
 - FINAL-PASS TODO: FAQ "docs vs code": README.md:204 says both roles require VLLM_USE_V2_MODEL_RUNNER=1; vLLM picks V2 by default when unset (vllm:vllm/config/vllm.py:692-694 + :695-722). Also any later page that says "set/not set" for V2 on/off.
@@ -80,7 +84,7 @@ Update it after every subagent finishes and after every user decision.
 
 ## Next step
 
-FC-B2 RUNNING (no pause, user instruction). If cut off: resume it, do not restart. B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → FC-B1 (no pause, user instruction) (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → B2 → B3 with no pauses → PAUSE after B3 fact-checked. Then B4, B5 with pauses, then F.
+B3 WRITER RUNNING (no pause, user instruction). If cut off: resume it, do not restart. B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → FC-B1 (no pause, user instruction) (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → B2 → B3 with no pauses → PAUSE after B3 fact-checked. Then B4, B5 with pauses, then F.
 
 ## Questions for the user
 
@@ -115,4 +119,5 @@ FC-B2 RUNNING (no pause, user instruction). If cut off: resume it, do not restar
 | 2026-10-28 | explainer-worker: B1 writer | done; 8 pages, 6 diagrams, 0 errors |
 | 2026-10-28 | explainer-worker: FC-B1 (full + sample for 2 module pages) | done; ~120 claims, 6 defects, 215k tokens |
 | 2026-10-28 | explainer-worker: B2 writer | done; 6 pages, 4 diagrams, topology-mapper, 277k |
-| 2026-10-28 | explainer-worker: FC-B2 | running |
+| 2026-10-28 | explainer-worker: FC-B2 (full + sample for 2 module pages) | done; ~70 claims, 2 defects |
+| 2026-10-28 | explainer-worker: B3 writer | running |
