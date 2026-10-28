@@ -1,0 +1,172 @@
+---
+title: The attention runtime: a seam over Model Runner V2
+nav_title: Attention runtime
+level: Advanced
+prerequisites: concepts/roles
+related: concepts/ffn-runtime, concepts/control-plane, concepts/model-wrappers, code/attention-worker
+summary: The attention runner is a thin subclass of the native vLLM GPU Model Runner V2. It overrides a few seams for the connector and the control plane, and delegates the model forward, sampling and output to the native class.
+---
+<x-sentence>The attention runner, <code>AFDAttentionModelRunnerV2</code>, wraps the native vLLM {{term model-runner-v2 | Model Runner V2}}. It adds the {{term connector}} and {{term control-plane | control plane}}, and reuses the rest.</x-sentence>
+
+<h2>The idea</h2>
+<p>On the {{term attention-role | attention role}}, {{term afd}} does not rewrite the vLLM model runner. It
+subclasses it. <code>AFDAttentionModelRunnerV2</code> inherits the native GPU
+{{term model-runner-v2 | Model Runner V2}} and an AFD metadata mixin
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:358}}). The native class keeps request state, input
+preparation, attention, the KV cache, sampling and the output. The AFD subclass adds only the connector
+lifecycle and the control-plane publish.</p>
+<p>The runner's own docstring states this split: native V2 keeps execution, dummy runs and the graph lifecycle;
+the AFD methods are connector and context plumbing
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:358-365}}).</p>
+<p><strong>An everyday comparison.</strong> Think of a seat cover on a car seat. It adds a pocket and a strap,
+but the seat, the frame and the belt stay the same. The comparison stops here: the runner's "pocket" must open
+and close at the exact moment vLLM builds each forward context.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b3_attention_runtime" alt="Two panels. Panel 1: a blue box AFDAttentionModelRunnerV2 lists its overrides: __init__ makes the connector (369-411), load_model inits the connector at the end (454-462), initialize_kv_cache enables DP1 ubatch (473-486), capture_model (509-553), execute_model wraps and delegates (569-595). An arrow labelled delegates points to a neutral box native GPUModelRunnerV2 that keeps request state, attention and KV cache, the model forward, logits and sampling every step, and the output. Panel 2: control plane once per step before the layer loop. Two violet publish seams, the DBO ubatch prepare seam (156-157) and the non-DBO forward-context provider (248-257), both point to a blue box control_plane.send_dp_metadata_list." caption="Figure: the AFD runner overrides a few seams and delegates to native V2. One of two seams publishes the DP metadata once per step." />
+<p>Read panel 1 as a thin layer over the native class. Every override calls <code>super()</code> for the real
+work. Panel 2 shows the one control-plane publish per step, before the layer loop; the
+{{term data-plane | data plane}} then runs once per layer and {{term stage}}.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: Construction makes the connector and checks for a control plane</h3>
+<p>The constructor validates the V2 contract, calls <code>super().__init__</code>, then builds the connector
+through the factory ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:369-411}}). It requires a
+control-plane-driven connector and raises otherwise
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:394-397}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="382-397" highlight="384,394" caption="Build the connector; a connector with no control plane is rejected." />
+
+<h3>Step 2: load_model defers the connector rendezvous to the end</h3>
+<p><code>load_model</code> calls native loading first, then initializes the connector. The comment explains the
+order: the rendezvous waits until weights are loaded, so attention and FFN weight loading overlap
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:454-462}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="454-462" highlight="460,462" caption="load_model: native load, then the collective connector init at the end." />
+
+<h3>Step 3: execute_model wraps native V2 in the AFD context</h3>
+<p><code>execute_model</code> steps the profiler, opens <code>_use_afd_execution_context</code>, then delegates
+the whole forward to <code>super().execute_model</code>
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:569-595}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="580-595" highlight="582,586" caption="The AFD context scopes the metadata provider; native V2 runs the model and samples." />
+<p>Because the forward is native, logits and sampling are native too. They run once per {{term step}}, after the
+last layer, on the attention side ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:586}}).</p>
+
+<h3>Step 4: The AFD metadata provider installs the sidecar</h3>
+<p>Model wrappers read AFD metadata from the vLLM forward context. The provider installs it as vLLM makes each
+context. The plugin cannot extend <code>set_forward_context</code>, so it wraps
+<code>create_forward_context</code> for the scope and mutates <code>additional_kwargs</code>
+({{cite afd_plugin/model_executor/models/forward_context.py:37-67}}).</p>
+<x-code file="afd_plugin/model_executor/models/forward_context.py" lines="55-67" highlight="58,63" caption="use_afd_metadata_provider: wrap the native context factory, then restore it." />
+<p>The installer and the publish logic live in the shared mixin,
+<code>AFDMetadataProviderMixin</code> ({{cite afd_plugin/v1/worker/attention_metadata.py:21}}). Both the V2
+runner and the NPU runners reuse it.</p>
+
+<h3>Step 5: The control plane publishes once per step</h3>
+<p>The {{term dp-metadata | DP metadata}} crosses once per step, before the layer loop. One of two seams sends
+it. With {{term dbo | DBO}}, the ubatch prepare seam sends it after it stages the microbatches
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:153-158}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="153-158" highlight="156,157" caption="DBO path: publish the control payload from the prepare seam." />
+<p>Without DBO, the forward-context provider sends it once, unless a graph lifecycle already pre-sent it
+({{cite afd_plugin/v1/worker/attention_metadata.py:248-257}}). Both paths end in
+<code>send_dp_metadata</code>, which updates the connector state and sends the payload
+({{cite afd_plugin/v1/worker/attention_metadata.py:115-116}}).</p>
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="_use_afd_execution_context, scope by scope">
+<p>The context manager opens several scopes together, then restores the runner's sidecar state when it exits
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:316-355}}).</p>
+<ol>
+  <li><code>use_gpu_mrv2_dbo_dispatch()</code> lets native V2 run DBO on DP1
+      ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:342}}).</li>
+  <li><code>_use_afd_fullgraph_replay_hook</code>, but only in <code>FULL_DECODE_ONLY</code> graph mode
+      ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:323-339}}).</li>
+  <li><code>_use_afd_ubatch_preparation</code> wraps the native ubatch <code>prepare</code> to attach the
+      sidecar and publish control ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:344}}).</li>
+  <li><code>use_afd_metadata_provider</code> installs the sidecar on every new context
+      ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:345-347}}).</li>
+</ol>
+<p>The <code>finally</code> block restores the pending metadata, the suppress flag and the warm-up and graph
+flags ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:350-355}}).</p>
+</x-deepdive>
+
+<x-deepdive title="How DBO and graph replay plug in">
+<p><strong>DBO.</strong> {{term dbo | Dual-batch overlap}} runs two {{term stage | stages}} per layer.
+<code>initialize_kv_cache</code> scopes a factory so native V2 builds a DP1 ubatch runner
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:473-486}}). At run time the prepare seam stages the
+two microbatches and publishes one control payload for both
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:153-158}}). The {{link concepts/dbo}} page reads the
+yield op.</p>
+<p><strong>Graph replay.</strong> AFD supports {{term full-decode-only | FULL_DECODE_ONLY}} graphs.
+<code>capture_model</code> wraps the native capture so each descriptor publishes one warm-up and one capture
+payload ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:509-553}}). Native FULL replay builds no
+context, so a per-manager hook publishes one padded control payload before each replay
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:270-303}}). The {{link concepts/cuda-graphs}} page
+reads capture and replay in full.</p>
+</x-deepdive>
+
+<x-deepdive title="What stays native">
+<p>The AFD subclass never copies these; it inherits them from native V2 and the vLLM stack.</p>
+<table>
+  <thead><tr><th>Part</th><th>Owner</th></tr></thead>
+  <tbody>
+    <tr><td>scheduler, token batching</td><td>vLLM EngineCore, native</td></tr>
+    <tr><td>request and input state, attention, KV cache</td><td>native GPUModelRunnerV2</td></tr>
+    <tr><td>the model forward</td><td>native, through the AFD model wrapper</td></tr>
+    <tr><td>logits + sampling, once per step after the last layer</td><td>native, on the attention side</td></tr>
+    <tr><td>ModelRunnerOutput</td><td>native</td></tr>
+  </tbody>
+</table>
+<p>The attention side keeps the full vLLM serving loop. The connector and control plane are the only additions.
+The {{link concepts/ffn-runtime}} page shows the FFN side, which drops all of this.</p>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<x-simplified><p>This page reads the GPU runner. The NPU runners reuse the same mixin but have their own
+context handling, covered on {{link concepts/npu-overview}}. For the file layout, see
+{{link code/attention-worker}}.</p></x-simplified>
+<ul>
+  <li><strong>A connector with no control plane.</strong> The runner raises at construction; the GPU attention
+      runner needs a control plane ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:394-397}}).</li>
+  <li><strong>A KV-only context with no batch descriptor.</strong> The runner skips the AFD install for such a
+      context, so it does not start a spurious transaction
+      ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:434-443}}).</li>
+  <li><strong>Construction failure.</strong> If any step after <code>super().__init__</code> raises, the
+      runner closes the connector and shuts down native state, then re-raises
+      ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:405-411}}).</li>
+  <li><strong>Missing graph manager in FULL_DECODE_ONLY.</strong> The replay hook raises if the graph manager
+      is not initialized ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:244-248}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The runner must publish the DP metadata before the layers start, and attach
+the sidecar on every context. If a seam misses, the FFN side waits for a payload that never arrives, or a layer
+runs with no connector in scope.</p>
+
+<x-quiz>
+  <x-q level="easy">Which native class does the attention runner subclass?
+    <x-a><p>The GPU <code>GPUModelRunner</code> (Model Runner V2), imported as <code>GPUModelRunnerV2</code>
+      ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:358}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">Where does sampling run in AFD?
+    <x-a><p>On the attention side, in native V2, once per step after the last layer. The AFD
+      <code>execute_model</code> delegates to <code>super</code>
+      ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:586}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Why does <code>load_model</code> initialize the connector at the end?
+    <x-a><p>So the collective rendezvous waits until weights are loaded, letting attention and FFN weight
+      loading overlap ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:454-462}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">The plugin cannot extend <code>set_forward_context</code>. How does it attach AFD
+    metadata to the forward context?
+    <x-a><p>It wraps <code>create_forward_context</code> for the scope and mutates
+      <code>additional_kwargs</code> right after vLLM makes the context
+      ({{cite afd_plugin/model_executor/models/forward_context.py:37-67}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">There are two control-plane publish seams. When is each used, and how often do they send per
+    step?
+    <x-a><p>The DBO ubatch prepare seam sends when DBO stages microbatches
+      ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:156-157}}); the forward-context provider sends
+      on the non-DBO path, unless a graph lifecycle pre-sent it
+      ({{cite afd_plugin/v1/worker/attention_metadata.py:248-257}}). Either way, the control plane sends once
+      per step, before the layer loop.</p></x-a>
+  </x-q>
+</x-quiz>

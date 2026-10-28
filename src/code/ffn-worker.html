@@ -1,0 +1,128 @@
+---
+title: v1/worker: the FFN worker and runner
+nav_title: ffn_worker.py
+level: Advanced
+prerequisites: concepts/ffn-runtime
+related: concepts/ffn-runtime, concepts/control-plane, code/attention-worker, code/deepseek-v2-py
+summary: Three files run the FFN role: the worker that starts the daemon loop, the stand-alone connector-driven runner, and the CPU-safe token-count helpers that map attention counts to FFN ranks.
+---
+<x-sentence>The FFN role is a native vLLM {{term worker-cls | worker}} that starts a daemon loop, a stand-alone runner driven by the {{term control-plane | control plane}}, and small token-count helpers.</x-sentence>
+
+<h2>Purpose</h2>
+<p>These three files run the FFN side with no scheduler and no KV cache. The concept is on
+{{link concepts/ffn-runtime}}; this page maps the files.</p>
+<table>
+  <thead><tr><th>Item</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Files (lines, origin)</td><td><code>ffn_worker.py</code> (226), <code>ffn_model_runner.py</code> (483), <code>ffn_metadata.py</code> (93); all AFD-owned</td></tr>
+    <tr><td>Main classes</td><td><code>AFDFFNWorker</code> ({{cite afd_plugin/v1/worker/ffn_worker.py:32}}), <code>GPUFFNModelRunner</code> ({{cite afd_plugin/v1/worker/ffn_model_runner.py:52}})</td></tr>
+    <tr><td>Runs in</td><td>each FFN worker process; the loop runs on a daemon thread; compute on the current CUDA stream</td></tr>
+    <tr><td>Called by</td><td>vLLM, through the rewritten <code>worker_cls</code> ({{cite afd_plugin/validation.py:290-291}}); then the control plane drives the loop</td></tr>
+    <tr><td>Calls</td><td>native <code>Worker</code> and the model loader, the connector, the model wrapper's FFN compute</td></tr>
+    <tr><td>Not in this file</td><td>the attention runtime ({{link code/attention-worker}}), the connector transport ({{link code/p2p-py}}), the model split ({{link code/deepseek-v2-py}})</td></tr>
+  </tbody>
+</table>
+
+<h2>Where it sits</h2>
+<h3>Who calls it</h3>
+<p>The AFD config patch rewrites <code>worker_cls</code> to <code>AFDFFNWorker</code> when the role is FFN
+({{cite afd_plugin/validation.py:280-296}}). The FFN EngineCore returns after the executor is built, so no
+scheduler drives this worker; the loop is driven by the control plane instead
+({{cite afd_plugin/v1/worker/ffn_worker.py:133-158}}).</p>
+<h3>What it calls</h3>
+<p>The worker swaps the runner class and delegates to native <code>Worker.init_device</code>
+({{cite afd_plugin/v1/worker/ffn_worker.py:73-100}}). The runner builds the connector
+({{cite afd_plugin/connectors/factory.py:49-68}}) and calls the model wrapper's
+<code>compute_ffn_output</code> or <code>compute_experts_output</code>.</p>
+
+<h2>Key classes and functions</h2>
+<table>
+  <thead><tr><th>Name</th><th>Line</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td><code>AFDFFNWorker.init_device</code></td><td>{{cite afd_plugin/v1/worker/ffn_worker.py:73-100}}</td><td>swap in the FFN runner for the native window</td></tr>
+    <tr><td><code>initialize_from_config</code></td><td>{{cite afd_plugin/v1/worker/ffn_worker.py:107-113}}</td><td>skip KV cache, init connector, start the loop</td></tr>
+    <tr><td><code>_run_ffn_server_loop</code></td><td>{{cite afd_plugin/v1/worker/ffn_worker.py:160-199}}</td><td>one recv per step, then dispatch</td></tr>
+    <tr><td><code>GPUFFNModelRunner.execute_model</code></td><td>{{cite afd_plugin/v1/worker/ffn_model_runner.py:153-184}}</td><td>replay a graph, or run <code>_ffn_forward</code></td></tr>
+    <tr><td><code>_ffn_forward</code></td><td>{{cite afd_plugin/v1/worker/ffn_model_runner.py:186-269}}</td><td>loop layers x stages: receive, compute, send</td></tr>
+    <tr><td><code>sample_tokens</code></td><td>{{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}}</td><td>raises; the FFN role never samples</td></tr>
+    <tr><td><code>aggregate_ffn_token_counts</code></td><td>{{cite afd_plugin/v1/worker/ffn_metadata.py:15-60}}</td><td>sum attention counts per FFN rank</td></tr>
+  </tbody>
+</table>
+
+<h2>Walk through the main methods</h2>
+
+<h3>_run_ffn_server_loop: one step per control payload</h3>
+<p>The loop runs until the shutdown event is set. Each pass reads one DP-metadata payload, then dispatches to
+capture or execute ({{cite afd_plugin/v1/worker/ffn_worker.py:160-199}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_worker.py" lines="168-199" highlight="169,176,185,191" caption="The loop: reject a connector with no control plane, recv once, then dispatch." />
+<ol>
+  <li>Lines 169-174. A connector with <code>control_plane</code> None raises; the GPU FFN needs one.</li>
+  <li>Line 176. One <code>recv_dp_metadata_list</code> per step.</li>
+  <li>Lines 182-189. Warm-up or graph capture calls <code>capture_model</code>.</li>
+  <li>Lines 190-196. Otherwise <code>execute_model</code> runs the step; then the loop synchronizes.</li>
+</ol>
+
+<h3>_ffn_forward: layers x stages</h3>
+<p>The forward sets the layer set from the gate flag, then loops layers and stages
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:207-269}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_model_runner.py" lines="236-268" highlight="236,257,263,268" caption="recv_attn_output, then compute, then send_ffn_output." />
+<ol>
+  <li>Line 236. <code>recv_attn_output</code> returns the hidden states and the context.</li>
+  <li>Lines 251-261. An attention-side-gate expert layer calls <code>compute_experts_output</code>.</li>
+  <li>Lines 262-267. Any other layer calls <code>compute_ffn_output</code> through
+      <code>_execute_eager_mode</code>.</li>
+  <li>Line 268. <code>send_ffn_output</code> sends the result back.</li>
+</ol>
+
+<h3>aggregate_ffn_token_counts: attention counts to FFN ranks</h3>
+<p>Each FFN rank sums the contiguous block of attention ranks mapped to it
+({{cite afd_plugin/v1/worker/ffn_metadata.py:15-60}}). Every attention peer contributes at least one row, so a
+zero-token peer still adds a placeholder.</p>
+<x-code file="afd_plugin/v1/worker/ffn_metadata.py" lines="49-60" caption="Sum the block that build_rank_mapping assigns to each FFN rank." />
+
+<h2>Deep dive</h2>
+<x-deepdive title="Why the worker and runner both reject a no-control-plane connector">
+<p>The GPU FFN path supports only control-plane-driven connectors. The runner asserts it at construction
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:87-89}}), and the loop re-checks it each pass
+({{cite afd_plugin/v1/worker/ffn_worker.py:169-174}}). The async NPU connector sets
+<code>control_plane = None</code> and drives the FFN side through its own receive loop; that path is on
+{{link concepts/npu-overview}}.</p>
+</x-deepdive>
+<x-deepdive title="The token-count helpers">
+<table>
+  <thead><tr><th>Function</th><th>Maps</th><th>Line</th></tr></thead>
+  <tbody>
+    <tr><td><code>aggregate_ffn_token_counts</code></td><td>attention-rank counts to FFN-rank counts</td><td>{{cite afd_plugin/v1/worker/ffn_metadata.py:15-60}}</td></tr>
+    <tr><td><code>project_ffn_token_counts_to_dp</code></td><td>FFN role-rank counts to DP-rank counts</td><td>{{cite afd_plugin/v1/worker/ffn_metadata.py:63-78}}</td></tr>
+    <tr><td><code>_set_moe_layer_index</code></td><td>the current layer to the native MoE-layer index</td><td>{{cite afd_plugin/v1/worker/ffn_metadata.py:84-93}}</td></tr>
+  </tbody>
+</table>
+<p>The runner calls the first two inside <code>_make_ffn_dp_metadata</code>
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:287-303}}). The module is CPU-safe and imports no torch at
+module load, so CPU tests can use it.</p>
+</x-deepdive>
+
+<h2>Related concepts</h2>
+<ul>
+  <li>{{link concepts/ffn-runtime}} — the server loop and the layers x stages forward.</li>
+  <li>{{link concepts/control-plane}} — the DP-metadata path.</li>
+  <li>{{link code/attention-worker}} — the attention side that publishes the control plane.</li>
+  <li>{{link code/deepseek-v2-py}} — the FFN compute methods.</li>
+</ul>
+
+<x-quiz>
+  <x-q level="easy">What does <code>sample_tokens</code> do on the FFN runner?
+    <x-a><p>It raises; the FFN role never samples
+      ({{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">What starts the FFN server loop, and on what kind of thread?
+    <x-a><p><code>initialize_from_config</code> calls <code>start_ffn_server_loop</code>, which starts a daemon
+      thread ({{cite afd_plugin/v1/worker/ffn_worker.py:107-113}},
+      {{cite afd_plugin/v1/worker/ffn_worker.py:153-158}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">On 3A2F, why does a zero-token attention peer still add a row to its FFN rank's count?
+    <x-a><p><code>aggregate_ffn_token_counts</code> takes <code>max(1, count)</code> per peer, so every peer
+      contributes at least one placeholder row; F0 sums the block {A0, A1} and F1 the block {A2}
+      ({{cite afd_plugin/v1/worker/ffn_metadata.py:49-60}}).</p></x-a>
+  </x-q>
+</x-quiz>

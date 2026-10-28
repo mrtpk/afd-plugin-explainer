@@ -1,0 +1,167 @@
+---
+title: The MoE handoff: where the gate runs
+nav_title: The MoE handoff
+level: Advanced
+prerequisites: concepts/model-wrappers
+related: concepts/wire-data, concepts/ffn-runtime, concepts/connector-contract, code/deepseek-v2-py
+summary: The compute_gate_on_attention flag decides whether the MoE gate runs on the attention side or the FFN side. The choice changes which classes build, what crosses the connector, and which layers the FFN runs.
+---
+<x-sentence>A MoE layer has a gate and experts. The {{term compute-gate-on-attention}} flag decides which {{term afd | AFD}} role runs the gate, and so what crosses the {{term connector}}.</x-sentence>
+
+<h2>The idea</h2>
+<p>A mixture-of-experts layer has two parts: a small gate that picks experts per token, and the large experts
+themselves. {{term afd}} always runs the experts on the {{term ffn-role | FFN role}}, because the expert
+weights are large. The gate is small, so AFD can run it on either side.</p>
+<p>One flag chooses: <code>compute_gate_on_attention</code>. When it is false (the default), the gate stays with
+the experts on the FFN side. When it is true, the gate runs on the {{term attention-role | attention role}},
+and the attention side sends the router output along with the hidden states.</p>
+<p><strong>An everyday comparison.</strong> Think of a mailroom. You can write the delivery route on the parcel
+before you hand it over (gate on the attention side), or let the mailroom read the address and decide (gate on
+the FFN side). Either way the parcel reaches the same shelf. The comparison stops here: the gate output is a
+tensor, not a label, and it must match the experts the FFN side runs.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b3_moe_handoff" alt="Three panels. Panel 1, compute_gate_on_attention false: an attention box sends hidden_states to an FFN box that runs gate plus experts for all layers. Panel 2, compute_gate_on_attention true: an attention box computes the gate to produce router_logits and sends hidden_states plus router_logits to an FFN box that runs experts only for expert layers (lines 211-215). Panel 3, what crosses on the data plane: hidden_states only for any layer with the gate on FFN; hidden_states plus router_logits for a MoE layer with the gate on attention; plus int32 input_ids for DeepSeek-V4 hash MoE." caption="Figure: the flag moves the gate. With the gate on the attention side the FFN runs experts only, and router_logits cross the wire." />
+<p>Read panels 1 and 2 as the two settings. The blue arrow is the {{term data-plane | data plane}}. Panel 3
+lists the three wire payloads. The order on the wire is always hidden states, then router logits, then input
+ids.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: The default: the gate runs on the FFN side</h3>
+<p>With the flag false, the attention side ships the whole FFN or MoE block through a
+{{term remote-ffn-proxy | remote FFN proxy}}. The FFN side runs the native block, gate and all. On the CUDA MoE
+path the attention role still builds a {{term remote-experts | remote-experts}} shell, but its gate is
+<code>None</code>, so the shell ships only the hidden states
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:319-335}}).</p>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="306-335" highlight="306,320,332" caption="The shell builds a gate only when compute_gate_on_attention is set; else gate is None." />
+
+<h3>Step 2: Gate on the attention side: compute, then send the router logits</h3>
+<p>With the flag true, the shell builds its own gate
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:306-318}}). Its <code>forward</code> computes the
+router logits first, then calls the experts proxy with them
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:347-371}}).</p>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="355-364" caption="The attention-side gate runs before transport; the proxy carries the router logits." />
+<p>The experts proxy is <code>AFDAttentionFusedMoE</code>, a <code>RemoteFFNProxy</code> that adds
+<code>router_logits</code> to the send only when the experts use external routing
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:178-191}}).</p>
+
+<h3>Step 3: The FFN side runs experts only, for expert layers only</h3>
+<p>The {{term ffn-server-loop | FFN server loop}} drives the FFN model runner. Inside
+<code>_ffn_forward</code>, the set of layers depends on the flag. With the gate on the attention side, the FFN
+runs only the expert layers; otherwise it runs all layers
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:211-215}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_model_runner.py" lines="207-215" highlight="211,213" caption="layer_indices: expert layers only when the gate runs on the attention side." />
+<p>For each received layer, the runner picks the compute call. An expert layer with the gate on the attention
+side calls <code>compute_experts_output</code> with the transported router logits; any other layer calls
+<code>compute_ffn_output</code> ({{cite afd_plugin/v1/worker/ffn_model_runner.py:251-267}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_model_runner.py" lines="251-267" highlight="257,263" caption="compute_experts_output (gate on attention) vs compute_ffn_output (gate on FFN)." />
+
+<h3>Step 4: compute_experts_output needs the gate cleared</h3>
+<p><code>compute_experts_output</code> runs the native experts runner with the transported router logits. It
+checks that the runner gate is <code>None</code>, which is the v0.30 contract for external routing
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:702-721}}).</p>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="714-721" highlight="716" caption="The FFN experts runner must use external routing (gate cleared)." />
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="What crosses the wire, by case">
+<p>The send order is fixed: hidden states, then router logits (if any), then input ids (if any)
+({{cite afd_plugin/connectors/gpu/p2p.py:336-338}}).</p>
+<table>
+  <thead><tr><th>Case</th><th>On the wire (A to F)</th><th>FFN compute</th></tr></thead>
+  <tbody>
+    <tr><td>dense layer, any flag</td><td><code>hidden_states</code></td><td><code>compute_ffn_output</code> (native MLP)</td></tr>
+    <tr><td>MoE layer, gate on FFN</td><td><code>hidden_states</code></td><td><code>compute_ffn_output</code> (native MoE, native gate)</td></tr>
+    <tr><td>MoE layer, gate on attention</td><td><code>hidden_states</code> + <code>router_logits</code></td><td><code>compute_experts_output</code> (external routing)</td></tr>
+    <tr><td>DeepSeek-V4 hash MoE</td><td><code>hidden_states</code> + int32 <code>input_ids</code></td><td><code>compute_ffn_output</code> with ids</td></tr>
+  </tbody>
+</table>
+<p>The <code>input_ids</code> are a 1-D int32 tensor, token-aligned with the hidden states; they are used only
+for the DeepSeek-V4 hash MoE ({{cite afd_plugin/connectors/gpu/p2p.py:210}},
+{{cite afd_plugin/model_executor/models/deepseek_v4.py:89-92}}). The {{link concepts/wire-data}} page reads
+the tensor shapes and the per-peer split.</p>
+</x-deepdive>
+
+<x-deepdive title="The three attention-side MoE classes">
+<p>Three classes can stand in for the MoE block on the attention role. They differ by device and by what they
+send.</p>
+<table>
+  <thead><tr><th>Class</th><th>Role / device</th><th>Sends</th><th>Line</th></tr></thead>
+  <tbody>
+    <tr><td><code>AFDDeepseekV2RemoteExpertsMoE</code></td><td>CUDA MoE shell</td><td>hidden states; builds the gate when the flag is set</td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:277-335}}</td></tr>
+    <tr><td><code>AFDAttentionFusedMoE</code></td><td>the shell's experts proxy</td><td>hidden states + router logits (external routing)</td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:161-191}}</td></tr>
+    <tr><td><code>GateOnlyRemoteMoE</code></td><td>NPU gate-on-attention</td><td>hidden states + gate outputs</td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:197-274}}</td></tr>
+  </tbody>
+</table>
+<p>The NPU path is covered on {{link concepts/npu-overview}}; this page reads the CUDA classes.</p>
+</x-deepdive>
+
+<x-deepdive title="The afd_balanced routing strategy (benchmarks only)">
+<p>For controlled MoE benchmarks, the plugin registers a deterministic routing strategy,
+{{term afd-balanced | afd_balanced}} ({{cite afd_plugin/model_executor/routing_simulator.py:166-171}}). It
+replaces the gate's choice with uniform weights and fixed, EP-balanced expert ids, so every rank gets an equal
+share ({{cite afd_plugin/model_executor/routing_simulator.py:122-163}}).</p>
+<ul>
+  <li><strong>How to turn it on.</strong> Set vLLM's <code>VLLM_MOE_ROUTING_SIMULATION_STRATEGY</code> to
+      <code>afd_balanced</code> ({{cite afd_plugin/model_executor/routing_simulator.py:5-8}}).</li>
+  <li><strong>Weights.</strong> Uniform, <code>1 / top_k</code> per selected expert
+      ({{cite afd_plugin/model_executor/routing_simulator.py:113-118}}).</li>
+  <li><strong>Expert ids.</strong> A fixed permutation (seed 1024), or the first
+      <code>AFD_BENCHMARK_FORCE_LB_TOPN_PER_RANK</code> experts of each rank
+      ({{cite afd_plugin/model_executor/routing_simulator.py:66-96}}).</li>
+  <li><strong>Honesty.</strong> It changes model outputs and is for benchmark and profiling runs only
+      ({{cite afd_plugin/model_executor/routing_simulator.py:10-11}}).</li>
+</ul>
+<p>The strategy is registered in <code>register_afd</code>, outside the patch try/except
+({{cite afd_plugin/__init__.py:183-187}}).</p>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<x-simplified><p>This page reads the CUDA gate placement and the wire payloads. It does not read the NPU
+gate kernels or the hash-router internals. See {{link concepts/npu-overview}} and {{link code/deepseek-v2-py}}.</p></x-simplified>
+<ul>
+  <li><strong>Qwen3-MoE with the gate on attention.</strong> The Qwen3-MoE wrapper requires
+      <code>compute_gate_on_attention=false</code> and raises otherwise
+      ({{cite afd_plugin/model_executor/models/qwen3_moe.py:84-87}}). README.md:50 states the same rule.</li>
+  <li><strong>A held gate on the FFN experts.</strong> <code>compute_experts_output</code> raises if the FFN
+      experts runner still owns a gate ({{cite afd_plugin/model_executor/models/deepseek_v2.py:716-717}}).</li>
+  <li><strong>A dense layer sent to compute_experts_output.</strong> It raises if the layer is not an
+      attention-side-gate MoE layer ({{cite afd_plugin/model_executor/models/deepseek_v2.py:708-711}}).</li>
+  <li><strong>GPU gate-on-attention calling the wrong path.</strong> On CUDA the gated path must call
+      <code>compute_experts_output</code>, not <code>compute_ffn_output</code>; the dense call raises
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:690-693}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The two sides must agree on where the gate runs. If the attention side
+sends router logits but the FFN side keeps its own gate, the experts would route twice and the output would be
+wrong.</p>
+
+<x-quiz>
+  <x-q level="easy">What does <code>compute_gate_on_attention</code> decide?
+    <x-a><p>Which role runs the MoE gate. False (the default) keeps the gate with the experts on the FFN side;
+      true runs it on the attention side
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:306-320}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">When the gate runs on the attention side, which layers does the FFN run?
+    <x-a><p>Only the expert layers. <code>layer_indices</code> is the sorted expert-layer set when the flag is
+      set, else all layers ({{cite afd_plugin/v1/worker/ffn_model_runner.py:211-215}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">What extra tensor crosses the wire when the gate runs on the attention side, and when is
+    it consumed?
+    <x-a><p><code>router_logits</code>. The FFN experts runner consumes it only when its gate is
+      <code>None</code> (external routing), which AFD arranges by clearing the runner gate
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:548-553}},
+      {{cite afd_plugin/model_executor/models/deepseek_v2.py:714-721}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">What does DeepSeek-V4 add to the handoff, and why?
+    <x-a><p>A 1-D int32 <code>input_ids</code> tensor, because its hash router needs the token ids to pick
+      experts ({{cite afd_plugin/connectors/gpu/p2p.py:210}},
+      {{cite afd_plugin/model_executor/models/deepseek_v4.py:89-92}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">What does the <code>afd_balanced</code> strategy return, and why is it not for production?
+    <x-a><p>Uniform weights (<code>1 / top_k</code>) and deterministic, EP-balanced expert ids
+      ({{cite afd_plugin/model_executor/routing_simulator.py:99-119}}). It replaces the real routing, so it
+      changes model outputs; it is for benchmark and profiling runs only
+      ({{cite afd_plugin/model_executor/routing_simulator.py:10-11}}).</p></x-a>
+  </x-q>
+</x-quiz>

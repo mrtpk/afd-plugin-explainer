@@ -1,0 +1,158 @@
+---
+title: model_executor/models/deepseek_v2.py: the DeepSeek wrapper
+nav_title: deepseek_v2.py
+level: Advanced
+prerequisites: concepts/model-wrappers
+related: concepts/model-wrappers, concepts/moe-handoff, code/attention-worker, code/ffn-worker
+summary: This file holds the DeepSeek AFD wrapper: the role-aware decoder layer, the remote FFN proxies, the remote-experts MoE shell, and the model and causal-LM classes that filter weights by role.
+---
+<x-sentence>This file is the DeepSeek {{term model-wrapper | model wrapper}}. It builds a role-aware decoder layer and routes the FFN stage through the {{term connector}}.</x-sentence>
+
+<h2>Purpose</h2>
+<p>This file implements the model split for DeepSeek V2/V3/V3.2 and GLM-MoE-DSA. The concept is on
+{{link concepts/model-wrappers}} and the gate handoff on {{link concepts/moe-handoff}}; this page reads the
+file class by class.</p>
+<table>
+  <thead><tr><th>Item</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>File (lines, origin)</td><td><code>model_executor/models/deepseek_v2.py</code> (994); AFD-owned</td></tr>
+    <tr><td>Main classes</td><td><code>AFDDeepseekV2DecoderLayer</code> ({{cite afd_plugin/model_executor/models/deepseek_v2.py:375}}), <code>AFDDeepseekV2Model</code> ({{cite afd_plugin/model_executor/models/deepseek_v2.py:725}}), <code>AFDDeepseekV2ForCausalLM</code> ({{cite afd_plugin/model_executor/models/deepseek_v2.py:925}})</td></tr>
+    <tr><td>Runs in</td><td>both roles; the class branches on <code>afd_config.role</code> and the device</td></tr>
+    <tr><td>Called by</td><td>vLLM model loading, through the registered <code>AFDDeepseekV2ForCausalLM</code> ({{cite afd_plugin/__init__.py:100-102}})</td></tr>
+    <tr><td>Calls</td><td>native vLLM DeepSeek modules ({{cite vllm:vllm/model_executor/models/deepseek_v2.py:1}}), the connector, the DBO yield op</td></tr>
+    <tr><td>Not in this file</td><td>the runners ({{link code/attention-worker}}, {{link code/ffn-worker}}), the NPU DeepSeek files</td></tr>
+  </tbody>
+</table>
+
+<h2>Where it sits</h2>
+<h3>Who calls it</h3>
+<p>The plugin registers <code>AFDDeepseekV2ForCausalLM</code> under the model name
+<code>AFDDeepseekV2ForCausalLM</code> ({{cite afd_plugin/__init__.py:100-102}},
+{{cite afd_plugin/__init__.py:213-214}}). The worker selects the AFD model identity before loading
+({{cite afd_plugin/v1/worker/attention_worker.py:75-80}}), so vLLM loads this class.</p>
+<h3>What it calls</h3>
+<p>The classes subclass native vLLM DeepSeek modules imported as <code>native</code>
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:22}}). The proxy calls the connector through the AFD
+forward metadata, and the DBO yield op between send and receive
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:146-158}}).</p>
+
+<h2>Key classes and functions</h2>
+<table>
+  <thead><tr><th>Name</th><th>Line</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td><code>_checkpoint_weight_roles</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:69-95}}</td><td>classify a weight path by its owning role</td></tr>
+    <tr><td><code>RemoteFFNProxy</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:117}}</td><td>parameter-free FFN stage over the connector</td></tr>
+    <tr><td><code>AFDAttentionFusedMoE</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:161}}</td><td>experts proxy; sends router logits on external routing</td></tr>
+    <tr><td><code>GateOnlyRemoteMoE</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:197}}</td><td>NPU attention-side gate, remote experts</td></tr>
+    <tr><td><code>AFDDeepseekV2RemoteExpertsMoE</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:277}}</td><td>native MoE shell with a {{term remote-experts | remote-experts}} proxy</td></tr>
+    <tr><td><code>AFDDeepseekV2DecoderLayer</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:375}}</td><td>role-aware decoder layer</td></tr>
+    <tr><td><code>AFDDeepseekV2Model</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:725}}</td><td>role-aware model; builds the layers</td></tr>
+    <tr><td><code>AFDDeepseekV2ForCausalLM</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:925}}</td><td>causal-LM wrapper; filters weights by role</td></tr>
+    <tr><td>family subclasses</td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:977-986}}</td><td>Deepseek, V3, GLM-MoE-DSA pass-throughs</td></tr>
+  </tbody>
+</table>
+
+<h2>Walk through the main methods</h2>
+
+<h3>Construction branches: what each role builds</h3>
+<p><code>AFDDeepseekV2DecoderLayer.__init__</code> builds only the modules its role owns
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:383-561}}). The table names the branch and the lines.</p>
+<table>
+  <thead><tr><th>Role</th><th>Layer kind</th><th>Module built</th><th>Lines</th></tr></thead>
+  <tbody>
+    <tr><td>attention</td><td>any</td><td><code>self_attn</code>: native attention</td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:474-491}}</td></tr>
+    <tr><td>attention</td><td>CUDA MoE</td><td><code>AFDDeepseekV2RemoteExpertsMoE</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:493-500}}</td></tr>
+    <tr><td>attention</td><td>NPU MoE + gate</td><td><code>GateOnlyRemoteMoE</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:501-507}}</td></tr>
+    <tr><td>attention</td><td>dense + gate</td><td>native <code>DeepseekV2MLP</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:508-515}}</td></tr>
+    <tr><td>attention</td><td>otherwise</td><td><code>RemoteFFNProxy</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:516-517}}</td></tr>
+    <tr><td>FFN</td><td>any</td><td><code>self_attn</code>: <code>PPMissingLayer</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:520}}</td></tr>
+    <tr><td>FFN</td><td>MoE</td><td>native <code>DeepseekV2MoE</code> (gate cleared on CUDA + gate)</td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:523-553}}</td></tr>
+    <tr><td>FFN</td><td>dense</td><td>native <code>DeepseekV2MLP</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:554-561}}</td></tr>
+  </tbody>
+</table>
+
+<h3>The layer's compute methods, by role</h3>
+<p>The layer has no single forward: the runner calls role-specific compute methods. On the attention role,
+<code>compute_attn_output</code> runs the input norm, attention and post-attention norm, and (on NPU) the gate
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:577-647}}). The <code>mlp</code> module then sends the
+hidden states through the connector.</p>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="127-158" highlight="146,151,155" caption="RemoteFFNProxy._send_and_receive: send, DBO yield, receive." />
+<p>On the FFN role, the runner calls <code>compute_ffn_output</code> for a dense or gate-on-FFN layer, or
+<code>compute_experts_output</code> for an attention-side-gate MoE layer
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:649-721}}).</p>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="702-721" highlight="708,716,718" caption="compute_experts_output: run the native experts with the transported router logits." />
+
+<h3>The model and causal-LM wrappers</h3>
+<p><code>AFDDeepseekV2Model</code> is decorated with <code>support_torch_compile</code> and builds the layers with
+the role-aware constructor ({{cite afd_plugin/model_executor/models/deepseek_v2.py:724-725}},
+{{cite afd_plugin/model_executor/models/deepseek_v2.py:791-802}}). It forwards to the native model, except for
+the async NPU connector, which uses its own forward
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:839-863}}).</p>
+<p><code>AFDDeepseekV2ForCausalLM</code> filters the weight stream by role before the native loader
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:964-974}}). The DeepSeek, V3 and GLM-MoE-DSA classes are
+thin subclasses ({{cite afd_plugin/model_executor/models/deepseek_v2.py:977-986}}).</p>
+
+<h3>get_experts_layer_indices and get_experts_routing_spec</h3>
+<p>The FFN runner needs to know which layers hold experts, and the routing spec for graph capture.
+<code>get_experts_layer_indices</code> returns the MoE-layer indices
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:887-895}}).</p>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="887-907" highlight="887,897" caption="The expert-layer inventory and the static routing spec." />
+<ol>
+  <li>Lines 887-895. Collect every <code>AFDDeepseekV2DecoderLayer</code> whose <code>is_moe_layer</code> is
+      true.</li>
+  <li>Lines 897-907. Return the router-logits width and dtype, so graph capture can pre-allocate the wire
+      buffers.</li>
+</ol>
+<p>The causal-LM class forwards both to the model
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:955-962}}).</p>
+
+<h2>Deep dive</h2>
+<x-deepdive title="The remote proxies, compared">
+<table>
+  <thead><tr><th>Class</th><th>Base</th><th>Extra payload</th><th>Line</th></tr></thead>
+  <tbody>
+    <tr><td><code>RemoteFFNProxy</code></td><td><code>nn.Module</code></td><td>none (hidden states only)</td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:117-158}}</td></tr>
+    <tr><td><code>AFDAttentionFusedMoE</code></td><td><code>RemoteFFNProxy</code></td><td><code>router_logits</code> on external routing</td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:161-191}}</td></tr>
+    <tr><td><code>GateOnlyRemoteMoE</code></td><td><code>RemoteFFNProxy</code></td><td>gate outputs (NPU)</td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:197-274}}</td></tr>
+    <tr><td><code>AFDDeepseekV2RemoteExpertsMoE</code></td><td>native <code>DeepseekV2MoE</code></td><td>wraps <code>AFDAttentionFusedMoE</code> as its experts</td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:277-335}}</td></tr>
+  </tbody>
+</table>
+<p>The shell computes the gate before transport only when it owns one; a gate-less shell keeps the native
+delegation ({{cite afd_plugin/model_executor/models/deepseek_v2.py:347-371}}).</p>
+</x-deepdive>
+<x-deepdive title="The weight filter in detail">
+<p><code>_checkpoint_weight_roles</code> decides each weight's owner
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:69-95}}). A non-layer path (embeddings, final norm)
+returns both roles; a <code>self_attn</code> path returns attention; a dense <code>mlp</code> path follows the
+gate flag; a MoE <code>gate</code> path returns both roles when the gate runs on the attention side, and the
+other expert weights return the FFN role. The causal-LM class passes the connector choice so the async NPU
+connector can also keep the shared-expert weights on the attention role
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:969-973}}).</p>
+</x-deepdive>
+
+<h2>Related concepts</h2>
+<ul>
+  <li>{{link concepts/model-wrappers}} — the construction branches in prose.</li>
+  <li>{{link concepts/moe-handoff}} — the gate placement and the wire payloads.</li>
+  <li>{{link code/attention-worker}} — the runner that drives the attention side.</li>
+  <li>{{link code/ffn-worker}} — the runner that calls the FFN compute methods.</li>
+</ul>
+
+<x-quiz>
+  <x-q level="easy">What base class does <code>AFDDeepseekV2RemoteExpertsMoE</code> extend?
+    <x-a><p>The native <code>DeepseekV2MoE</code>; it keeps the native MoE forward but replaces the experts with a
+      proxy ({{cite afd_plugin/model_executor/models/deepseek_v2.py:277}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">The decoder layer has no single forward. Which methods run its two halves, and on which
+    role?
+    <x-a><p><code>compute_attn_output</code> on the attention role
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:577-647}}); <code>compute_ffn_output</code> or
+      <code>compute_experts_output</code> on the FFN role
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:649-721}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">Why does <code>get_experts_routing_spec</code> exist, and what does it return?
+    <x-a><p>Graph capture must pre-allocate the router-logits buffer, so it needs a static shape. It returns the
+      router-logits width (the routed-expert count) and dtype
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:897-907}}).</p></x-a>
+  </x-q>
+</x-quiz>

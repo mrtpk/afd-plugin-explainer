@@ -1,0 +1,24 @@
+{
+  "_about": "Batch B3 (model split + execution). Owner: B3 writer. Search other glossary files before adding a term.",
+  "remote-experts": {
+    "term": "remote experts",
+    "short": "A parameter-free MoE shell on the attention role. It keeps the native MoE forward but sends the expert compute to the FFN role.",
+    "long": "On CUDA, every MoE layer on the attention side builds <code>AFDDeepseekV2RemoteExpertsMoE</code>, a native <code>DeepseekV2MoE</code> with its experts replaced by a proxy ({{cite afd_plugin/model_executor/models/deepseek_v2.py:277-335}}).",
+    "aliases": ["remote experts shell", "AFDDeepseekV2RemoteExpertsMoE"],
+    "page": "concepts/model-wrappers"
+  },
+  "afd-forward-metadata": {
+    "term": "AFD forward metadata",
+    "short": "A sidecar object that AFD attaches to the vLLM forward context. It holds the connector, the transaction id and the per-stage token counts.",
+    "long": "Model wrappers read it with <code>get_afd_metadata_from_forward_context</code>; the runner installs it as vLLM makes each forward context ({{cite afd_plugin/model_executor/models/forward_context.py:18-67}}).",
+    "aliases": ["AFDForwardContextMetadata", "afd_metadata", "forward-context sidecar"],
+    "page": "concepts/attention-runtime"
+  },
+  "afd-balanced": {
+    "term": "afd_balanced routing",
+    "short": "A deterministic, EP-balanced MoE routing strategy for benchmarks. It returns uniform weights and fixed expert ids, so it changes model outputs.",
+    "long": "Opt in with vLLM's <code>VLLM_MOE_ROUTING_SIMULATION_STRATEGY</code> ({{cite afd_plugin/model_executor/routing_simulator.py:122-171}}). It is for benchmark and profiling runs only.",
+    "aliases": ["AFDBalancedRoutingStrategy", "routing simulator"],
+    "page": "concepts/moe-handoff"
+  }
+}

@@ -1,0 +1,224 @@
+---
+title: Model wrappers: the role-aware decoder layer
+nav_title: Model wrappers
+level: Advanced
+prerequisites: concepts/roles
+related: concepts/moe-handoff, concepts/connector-contract, concepts/attention-runtime, code/deepseek-v2-py
+summary: Each supported model gets an AFD wrapper. The wrapper builds a decoder layer that constructs only the modules its role owns, and routes the FFN stage through the connector.
+---
+<x-sentence>An AFD {{term model-wrapper | model wrapper}} replaces each decoder layer with a role-aware layer. It builds only the modules its {{term attention-role | attention}} or {{term ffn-role | FFN role}} owns.</x-sentence>
+
+<h2>The idea</h2>
+<p>{{term afd}} runs one model as two server processes. The two processes load the same checkpoint, but each
+one needs only part of it. The attention process needs attention; the FFN process needs the feed-forward and
+MoE experts. A model wrapper makes this split at the decoder-layer level.</p>
+<p>For DeepSeek, the wrapper is a small set of classes in
+<code>afd_plugin/model_executor/models/deepseek_v2.py</code>. The key class is
+<code>AFDDeepseekV2DecoderLayer</code>, a subclass of the native vLLM decoder layer
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:375}}). Its constructor reads the AFD role, then
+builds only that role's modules. The stage it does not own becomes a placeholder or a
+{{term remote-ffn-proxy | remote FFN proxy}}.</p>
+<p><strong>An everyday comparison.</strong> Think of two cooks who share one recipe card. One cook keeps only
+the sauce steps; the other keeps only the bake steps. Neither buys the ingredients for the other half. The
+comparison stops here: the two cooks still pass the half-made dish between them on every step, which the
+{{term connector}} does for hidden states.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b3_model_wrappers" alt="Three panels. Panel 1: the attention role. A neutral box 'role == attention' with self_attn native. Below it four blue branch boxes: dense layer uses RemoteFFNProxy (lines 516-517); CUDA MoE layer uses AFDDeepseekV2RemoteExpertsMoE (493-500); NPU MoE layer with gate-on-attention uses GateOnlyRemoteMoE (501-507); dense layer with gate-on-attention uses native DeepseekV2MLP (508-515). Panel 2: the FFN role. self_attn is PPMissingLayer; three emerald boxes: dense plus gate-on-attention uses PPMissingLayer (521-522); MoE layer uses native DeepseekV2MoE with the gate cleared (523-553); dense layer uses native DeepseekV2MLP (554-561). Panel 3: four violet boxes for the four model families, deepseek_v2.py, qwen3_moe.py (CUDA only), qwen3_5.py (CUDA text only) and deepseek_v4.py (sends input_ids)." caption="Figure: each role builds only its own modules. The attention role has four mlp branches; the FFN role has three." />
+<p>Read panel 1 top to bottom. The attention role always builds the native attention module, then picks one of
+four branches for <code>mlp</code>. Panel 2 shows the FFN role, where the attention module is dropped and
+<code>mlp</code> is the real compute. Panel 3 lists the four model families and their main differences.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: One decoder-layer class, two roles</h3>
+<p><code>AFDDeepseekV2DecoderLayer.__init__</code> reads the role from the AFD config, then calls
+<code>torch.nn.Module.__init__</code> directly instead of the native constructor. This way, it never allocates
+the modules of the other role ({{cite afd_plugin/model_executor/models/deepseek_v2.py:391-396}}).</p>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="391-396" caption="The constructor reads the role before any allocation." />
+<p>The layer also records whether it is a MoE layer and whether the gate runs on the attention side
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:423-444}}). The flag
+<code>uses_remote_experts</code> is true only on CUDA for a MoE layer
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:444}}).</p>
+
+<h3>Step 2: The attention role builds native attention and one of four mlp branches</h3>
+<p>On the attention role, <code>self_attn</code> is always a native attention module; the class picks the
+right attention variant for the model ({{cite afd_plugin/model_executor/models/deepseek_v2.py:459-491}}).</p>
+<p>The <code>mlp</code> stage then takes one of four branches. The table names the class and the exact lines.</p>
+<table>
+  <thead><tr><th>Branch (condition)</th><th>mlp becomes</th><th>Lines</th></tr></thead>
+  <tbody>
+    <tr><td>CUDA MoE layer (<code>uses_remote_experts</code>)</td><td><code>AFDDeepseekV2RemoteExpertsMoE</code> (a {{term remote-experts | remote-experts}} shell)</td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:493-500}}</td></tr>
+    <tr><td>NPU MoE layer + {{term compute-gate-on-attention}}</td><td><code>GateOnlyRemoteMoE</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:501-507}}</td></tr>
+    <tr><td>dense layer + gate on attention</td><td>native <code>DeepseekV2MLP</code> (computed locally)</td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:508-515}}</td></tr>
+    <tr><td>otherwise (dense default, or MoE with the gate on the FFN side)</td><td><code>RemoteFFNProxy</code></td><td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:516-517}}</td></tr>
+  </tbody>
+</table>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="493-517" highlight="494,502,509,517" caption="The four mlp branches on the attention role." />
+<x-note title="On CUDA the gate-on-attention MoE path is the shell, not GateOnlyRemoteMoE"><p>On CUDA a MoE
+layer always takes the first branch, because <code>uses_remote_experts</code> is true. The shell builds the
+gate inside itself when the flag is set ({{cite afd_plugin/model_executor/models/deepseek_v2.py:306-320}}).
+<code>GateOnlyRemoteMoE</code> is the NPU gate-on-attention path. See {{link concepts/moe-handoff}}.</p></x-note>
+
+<h3>Step 3: The FFN role drops attention and keeps the real FFN</h3>
+<p>On the FFN role, <code>self_attn</code> is a <code>PPMissingLayer</code>: a placeholder that holds no
+weights ({{cite afd_plugin/model_executor/models/deepseek_v2.py:520}}). The <code>mlp</code> stage takes one
+of three branches.</p>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="519-561" highlight="520,522,538,555" caption="The FFN role: a missing attention module and the real FFN/MoE block." />
+<ol>
+  <li><strong>Dense layer with the gate on the attention side.</strong> The dense MLP runs on the attention
+      side, so the FFN role drops it too ({{cite afd_plugin/model_executor/models/deepseek_v2.py:521-522}}).</li>
+  <li><strong>MoE layer.</strong> The FFN role builds the native <code>DeepseekV2MoE</code>
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:538-547}}). On CUDA with the gate on the
+      attention side, it clears the runner gate, so the experts consume the transported router logits
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:548-553}}).</li>
+  <li><strong>Dense layer (the gate stays on the FFN side).</strong> The FFN role builds the native
+      <code>DeepseekV2MLP</code> ({{cite afd_plugin/model_executor/models/deepseek_v2.py:554-561}}).</li>
+</ol>
+
+<h3>Step 4: RemoteFFNProxy sends, yields, then receives</h3>
+<p>The {{term remote-ffn-proxy | remote FFN proxy}} is a parameter-free module
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:117-125}}). Its
+<code>_send_and_receive</code> is the one place where the attention role crosses to the FFN role inside a
+layer.</p>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="127-158" highlight="146,151,155" caption="_send_and_receive: read the AFD metadata, send, yield for DBO, then receive." />
+<ol>
+  <li>Lines 132-139. Read the {{term afd-forward-metadata | AFD forward metadata}} and the stage index from
+      the vLLM forward context.</li>
+  <li>Lines 140-145. Build the transfer metadata for this layer and {{term stage}}, with the row count equal to
+      the number of tokens.</li>
+  <li>Line 146. <code>send_attn_output</code> sends the hidden states to the FFN side.</li>
+  <li>Line 151. <code>maybe_apply_dbo_yield</code> yields to the other microbatch under {{term dbo | DBO}}.</li>
+  <li>Line 155. <code>recv_ffn_output</code> receives the FFN result into the same tensor and returns it.</li>
+</ol>
+<x-note title="Two proxy subclasses add payloads"><p><code>AFDAttentionFusedMoE</code> is a
+<code>RemoteFFNProxy</code> that also sends <code>router_logits</code> when the experts use external routing
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:161-191}}).
+<code>GateOnlyRemoteMoE</code> sends the gate outputs too
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:254-274}}).</p></x-note>
+
+<h3>Step 5: Weight loading keeps only this role's checkpoint paths</h3>
+<p>Both roles read the same checkpoint, but each keeps only its own weights. The causal-LM wrapper filters the
+weight stream before the native loader sees it
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:964-974}}).</p>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="964-974" highlight="965" caption="load_weights wraps the weight iterator with a role filter." />
+<p>The filter is <code>_iter_role_weights</code>, which calls <code>_checkpoint_weight_roles</code> for each
+weight path and keeps a weight only when this role owns it
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:98-114}}).</p>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="69-95" highlight="82,84,88,95" caption="_checkpoint_weight_roles: which role owns each decoder weight." />
+<ol>
+  <li>Lines 82-83. A <code>self_attn</code> weight belongs to the attention role.</li>
+  <li>Lines 84-85. A weight that is not under <code>mlp</code> belongs to both roles (for example embeddings).</li>
+  <li>Lines 87-88. A dense-layer <code>mlp</code> weight follows the gate flag: attention side when the gate
+      runs there, otherwise the FFN side.</li>
+  <li>Lines 92-95. A MoE <code>gate</code> weight goes to both roles when the gate runs on the attention side;
+      the other expert weights go to the FFN role.</li>
+</ol>
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="The other three model families, one at a time">
+<p>Four wrappers follow the same pattern. The differences are the native base model, the device support, and
+the extra payloads.</p>
+<p><strong>Qwen3-MoE</strong> ({{cite afd_plugin/model_executor/models/qwen3_moe.py:102}}). The wrapper reuses
+the native <code>decoder_layer_type</code> hook instead of rebuilding <code>make_layers</code>
+({{cite afd_plugin/model_executor/models/qwen3_moe.py:198-202}}). It supports CUDA only and requires
+<code>compute_gate_on_attention=false</code>, so the gate always runs on the FFN side
+({{cite afd_plugin/model_executor/models/qwen3_moe.py:82-87}}). On the attention role, <strong>every</strong>
+layer (dense or MoE) uses a plain <code>RemoteFFNProxy</code>
+({{cite afd_plugin/model_executor/models/qwen3_moe.py:157}}); there is no remote-experts shell. The FFN role
+builds the native <code>Qwen3MoeSparseMoeBlock</code> or <code>Qwen3MoeMLP</code>
+({{cite afd_plugin/model_executor/models/qwen3_moe.py:167-180}}).</p>
+<p><strong>Qwen3.5 / 3.6 MoE</strong> ({{cite afd_plugin/model_executor/models/qwen3_5.py:373-374}}). The
+wrapper supports CUDA and text-only execution; a multimodal config raises
+({{cite afd_plugin/model_executor/models/qwen3_5.py:22-29}}). It uses a remote-experts shell built on the
+native <code>Qwen3NextSparseMoeBlock</code> ({{cite afd_plugin/model_executor/models/qwen3_5.py:88-90}}), and
+reuses <code>AFDAttentionFusedMoE</code> from the DeepSeek wrapper
+({{cite afd_plugin/model_executor/models/qwen3_5.py:15}}).</p>
+<p><strong>DeepSeek-V4</strong> (CUDA wrapper,
+{{cite afd_plugin/model_executor/models/deepseek_v4.py:574-578}}). It supports CUDA only and the synchronous
+P2P connector ({{cite afd_plugin/model_executor/models/deepseek_v4.py:392-397}}). Its hash-router MoE needs
+the token ids, so the wrapper sets <code>afd_requires_input_ids = True</code>
+({{cite afd_plugin/model_executor/models/deepseek_v4.py:578}}) and its proxy sends the
+<code>input_ids</code> alongside the hidden states
+({{cite afd_plugin/model_executor/models/deepseek_v4.py:108-112}}). The mHC residual state stays on the
+attention role ({{cite afd_plugin/model_executor/models/deepseek_v4.py:175-178}}).</p>
+</x-deepdive>
+
+<x-deepdive title="The NPU wrappers (named here, covered on the overview page)">
+<p>The model table maps <code>DeepseekV4ForCausalLM</code> to the NPU wrapper only when
+<code>torch_npu</code> is importable; otherwise it maps to the CUDA wrapper
+({{cite afd_plugin/__init__.py:109-113}}). The NPU DeepSeek-V4 wrapper is
+<code>afd_plugin/model_executor/models/npu/deepseek_v4.py</code>
+({{cite afd_plugin/model_executor/models/npu/deepseek_v4.py:649}}). The DeepSeek V2/V3 NPU gate helpers live
+next to it ({{cite afd_plugin/model_executor/models/npu/deepseek_v2_attention_gate.py:31-80}}). The
+{{link concepts/npu-overview}} page reads the NPU code; this page covers the CUDA path.</p>
+</x-deepdive>
+
+<x-deepdive title="Worked example: which modules load for DeepSeek-V2-Lite">
+<p>Take DeepSeek-V2-Lite with the GPU connector and <code>compute_gate_on_attention=false</code>. This model
+has 27 decoder layers, with the first layer dense and the rest MoE. <em>The 27 and the dense/MoE split are
+inferred from the DeepSeek-V2-Lite checkpoint config; they are not stored in either repository.</em></p>
+<ul>
+  <li><strong>Attention role.</strong> Each layer builds a native attention module. Layer 0 (dense) and every
+      MoE layer use the branches from Step 2: layer 0 gets a <code>RemoteFFNProxy</code>, each MoE layer gets
+      the remote-experts shell on CUDA. No expert weights load, because
+      <code>_checkpoint_weight_roles</code> sends them to the FFN role.</li>
+  <li><strong>FFN role.</strong> Each <code>self_attn</code> is a <code>PPMissingLayer</code>, so no attention
+      weights load. Layer 0 builds the native dense MLP; each MoE layer builds the native MoE block with its
+      experts. The attention and embedding weights do not load.</li>
+  <li><strong>Shared weights.</strong> The embeddings, the final norm and the LM head are not under a decoder
+      <code>mlp</code> or <code>self_attn</code>, so <code>_checkpoint_weight_roles</code> returns both roles
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:78-79}}).</li>
+</ul>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<x-simplified><p>This page shows the construction branches and the proxy. It does not read the full attention
+forward or the NPU gate helpers. The {{link concepts/moe-handoff}} page reads the gate placement, and
+{{link code/deepseek-v2-py}} reads the file class by class.</p></x-simplified>
+<ul>
+  <li><strong>EPLB on CUDA remote experts.</strong> The attention role with CUDA remote experts and EPLB
+      raises at construction ({{cite afd_plugin/model_executor/models/deepseek_v2.py:445-452}}).</li>
+  <li><strong>Gate on attention off CUDA and NPU.</strong> <code>compute_gate_on_attention</code> needs CUDA or
+      NPU; another device raises ({{cite afd_plugin/model_executor/models/deepseek_v2.py:453-456}}).</li>
+  <li><strong>No AFD metadata in the context.</strong> The proxy raises when the forward context has no AFD
+      metadata ({{cite afd_plugin/model_executor/models/deepseek_v2.py:133-134}}).</li>
+  <li><strong>DeepSeek-V4 without the P2P connector.</strong> The wrapper raises if the connector is not the
+      synchronous P2P connector ({{cite afd_plugin/model_executor/models/deepseek_v4.py:394-397}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The role filter and the branch set are what let two processes load one
+checkpoint without duplicating the large weights. A wrong branch would load the wrong half, or run the FFN in
+the wrong process.</p>
+
+<x-quiz>
+  <x-q level="easy">On the FFN role, what is <code>self_attn</code>?
+    <x-a><p>A <code>PPMissingLayer</code>: a placeholder with no weights
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:520}}). The FFN role does no attention.</p></x-a>
+  </x-q>
+  <x-q level="easy">Which model family must run the gate on the FFN side?
+    <x-a><p>Qwen3-MoE. The wrapper requires <code>compute_gate_on_attention=false</code>
+      ({{cite afd_plugin/model_executor/models/qwen3_moe.py:84-87}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">On the attention role, which class does a CUDA MoE layer build for <code>mlp</code>, and
+    why not <code>GateOnlyRemoteMoE</code>?
+    <x-a><p><code>AFDDeepseekV2RemoteExpertsMoE</code> ({{cite afd_plugin/model_executor/models/deepseek_v2.py:493-500}}).
+      On CUDA, <code>uses_remote_experts</code> is true for a MoE layer, so the first branch is taken;
+      <code>GateOnlyRemoteMoE</code> is the NPU path
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:444}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">How does the attention role avoid loading the expert weights?
+    <x-a><p><code>load_weights</code> wraps the weight stream in <code>_iter_role_weights</code>, which keeps a
+      weight only when the role owns it. Expert weights map to the FFN role
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:964-974}},
+      {{cite afd_plugin/model_executor/models/deepseek_v2.py:92-95}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">Why does DeepSeek-V4 set <code>afd_requires_input_ids</code>, and where does the value
+    change the run?
+    <x-a><p>Its hash-router MoE needs the token ids to route
+      ({{cite afd_plugin/model_executor/models/deepseek_v4.py:578}}). The attention proxy sends the ids
+      ({{cite afd_plugin/model_executor/models/deepseek_v4.py:108-112}}), and the FFN runner reads the flag to
+      request them from the connector
+      ({{cite afd_plugin/v1/worker/ffn_model_runner.py:221}}).</p></x-a>
+  </x-q>
+</x-quiz>

@@ -1,0 +1,130 @@
+---
+title: v1/worker: the attention worker and runner
+nav_title: attention_worker.py
+level: Advanced
+prerequisites: concepts/attention-runtime
+related: concepts/attention-runtime, concepts/control-plane, code/ffn-worker, code/deepseek-v2-py
+summary: Three files run the attention role: the worker that swaps in the AFD runner, the runner that wraps native Model Runner V2, and the shared metadata mixin that publishes the control plane.
+---
+<x-sentence>The attention role is a native vLLM {{term worker-cls | worker}} with the AFD {{term model-runner-v2 | Model Runner V2}} swapped in, plus a shared mixin that publishes the {{term control-plane | control plane}}.</x-sentence>
+
+<h2>Purpose</h2>
+<p>These three files add the connector and control plane to the attention side without rewriting native vLLM.
+The concept behind them is on {{link concepts/attention-runtime}}; this page maps the files.</p>
+<table>
+  <thead><tr><th>Item</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Files (lines, origin)</td><td><code>attention_worker.py</code> (93), <code>attention_model_runner_v2.py</code> (622), <code>attention_metadata.py</code> (357); all AFD-owned</td></tr>
+    <tr><td>Main classes</td><td><code>AFDAttentionWorker</code> ({{cite afd_plugin/v1/worker/attention_worker.py:22}}), <code>AFDAttentionModelRunnerV2</code> ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:358}}), <code>AFDMetadataProviderMixin</code> ({{cite afd_plugin/v1/worker/attention_metadata.py:21}})</td></tr>
+    <tr><td>Runs in</td><td>each attention worker process (one per rank); transfers on the current CUDA stream</td></tr>
+    <tr><td>Called by</td><td>vLLM, through the rewritten <code>worker_cls</code> ({{cite afd_plugin/validation.py:290-291}})</td></tr>
+    <tr><td>Calls</td><td>native <code>Worker</code> and <code>GPUModelRunner</code> ({{cite vllm:vllm/v1/worker/gpu_worker.py:469-482}}), the connector factory, the model wrapper</td></tr>
+    <tr><td>Not in this file</td><td>the FFN runtime ({{link code/ffn-worker}}), the connector transport ({{link code/p2p-py}}), the model split ({{link code/deepseek-v2-py}})</td></tr>
+  </tbody>
+</table>
+
+<h2>Where it sits</h2>
+<h3>Who calls it</h3>
+<p>The AFD config patch rewrites <code>worker_cls</code> to <code>AFDAttentionWorker</code> when the role is
+attention ({{cite afd_plugin/validation.py:280-291}}). vLLM then builds this worker like any other. The worker
+builds the runner inside <code>init_device</code>.</p>
+<h3>What it calls</h3>
+<p>The worker delegates device setup to native <code>Worker.init_device</code>, which local-imports and builds
+<code>GPUModelRunner</code> ({{cite vllm:vllm/v1/worker/gpu_worker.py:469-482}}). The runner builds the
+connector through the factory ({{cite afd_plugin/connectors/factory.py:49-68}}) and reads the model wrapper.</p>
+
+<h2>Key classes and functions</h2>
+<table>
+  <thead><tr><th>Name</th><th>Line</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td><code>AFDAttentionWorker.init_device</code></td><td>{{cite afd_plugin/v1/worker/attention_worker.py:60-90}}</td><td>swap in the AFD runner for the native construction window</td></tr>
+    <tr><td><code>AFDAttentionModelRunnerV2.__init__</code></td><td>{{cite afd_plugin/v1/worker/attention_model_runner_v2.py:369-411}}</td><td>build the connector; require a control plane</td></tr>
+    <tr><td><code>load_model</code></td><td>{{cite afd_plugin/v1/worker/attention_model_runner_v2.py:454-462}}</td><td>native load, then connector rendezvous at the end</td></tr>
+    <tr><td><code>execute_model</code></td><td>{{cite afd_plugin/v1/worker/attention_model_runner_v2.py:569-595}}</td><td>scope the AFD context, delegate to native V2</td></tr>
+    <tr><td><code>capture_model</code></td><td>{{cite afd_plugin/v1/worker/attention_model_runner_v2.py:509-553}}</td><td>publish graph warm-up/capture control</td></tr>
+    <tr><td><code>AFDMetadataProviderMixin.send_dp_metadata</code></td><td>{{cite afd_plugin/v1/worker/attention_metadata.py:75-116}}</td><td>publish one control payload</td></tr>
+    <tr><td><code>install_afd_metadata_on_forward_context</code></td><td>{{cite afd_plugin/v1/worker/attention_metadata.py:211-257}}</td><td>attach the sidecar, publish on the non-DBO path</td></tr>
+  </tbody>
+</table>
+
+<h2>Walk through the main methods</h2>
+
+<h3>AFDAttentionWorker.init_device: swap the runner class</h3>
+<p>vLLM 0.30.0 builds its runner from a module symbol inside <code>Worker.init_device</code>, with no injection
+hook. The worker replaces that symbol for the native construction window, then restores it
+({{cite afd_plugin/v1/worker/attention_worker.py:60-90}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_worker.py" lines="82-90" highlight="83,85,87" caption="Replace the module class around super().init_device(), then restore it." />
+<ol>
+  <li>Line 82. Save the native runner class.</li>
+  <li>Line 83. Point the module symbol at <code>AFDAttentionModelRunnerV2</code>.</li>
+  <li>Line 85. Native <code>init_device</code> local-imports and builds the runner, now the AFD class.</li>
+  <li>Lines 86-87. Restore the native class in a <code>finally</code>, so the patch is scoped to the window.</li>
+</ol>
+<p>Before the swap, the worker asserts the AFD stack and validates the V2 config
+({{cite afd_plugin/v1/worker/attention_worker.py:64-73}}).</p>
+
+<h3>execute_model: scope the context, then delegate</h3>
+<p>The runner adds nothing to the forward itself. It opens the AFD context and calls <code>super</code>
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:580-595}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="580-595" highlight="582,586" caption="The AFD context scopes the metadata provider and replay hook; native V2 runs and samples." />
+
+<h3>send_dp_metadata: publish one control payload</h3>
+<p>The mixin builds one payload with the per-stage DP metadata and the graph flags, updates the connector state,
+then sends ({{cite afd_plugin/v1/worker/attention_metadata.py:75-116}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_metadata.py" lines="108-116" highlight="115,116" caption="Build the payload, update state, then send the DP-metadata list." />
+<ol>
+  <li>Lines 108-114. Build the <code>AFDControlPayload</code> with the DP metadata and the warm-up/capture/replay
+      flags.</li>
+  <li>Line 115. <code>update_state_from_dp_metadata</code> pre-allocates the wire buffers.</li>
+  <li>Line 116. <code>send_dp_metadata_list</code> sends on the designated sender ranks.</li>
+</ol>
+
+<h2>Deep dive</h2>
+<x-deepdive title="The overrides and what each adds">
+<table>
+  <thead><tr><th>Override</th><th>Adds</th><th>Line</th></tr></thead>
+  <tbody>
+    <tr><td><code>__init__</code></td><td>connector + profiler; control-plane check</td><td>{{cite afd_plugin/v1/worker/attention_model_runner_v2.py:369-411}}</td></tr>
+    <tr><td><code>load_model</code></td><td>deferred connector rendezvous</td><td>{{cite afd_plugin/v1/worker/attention_model_runner_v2.py:454-462}}</td></tr>
+    <tr><td><code>initialize_kv_cache</code></td><td>DP1 ubatch factory for DBO</td><td>{{cite afd_plugin/v1/worker/attention_model_runner_v2.py:473-486}}</td></tr>
+    <tr><td><code>capture_model</code></td><td>graph warm-up/capture control</td><td>{{cite afd_plugin/v1/worker/attention_model_runner_v2.py:509-553}}</td></tr>
+    <tr><td><code>execute_model</code></td><td>AFD context scope</td><td>{{cite afd_plugin/v1/worker/attention_model_runner_v2.py:569-595}}</td></tr>
+    <tr><td><code>shutdown</code></td><td>profiler stop + connector close</td><td>{{cite afd_plugin/v1/worker/attention_model_runner_v2.py:609-619}}</td></tr>
+  </tbody>
+</table>
+<p>Every override calls <code>super()</code> for the real work. The runner's docstring states the delegation
+boundary ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:358-365}}).</p>
+</x-deepdive>
+<x-deepdive title="The shared mixin, used by GPU and NPU">
+<p><code>AFDMetadataProviderMixin</code> holds the connector-facing plumbing: build the sidecar, publish control,
+and attach the sidecar to a context ({{cite afd_plugin/v1/worker/attention_metadata.py:21-28}}). The GPU V2
+runner and the Ascend runners both reuse it, so the control-plane logic lives in one place. The module also has
+the DP-metadata builders for DBO stages
+({{cite afd_plugin/v1/worker/attention_metadata.py:308-351}}).</p>
+</x-deepdive>
+
+<h2>Related concepts</h2>
+<ul>
+  <li>{{link concepts/attention-runtime}} — the seam and the two publish paths.</li>
+  <li>{{link concepts/control-plane}} — the DP-metadata path.</li>
+  <li>{{link code/ffn-worker}} — the FFN side.</li>
+  <li>{{link code/deepseek-v2-py}} — the model split the runner drives.</li>
+</ul>
+
+<x-quiz>
+  <x-q level="easy">How does the worker install the AFD runner?
+    <x-a><p>It replaces the module <code>GPUModelRunner</code> symbol around <code>super().init_device()</code>,
+      then restores it ({{cite afd_plugin/v1/worker/attention_worker.py:82-87}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Which class holds the control-plane publish logic, and why is it a mixin?
+    <x-a><p><code>AFDMetadataProviderMixin</code> ({{cite afd_plugin/v1/worker/attention_metadata.py:21}}). It is
+      a mixin so the GPU V2 runner and the NPU runners share one implementation
+      ({{cite afd_plugin/v1/worker/attention_metadata.py:21-28}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">Why does the module-symbol swap in <code>init_device</code> work at all?
+    <x-a><p>Because native <code>Worker.init_device</code> local-imports <code>GPUModelRunner</code> from the
+      module just before it constructs the runner, so the attribute swap is seen at construction
+      ({{cite vllm:vllm/v1/worker/gpu_worker.py:469-482}},
+      {{cite afd_plugin/v1/worker/attention_worker.py:82-87}}).</p></x-a>
+  </x-q>
+</x-quiz>

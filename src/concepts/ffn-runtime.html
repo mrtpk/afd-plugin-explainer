@@ -1,0 +1,175 @@
+---
+title: The FFN runtime: a connector-driven server loop
+nav_title: FFN runtime
+level: Advanced
+prerequisites: concepts/roles
+related: concepts/attention-runtime, concepts/control-plane, concepts/moe-handoff, code/ffn-worker
+summary: The FFN side has no scheduler and no KV cache. A daemon thread reads one control payload per step and drives the FFN model runner, which runs the FFN or experts for each layer and stage.
+---
+<x-sentence>The {{term ffn-role | FFN role}} runs a stand-alone runner, not a vLLM scheduler. A daemon loop reads the {{term control-plane | control plane}} once per {{term step}} and drives the model.</x-sentence>
+
+<h2>The idea</h2>
+<p>On the FFN role, {{term afd}} drops the vLLM serving loop. There is no scheduler, no KV cache and no sampler.
+Instead, a daemon thread blocks on the {{term control-plane | control plane}}. When a payload arrives, it runs
+one {{term step}}: for each decoder layer and {{term stage}}, it receives hidden states, runs the FFN or experts,
+and sends the result back.</p>
+<p>The runner is <code>GPUFFNModelRunner</code>, a stand-alone class, not a subclass of the vLLM runner
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:52}}). It keeps only what the FFN role needs: the model, the
+connector and an optional CUDA graph cache.</p>
+<p><strong>An everyday comparison.</strong> Think of a short-order kitchen with no front counter. Orders arrive
+on a ticket rail (the control plane). The cook reads one ticket, makes the dish, and sends it out. The
+comparison stops here: the "ticket" carries only token counts, and the dish is a tensor that goes back to the
+exact attention rank that asked.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b3_ffn_runtime" alt="Two panels. Panel 1: the server loop. Three emerald step cards: recv_dp_metadata_list once per step from the control plane (line 176); dispatch to execute_model for eager (191) or capture_model for graph (185); synchronize then loop again (198). Panel 2: _ffn_forward, for each layer for each stage. A blue box recv_attn_output (236) points to an emerald compute box (compute_experts or compute_ffn, 251-267), which points to an emerald send_ffn_output box (268). A neutral box below shows the loop extent: layers (223) times stages (230), where a stage is the DBO ubatch index on the wire." caption="Figure: the daemon loop runs one step per control payload. Inside, _ffn_forward loops over layers and stages: receive, compute, send." />
+<p>Read panel 1 as the outer loop in the worker. Panel 2 is the inner forward in the runner. The blue box is a
+receive from the attention side; the emerald boxes are FFN compute and the send back.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: Construction keeps only the FFN parts</h3>
+<p>The runner parses the AFD config, validates the V2 contract, resolves the graph policy and builds the
+connector ({{cite afd_plugin/v1/worker/ffn_model_runner.py:63-99}}). Like the attention runner, it requires a
+control-plane-driven connector and asserts it at construction
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:87-89}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_model_runner.py" lines="80-96" highlight="87,93" caption="Build the connector, assert a control plane, and read the layer count." />
+
+<h3>Step 2: load_model loads the FFN model (and only its weights)</h3>
+<p><code>load_model</code> calls the native model loader
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:111-126}}). The model it loads is the AFD
+{{term model-wrapper | model wrapper}} for the FFN role, which builds only the FFN modules and keeps only the
+FFN weights. See {{link concepts/model-wrappers}} for the weight filter.</p>
+<x-code file="afd_plugin/v1/worker/ffn_model_runner.py" lines="111-126" caption="load_model: the native loader builds the FFN-role model." />
+<x-note title="No KV cache on the FFN side"><p><code>get_kv_cache_spec</code> returns an empty dict and
+<code>initialize_kv_cache</code> is a no-op ({{cite afd_plugin/v1/worker/ffn_model_runner.py:147-151}}). The FFN
+role allocates no KV cache.</p></x-note>
+
+<h3>Step 3: The server loop runs one step per control payload</h3>
+<p>The worker starts the loop on a daemon thread
+({{cite afd_plugin/v1/worker/ffn_worker.py:133-158}}). The thread reads one DP-metadata payload per step, then
+dispatches to graph capture or to execute ({{cite afd_plugin/v1/worker/ffn_worker.py:168-199}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_worker.py" lines="168-199" highlight="169,176,185,191" caption="One recv per step, then dispatch; a connector with no control plane is rejected." />
+<ol>
+  <li>Lines 169-174. A connector with <code>control_plane</code> None raises; the GPU FFN needs a control
+      plane.</li>
+  <li>Line 176. One <code>recv_dp_metadata_list</code> per step.</li>
+  <li>Lines 182-189. Graph warm-up or capture calls <code>capture_model</code>.</li>
+  <li>Lines 190-196. Otherwise <code>execute_model</code> runs the step.</li>
+</ol>
+
+<h3>Step 4: _ffn_forward loops over layers and stages</h3>
+<p><code>execute_model</code> makes the graph key, then either replays a captured graph or calls
+<code>_ffn_forward</code> for the eager path
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:153-184}}). <code>_ffn_forward</code> loops over the layer
+indices, and over the stages inside each layer
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:222-269}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_model_runner.py" lines="236-268" highlight="236,257,263,268" caption="For each layer and stage: receive, compute, send back." />
+<ol>
+  <li>Line 236. <code>recv_attn_output</code> returns the hidden states and the transfer context.</li>
+  <li>Lines 251-261. An expert layer with the gate on the attention side calls
+      <code>compute_experts_output</code> with the router logits.</li>
+  <li>Lines 262-267. Any other layer calls <code>_execute_eager_mode</code>, which calls
+      <code>compute_ffn_output</code>.</li>
+  <li>Line 268. <code>send_ffn_output</code> sends the result back to the attention rank.</li>
+</ol>
+
+<h3>Step 5: The FFN role never samples</h3>
+<p><code>sample_tokens</code> raises; the FFN role produces no tokens
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}}). The scheduler-driven
+<code>execute_model</code> on the worker also raises, because FFN work is connector-driven, not
+scheduler-driven ({{cite afd_plugin/v1/worker/ffn_worker.py:122-131}}).</p>
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="Eager vs graph path">
+<p><code>execute_model</code> resolves a run mode from the warm-up, capture and replay flags and whether a graph
+already exists ({{cite afd_plugin/v1/worker/ffn_model_runner.py:166-174}}).</p>
+<table>
+  <thead><tr><th>Mode</th><th>What runs</th><th>Line</th></tr></thead>
+  <tbody>
+    <tr><td>REPLAY</td><td>the captured CUDA graph replays; no recompute</td><td>{{cite afd_plugin/v1/worker/ffn_model_runner.py:175-177}}</td></tr>
+    <tr><td>eager / warm-up</td><td><code>_ffn_forward</code> runs the layers and stages</td><td>{{cite afd_plugin/v1/worker/ffn_model_runner.py:179-183}}</td></tr>
+    <tr><td>capture</td><td><code>capture_model</code> records the graph into its own pool</td><td>{{cite afd_plugin/v1/worker/ffn_model_runner.py:358-403}}</td></tr>
+  </tbody>
+</table>
+<p>The graph cache is keyed by the per-stage token counts ({{cite afd_plugin/v1/worker/ffn_model_runner.py:166}}).
+AFD on GPU allows only {{term full-decode-only | FULL_DECODE_ONLY}} graphs. The
+{{link concepts/cuda-graphs}} page reads capture and replay.</p>
+</x-deepdive>
+
+<x-deepdive title="Worked example: one step on 2A2F with DBO">
+<p>Take a 2A2F topology: two attention ranks (A0, A1) and two FFN ranks (F0, F1). The mapping sends A0 to F0 and
+A1 to F1 ({{cite afd_plugin/distributed/topology.py:135-136}}). Run with {{term dbo | DBO}}, so there are two
+{{term stage | stages}} per layer.</p>
+<p>Use DeepSeek-V2-Lite as the model. <em>This model has 27 decoder layers (layer 0 dense, the rest MoE). The
+27 and the dense/MoE split are inferred from the DeepSeek-V2-Lite checkpoint config; they are not stored in
+either repository.</em> With <code>compute_gate_on_attention=false</code>, the FFN runs every layer.</p>
+<ol>
+  <li>The control plane delivers one payload for the step, with one DP-metadata entry per stage
+      ({{cite afd_plugin/v1/worker/ffn_worker.py:176}}).</li>
+  <li><code>_ffn_forward</code> sets <code>layer_indices = range(27)</code> because the gate is on the FFN side
+      ({{cite afd_plugin/v1/worker/ffn_model_runner.py:211-215}}).</li>
+  <li>For each of the 27 layers, the runner loops over the two stages
+      ({{cite afd_plugin/v1/worker/ffn_model_runner.py:223-230}}).</li>
+  <li>That is 27 x 2 = 54 receive/compute/send cycles on F0 (and 54 on F1) for the step. F0 serves only A0's
+      tokens, because A0 maps to F0.</li>
+</ol>
+<p>The data plane runs 54 times per FFN rank in this step; the control plane ran once. This is why AFD counts the
+control plane per step and the data plane per layer and stage.</p>
+</x-deepdive>
+
+<x-deepdive title="Shutdown closes the connector">
+<p>The worker stops the loop, then shuts the runner down
+({{cite afd_plugin/v1/worker/ffn_worker.py:207-219}}). The runner's <code>shutdown</code> releases the graph
+state and native-equivalent GPU state, then closes the connector in a <code>finally</code>
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:442-456}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_model_runner.py" lines="444-456" highlight="455" caption="shutdown: release GPU state, then connector.close()." />
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<x-simplified><p>This page reads the GPU FFN runtime. The NPU async connector drives the FFN side without a
+control plane; that path is on {{link concepts/npu-overview}}. For the file layout, see
+{{link code/ffn-worker}}.</p></x-simplified>
+<ul>
+  <li><strong>A connector with no control plane.</strong> The GPU FFN loop raises
+      ({{cite afd_plugin/v1/worker/ffn_worker.py:169-174}}); the runner also asserts it at construction
+      ({{cite afd_plugin/v1/worker/ffn_model_runner.py:87-89}}).</li>
+  <li><strong>A scheduler-driven step.</strong> The worker's <code>execute_model</code> raises; requests go
+      only to the attention API server ({{cite afd_plugin/v1/worker/ffn_worker.py:122-131}}).</li>
+  <li><strong>A missing DP-metadata list.</strong> The runner's <code>execute_model</code> raises if the
+      control payload has no metadata ({{cite afd_plugin/v1/worker/ffn_model_runner.py:164-165}}).</li>
+  <li><strong>A loop error.</strong> The daemon stores the exception; the next call re-raises it
+      ({{cite afd_plugin/v1/worker/ffn_worker.py:201-205}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The FFN side is passive: it does nothing until a control payload arrives.
+If the attention side does not publish, the loop blocks; if a connector has no control plane, the loop cannot
+start.</p>
+
+<x-quiz>
+  <x-q level="easy">Does the FFN role have a KV cache?
+    <x-a><p>No. <code>get_kv_cache_spec</code> returns an empty dict and <code>initialize_kv_cache</code> is a
+      no-op ({{cite afd_plugin/v1/worker/ffn_model_runner.py:147-151}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">What drives one FFN step?
+    <x-a><p>One <code>recv_dp_metadata_list</code> from the control plane, read by the daemon loop
+      ({{cite afd_plugin/v1/worker/ffn_worker.py:176}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Inside <code>_ffn_forward</code>, what is the order of the three connector and compute
+    calls per layer and stage?
+    <x-a><p><code>recv_attn_output</code>, then the compute
+      (<code>compute_experts_output</code> or <code>compute_ffn_output</code>), then
+      <code>send_ffn_output</code> ({{cite afd_plugin/v1/worker/ffn_model_runner.py:236-268}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">What happens when a captured graph exists for the step's token counts?
+    <x-a><p>The run mode is REPLAY: the captured CUDA graph replays and the runner returns without recompute
+      ({{cite afd_plugin/v1/worker/ffn_model_runner.py:175-177}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">On 2A2F with DBO and a 27-layer model, how many data-plane cycles does one FFN rank run per
+    step, and how many control-plane reads?
+    <x-a><p>27 layers x 2 stages = 54 receive/compute/send cycles on the data plane, and one control-plane read
+      ({{cite afd_plugin/v1/worker/ffn_model_runner.py:223-230}},
+      {{cite afd_plugin/v1/worker/ffn_worker.py:176}}). The 27 is inferred from the DeepSeek-V2-Lite
+      checkpoint.</p></x-a>
+  </x-q>
+</x-quiz>
