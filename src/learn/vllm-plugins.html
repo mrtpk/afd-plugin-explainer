@@ -25,6 +25,11 @@ and each run starts fresh. So one plugin function runs many times, in many proce
 <x-diagram name="s1_plugin_processes" alt="Two panels. Panel 1 shows four processes. Process 0 (launch and API) spawns the EngineCore process, which spawns each worker process; a model-inspection subprocess branches off process 0. Each box names the call site of load_general_plugins: add_cli_args and __post_init__ in arg_utils.py for process 0, __init__ in v1/engine/core.py for EngineCore, init_worker in worker_base.py for the worker, and _run in registry.py for the subprocess. Panel 2 shows the guard: inside one process a second call returns early because plugins_loaded is True; a new process starts the guard at False, so the plugin runs again and must be idempotent." caption="Figure: vLLM calls load_general_plugins() from 5 call sites, in 4 kinds of process. The guard stops a repeat inside one process, not across processes." />
 <p>Read the top panel left to right. Process 0 starts first, then the engine core, then the workers. Each
 process loads the plugins once. The lower panel shows why a plugin must run safely more than once.</p>
+<x-simplified><p>The diagram shows each worker as a separate process. This is true for the multi-process
+executor ({{cite vllm:vllm/v1/executor/abstract.py:70-73}}). With a single device, vLLM uses the in-process
+executor, so the worker runs inside the EngineCore process
+({{cite vllm:vllm/v1/executor/abstract.py:74-77}}). The worker call then hits the guard and does not reload
+the plugins.</p></x-simplified>
 
 <h2>In the code</h2>
 
@@ -89,8 +94,9 @@ monkey-patching: it replaces a vLLM function or method with its own. afd-plugin 
 {{term patch | compat patches}}.</p>
 <p>A plugin <strong>cannot</strong> do some things:</p>
 <ul>
-  <li>It cannot change a value or reference that vLLM already imported and bound. A patch must run before the
-    first use of the target.</li>
+  <li>It cannot change a name that another module already bound with <code>from ... import</code>. That name
+    keeps the original object. A patch that replaces a module attribute (<code>module.func</code>) changes
+    only later attribute lookups. So the patch must run before the code that reads the attribute.</li>
   <li>It cannot change compiled C++ or CUDA code. It can only change the Python that calls it.</li>
   <li>It cannot add a new command-line flag on its own. The plugin function gets no parser.</li>
 </ul>
@@ -158,8 +164,9 @@ process; it does not stop the many processes. So the registration steps must be 
     ({{cite vllm:vllm/envs.py:1146-1150}}).</li>
   <li><strong>A plugin that is not idempotent.</strong> The function runs in many processes. State kept in one
     process does not reach the others.</li>
-  <li><strong>A patch that runs too late.</strong> A monkey-patch cannot change a reference that vLLM already
-    imported and bound. The patch must run before the first use.</li>
+  <li><strong>A patch that runs too late.</strong> A monkey-patch cannot change a name that another module
+    already bound with <code>from ... import</code>. The patch must run before that import, or before the
+    attribute lookup it changes.</li>
 </ul>
 <p><strong>Why it matters.</strong> AFD is installed only through this plugin mechanism. If the plugin does not
 load, or a patch runs too late, the two roles do not form and the run fails.</p>

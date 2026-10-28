@@ -1,7 +1,7 @@
 # AFD Plugin Explainer — Progress
 
 Last update: 2026-10-28
-Current phase: **1c Fact check S1** — F1 + W-S1 committed (fact check pending); usage pause; next: FC-S1.
+Current phase: **1b Samples S2** — S1 fact-checked and committed; usage pause; next: W-S2.
 
 This file is the memory of the project. A new session must be able to continue from it alone.
 Update it after every subagent finishes and after every user decision.
@@ -20,8 +20,8 @@ Update it after every subagent finishes and after every user decision.
 
 | Batch | Writer | Fact check | Committed |
 |---|---|---|---|
-| F1 Foundation | done (186k tokens) | in FC-S1 | yes (pending) |
-| S1 Samples (home, learn/vllm-plugins, code/index, code/init-py) | done (239k tokens) | – | yes (pending) |
+| F1 Foundation | done (186k tokens) | done in FC-S1 | yes |
+| S1 Samples (home, learn/vllm-plugins, code/index, code/init-py) | done (239k tokens) | done (6 defects, 208k tokens) | yes |
 | S2 Samples (tour life-of-a-request, reference/afd-config) | – | – | – |
 | B1 Basics + boundary | – | – | – |
 | B2 Roles, topology, connectors | – | – | – |
@@ -47,6 +47,9 @@ Update it after every subagent finishes and after every user decision.
 
 ## Done
 
+- 2026-10-28: FC-S1 done (full): ~120 claims, 6 defects fixed (call order: control plane once per step, not per layer; Qwen table; monkey-patch precision; UniProc simplification note; topology citation; diagram label). Writer notes #1, #2, #4, #6 confirmed. Supervisor fixed: tools/gen_folder_tree.py binary detection (whole-file NUL scan; repo total 164,972 → 139,046 lines; connectors/ 30,259 → 4,333); core.json full-decode-only (GPU: cuda_graph.py:20-21; NPU accepts FULL too). Accuracy lessons 7-10 added to notes/brief-writer.md. Facts merged.
+- IDEA (skill): the kit's templates/tools/gen_folder_tree.py has the same first-4-KB binary sniff; tell the user (not changed: skill files are out of scope).
+- FINAL-PASS TODO: concepts/control-plane, concepts/wire-data, tours/one-decode-step, tours/life-of-a-request must say control plane once per step, data plane once per layer and stage (source: facts.md "Added after the S1 fact check").
 - 2026-10-28: W-S1 done: home (system map, start here, both commits), learn/vllm-plugins, code/index hand parts, code/init-py; diagrams s1_plugin_processes, s1_register_afd_order; s1.json (2 terms); CSS block `/* Home: system map (S1) */`. Build 0 errors. Screenshots 1280/390: 0 overflow, 0 JS errors on all 4 pages. Facts merged [W]. plan.md §3 corrected (78 .py files). No suspected bugs.
 - FINAL-PASS TODO (supervisor CSS): home legend: the "around every step" swatch sits below the text line (assets/site.css S1 block).
 - 2026-10-28: User installed Chromium system libraries (`sudo npx -y playwright@1.56.1 install-deps chromium`). Browser check works: `node tools/shot.js <file-url> <out.png> <width> <height>` (uses cached playwright-core 1.56.1 + chromium-1234). connector-contract: 0 overflow, 0 JS errors at 1280 and 390. Look OK. Diagram nit: "control plane" label touches its dashed arrow (FC-S1 may fix).
@@ -63,7 +66,7 @@ Update it after every subagent finishes and after every user decision.
 
 ## Next step
 
-Usage pause after W-S1. Then FC-S1 (full check): concepts/connector-contract, index, learn/vllm-plugins, code/index (hand parts), code/init-py, diagrams f1_*/s1_*, src/glossary/core.json + s1.json, the `/* Home: system map (S1) */` CSS block only for wrong facts in labels. Then commit "S1 fact-checked", pause, then W-S2.
+Usage pause after FC-S1. Then writer W-S2 (plan §12 1b-2): tours/life-of-a-request + visual assets/viz/request-stepper.js, reference/afd-config + tools/gen_afd_config.py (generated table between markers, --check mode). Model pages: concepts/connector-contract (concept), code/init-py (module), learn/vllm-plugins (basics). Then build, commit "S2 (fact check pending)", pause, FC-S2.
 
 ## Questions for the user
 
@@ -89,3 +92,4 @@ Usage pause after W-S1. Then FC-S1 (full check): concepts/connector-contract, in
 | 2026-10-28 | explainer-worker: no-tools re-test (new session) | PASS, 28k tokens |
 | 2026-10-28 | explainer-worker: F1 foundation (template B) | done, 186k tokens, 83 tool calls; 0 errors |
 | 2026-10-28 | explainer-worker: W-S1 writer | done, 239k tokens, 73 tool calls; 0 errors, 44 expected link warnings |
+| 2026-10-28 | explainer-worker: FC-S1 fact check (full) | done, 208k tokens, 73 tool calls; ~120 claims, 6 defects |

@@ -21,9 +21,10 @@ plugin code at commit <code>{{project short_sha}}</code>, and the vLLM code it b
     <tr><th>Targets</th><td>vLLM <code>v0.30.0</code> at commit <code>{{project vllm_short_sha}}</code>
       ({{cite README.md:21}}, {{cite pyproject.toml:37}}). Other vLLM versions are not supported on GPU
       ({{cite README.md:69-70}}).</td></tr>
-    <tr><th>Models</th><td>DeepSeek V2 / V3 / V3.2 / V4, GLM-MoE-DSA, Qwen3-MoE and Qwen3.5 / Qwen3.6-MoE.
-      Each is registered under an <code>AFD</code>-prefixed name
-      ({{cite afd_plugin/__init__.py:96-131}}, {{cite README.md:47-51}}).</td></tr>
+    <tr><th>Models</th><td>DeepSeek V2 / V3 / V3.2 / V4, GLM-MoE-DSA, Qwen3-MoE, and one Qwen3.5-MoE
+      architecture, <code>Qwen3_5MoeForConditionalGeneration</code> (the README lists this one under
+      "Qwen3.5 / Qwen3.6 MoE"). The code registers eight architectures, each under an
+      <code>AFD</code>-prefixed name ({{cite afd_plugin/__init__.py:96-131}}, {{cite README.md:47-51}}).</td></tr>
     <tr><th>Connectors</th><td>Three: <code>P2pNcclAFDConnector</code> (CUDA),
       <code>CAMP2pAFDConnector</code> and <code>CAMAsyncAFDConnector</code> (both NPU)
       ({{cite afd_plugin/connectors/factory.py:88-102}}).</td></tr>

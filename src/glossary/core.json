@@ -147,8 +147,8 @@
   },
   "full-decode-only": {
     "term": "FULL_DECODE_ONLY",
-    "short": "The one CUDA graph mode that AFD supports. Graphs capture decode steps only; prefill runs eager.",
-    "long": "Enforced in validation ({{cite afd_plugin/validation.py:235-238}}).",
+    "short": "The only CUDA graph mode that AFD supports on GPU. Graphs capture decode steps only; other batches run eager.",
+    "long": "The GPU set of supported modes has this one member ({{cite afd_plugin/v1/worker/cuda_graph.py:20-21}}). The NPU runner accepts FULL and FULL_DECODE_ONLY ({{cite afd_plugin/validation.py:235-238}}).",
     "page": "concepts/cuda-graphs"
   },
   "custom-op": {

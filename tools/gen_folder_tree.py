@@ -68,8 +68,8 @@ def tracked_files() -> list[str]:
 
 def line_count(path: str) -> int:
     data = (REPO / path).read_bytes()
-    if b"\0" in data[:4096]:
-        return 0  # binary
+    if b"\0" in data:
+        return 0  # binary (scan the whole file: some installers start with a text header)
     return data.count(b"\n") + (0 if not data or data.endswith(b"\n") else 1)
 
 

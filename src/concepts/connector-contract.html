@@ -97,22 +97,26 @@ default name is <code>"P2pNcclAFDConnector"</code> ({{cite afd_plugin/config.py:
 the three connectors.</p>
 
 <x-deepdive title="The full call order, side by side">
-<p>One layer and one {{term stage}} run like this. The data-plane calls are in bold.</p>
+<p>The control plane runs once per step, before the layer loop. The data path then runs once per layer and
+{{term stage}}. The data-plane calls are in bold.</p>
+<p><strong>Once per step (control plane, when the connector has one):</strong> the attention runner applies
+the DP metadata locally, then sends it to the FFN side
+({{cite afd_plugin/v1/worker/attention_metadata.py:115-116}}). Each FFN step waits for the payload, then
+applies it ({{cite afd_plugin/v1/worker/ffn_worker.py:176}},
+{{cite afd_plugin/v1/worker/ffn_model_runner.py:194-197}}).</p>
+<p><strong>Then, for each layer and stage:</strong></p>
 <ol>
   <li><strong>Attention side:</strong> the model produces hidden states for the layer.</li>
-  <li>The control plane sends the per-stage token counts, when the connector has one
-      ({{cite afd_plugin/connectors/base.py:279-283}}).</li>
-  <li><strong>Attention side:</strong> <code>send_attn_output(hidden_states, context)</code>
-      ({{cite afd_plugin/connectors/base.py:145}}).</li>
-  <li>The FFN side applies the control-plane payload, when present, to size its buffers
-      ({{cite afd_plugin/connectors/base.py:261-266}}).</li>
+  <li><strong>Attention side:</strong> <code>send_attn_output(hidden_states, context)</code> from the model
+      proxy ({{cite afd_plugin/model_executor/models/deepseek_v2.py:146}}).</li>
   <li><strong>FFN side:</strong> <code>recv_attn_output(ubatch_idx)</code> returns the hidden states and the
-      context ({{cite afd_plugin/connectors/base.py:206}}).</li>
+      context ({{cite afd_plugin/v1/worker/ffn_model_runner.py:236}}).</li>
   <li><strong>FFN side:</strong> runs the FFN and MoE compute (not in the connector).</li>
   <li><strong>FFN side:</strong> <code>send_ffn_output(ffn_output, context)</code>
-      ({{cite afd_plugin/connectors/base.py:229}}).</li>
+      ({{cite afd_plugin/v1/worker/ffn_model_runner.py:268}}).</li>
   <li><strong>Attention side:</strong> <code>recv_ffn_output(ref_tensor, ubatch_idx)</code> returns the
-      result, which continues through the rest of the layer ({{cite afd_plugin/connectors/base.py:173}}).</li>
+      result, which continues through the rest of the layer
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:155}}).</li>
 </ol>
 <p>The {{term stage}} is the {{term dbo | DBO}} ubatch index. With DBO the connector runs two stages per
 layer. See {{link concepts/dbo}}.</p>
@@ -120,7 +124,8 @@ layer. See {{link concepts/dbo}}.</p>
 
 <x-deepdive title="Worked example: hidden-state shapes for DeepSeek-V2-Lite, 2A2F">
 <p>Take a 2A2F topology: two attention ranks (A0, A1) and two FFN ranks (F0, F1). Each FFN rank owns one
-attention peer, so A0 maps to F0 and A1 maps to F1 ({{cite afd_plugin/connectors/gpu/p2p.py:11-20}}).</p>
+attention peer, so A0 maps to F0 and A1 maps to F1 ({{cite afd_plugin/connectors/gpu/p2p.py:11-20}},
+{{cite afd_plugin/distributed/topology.py:135-136}}).</p>
 <p>The hidden size comes from the model config, <code>hf_text_config.hidden_size</code>
 ({{cite afd_plugin/connectors/gpu/p2p.py:195-197}}). For DeepSeek-V2-Lite this is <strong>2048</strong>.
 This value is <em>inferred</em> from the DeepSeek-V2-Lite checkpoint config; it is not stored in either

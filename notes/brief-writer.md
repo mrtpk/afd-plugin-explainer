@@ -50,6 +50,15 @@ glossary terms you own. This file gives everything else. It is binding.
    load_general_plugins from 5 call sites).
 5. DOCS: docs are often older than the code. Cite the code. Report each docs-vs-code difference (FAQ material).
 6. PROCESSES: say which process runs a line (API server, EngineCore, worker; attention or FFN side). Check it.
+7. FREQUENCY (after S1): say how often a call runs: once per step, once per layer, once per stage (ubatch).
+   The control plane runs once per step before the layer loop; the data plane once per layer and stage. Do
+   not fold a per-step call into a per-layer sequence.
+8. DRIVERS, NOT DOCSTRINGS (after S1): an ABC docstring proves the contract, not the run-time order. Cite the
+   concrete caller (model runner, server loop, model wrapper) for every "runs like this" sequence.
+9. README vs. REGISTERED CODE (after S1): when the README names a family loosely (Qwen3.5/3.6), say exactly
+   which architecture string the code registers.
+10. GENERAL PYTHON (after S1): be precise about patches: from-imports bind the original object; a module
+   attribute patch affects only later lookups.
 
 ## Ownership
 - You own only: your page files, src/glossary/<batch>.json, diagrams/<batch>_*.py, and your visual
