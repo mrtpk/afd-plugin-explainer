@@ -1,0 +1,38 @@
+{
+  "_about": "Batch B4 (graphs, DBO, patches). Owner: B4 writer. Search all glossary files before adding a term.",
+  "dbo-yield": {
+    "term": "DBO yield",
+    "short": "A custom op that hands control to the other ubatch thread. The AFD proxy calls it between the send and the receive, so the second stage runs while the first waits.",
+    "long": "Registered as <code>torch.ops.vllm.manual_dbo_yield</code> ({{cite afd_plugin/v1/worker/dbo.py:27-49}}). It yields only when vLLM DBO is active ({{cite afd_plugin/v1/worker/dbo.py:52-54}}).",
+    "aliases": ["manual_dbo_yield", "dbo yield"],
+    "page": "concepts/dbo"
+  },
+  "ffn-graph-key": {
+    "term": "FFN graph key",
+    "short": "A hashable key built from the per-stage DP metadata. The FFN runner uses it to store and look up one captured CUDA graph per token shape.",
+    "long": "Built by <code>make_ffn_graph_key</code> ({{cite afd_plugin/v1/worker/cuda_graph.py:104-133}}).",
+    "aliases": ["make_ffn_graph_key", "graph key"],
+    "page": "concepts/cuda-graphs"
+  },
+  "version-gate": {
+    "term": "version gate",
+    "short": "A check that decides whether a patch installs. is_target_vllm_compatible allows the target vLLM release and any dev build; on a mismatch, no patch installs.",
+    "long": "Defined in <code>is_target_vllm_compatible</code> ({{cite afd_plugin/compat/vllm.py:53-68}}). Different from the strict start-up check <code>assert_vllm_version_supported</code> ({{cite afd_plugin/compat/vllm.py:38-50}}).",
+    "aliases": ["is_target_vllm_compatible", "install gate"],
+    "page": "concepts/compat-patches"
+  },
+  "scoped-patch": {
+    "term": "scoped patch",
+    "short": "A patch that is active only inside a context manager, for the time of one AFD call. The code restores the original function on exit.",
+    "long": "Example: <code>use_gpu_mrv2_ubatch_factory</code> and <code>use_gpu_mrv2_dbo_dispatch</code> scope the DP1 DBO seams ({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:263-282}}).",
+    "aliases": ["scoped monkey-patch", "context-manager patch"],
+    "page": "concepts/compat-patches"
+  },
+  "acl-graph": {
+    "term": "ACL graph",
+    "short": "The Ascend NPU form of a captured graph, the NPU counterpart of a CUDA graph. The NPU validator accepts the FULL and FULL_DECODE_ONLY modes.",
+    "long": "The NPU runtime is covered on {{link concepts/npu-overview}}. The mode check is {{cite afd_plugin/validation.py:233-239}}.",
+    "aliases": ["ACL graph mode", "Ascend graph"],
+    "page": "concepts/npu-overview"
+  }
+}

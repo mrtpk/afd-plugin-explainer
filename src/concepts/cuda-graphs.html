@@ -1,0 +1,209 @@
+---
+title: CUDA graphs in AFD: FULL_DECODE_ONLY on both roles
+nav_title: CUDA graphs
+level: Advanced
+prerequisites: concepts/attention-runtime, concepts/ffn-runtime
+related: concepts/dbo, concepts/control-plane, concepts/wire-data, code/attention-worker, code/ffn-worker
+summary: AFD supports one CUDA graph mode, FULL_DECODE_ONLY. The attention side wraps native capture and replay to publish control; the FFN side keeps its own graph per token shape.
+---
+<x-sentence>AFD runs CUDA graphs in one mode only, {{term full-decode-only | FULL_DECODE_ONLY}}. Each role captures and replays its own graphs, and the two sides must agree on token shapes.</x-sentence>
+
+<h2>The idea</h2>
+<p>A CUDA graph records a fixed sequence of GPU work once, then replays it with almost no CPU cost. AFD splits
+one model across two processes, so each role records its own graph. The attention side and the FFN side capture
+and replay separately. They share nothing but the tensors that cross the {{term connector}}.</p>
+<p>AFD allows one graph mode: {{term full-decode-only | FULL_DECODE_ONLY}}. In this mode the graph covers
+pure-decode steps, where every request adds one token. Prefill and mixed batches run eager (no graph). This is
+set in one small policy module ({{cite afd_plugin/v1/worker/cuda_graph.py:20-21}}).</p>
+<p><strong>An everyday comparison.</strong> Think of a stage play with two actors in separate rooms, linked by
+a hatch. Each actor rehearses their own lines until they are automatic (capture), then performs them fast
+(replay). The comparison stops here: the two actors must hand the exact same size of parcel through the hatch
+every time, or the fast performance breaks.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b4_cuda_graphs" alt="Two panels. Panel 1, the attention side: three step cards left to right. Card 1, capture_model, warm-up then capture, sends DP metadata twice per descriptor. Card 2, the run_fullgraph hook, before each replay, sends a padded control payload once. Card 3, native replay, owned by vLLM, mode FULL_DECODE_ONLY. Panel 2, the FFN side: three boxes. Box 1, make_ffn_graph_key from DP metadata. Box 2, graph exists in the cache. Box 3, REPLAY calls graph.replay, else capture or eager. Below, a note that the capture path uses one torch.cuda.CUDAGraph in its own graph pool. A legend marks attention control, graph key, FFN graph, and native vLLM." caption="Figure: the attention side wraps native capture and replay to publish control. The FFN side keeps one CUDA graph per token shape, keyed by the DP metadata." />
+<p>Read the top panel as the attention role and the bottom panel as the FFN role. The attention side does not
+own the graph, native vLLM does; AFD only publishes control around it. The FFN side owns its graphs in a plain
+dictionary, one per token shape.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: One supported mode</h3>
+<p>The policy module lists the supported modes. The set holds one name
+({{cite afd_plugin/v1/worker/cuda_graph.py:20-21}}). <code>validate_cuda_graph_mode</code> returns a disabled
+policy when <code>enforce_eager</code> is set, and raises for any mode that is not
+<code>FULL_DECODE_ONLY</code> ({{cite afd_plugin/v1/worker/cuda_graph.py:42-85}}).</p>
+<x-code file="afd_plugin/v1/worker/cuda_graph.py" lines="42-66" highlight="49,61-66" caption="validate_cuda_graph_mode: eager disables graphs; any other mode raises." />
+<x-note title="DBO and graphs need exactly two ubatches"><p>When ubatching is on, the policy allows a graph
+only with exactly two ubatches ({{cite afd_plugin/v1/worker/cuda_graph.py:71-77}}). See {{link concepts/dbo}}.</p></x-note>
+<p>On Ascend NPU, the counterpart is an {{term acl-graph | ACL graph}}; the NPU validator accepts the
+<code>FULL</code> and <code>FULL_DECODE_ONLY</code> modes ({{cite afd_plugin/validation.py:233-239}}). The NPU
+runtime is covered on {{link concepts/npu-overview}}.</p>
+
+<h3>Step 2: The attention side wraps native capture</h3>
+<p>The AFD attention runner does not capture graphs itself. It wraps the native <code>capture_model</code> and
+publishes one warm-up payload and one capture payload for each FULL descriptor
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:509-553}}). An event tracker checks that native
+capture prepares inputs exactly twice per descriptor, in order
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:55-97}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="536-546" highlight="538,544" caption="capture_model: scope the AFD capture seam, then call native capture_model." />
+
+<h3>Step 3: The attention side publishes control before each replay</h3>
+<p>Native FULL replay does not build a forward context, so the AFD metadata provider cannot run there. The
+runner wraps the graph manager's <code>run_fullgraph</code> and sends one padded control payload just before
+each native replay ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:270-303}}). This hook is used
+only in <code>FULL_DECODE_ONLY</code> mode, and only when a graph manager exists
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:323-327}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="286-303" highlight="295,299" caption="run_fullgraph wrapper: publish one padded control payload, then run the native replay." />
+
+<h3>Step 4: The FFN side keys one graph per shape</h3>
+<p>The FFN runner builds a hashable {{term ffn-graph-key | FFN graph key}} from the per-stage DP metadata, then
+looks up a stored graph ({{cite afd_plugin/v1/worker/ffn_model_runner.py:166-174}}). On a hit in replay mode it
+calls <code>graph.replay()</code> and returns ({{cite afd_plugin/v1/worker/ffn_model_runner.py:175-177}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_model_runner.py" lines="166-184" highlight="166,175,176" caption="execute_model: build the graph key, then replay the stored graph or run the forward." />
+<p>The run mode is chosen by a small helper. It returns <code>REPLAY</code> only when the graph is enabled and
+a graph for this key exists ({{cite afd_plugin/v1/worker/cuda_graph.py:136-150}}).</p>
+
+<h3>Step 5: The FFN side captures its own graph</h3>
+<p>The FFN server loop reads the control payload, then calls <code>capture_model</code> for warm-up and capture
+steps, or <code>execute_model</code> otherwise ({{cite afd_plugin/v1/worker/ffn_worker.py:182-196}}). Capture
+runs <code>_dummy_run</code>, which records one <code>torch.cuda.CUDAGraph</code> into the runner's own graph
+pool and stores it under the key ({{cite afd_plugin/v1/worker/ffn_model_runner.py:316-351}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_model_runner.py" lines="326-351" highlight="330,341,347" caption="_dummy_run: capture one CUDA graph per key, after the control-plane receive." />
+
+<h3>Step 6: Custom ops keep the transfers capturable</h3>
+<p>The data path uses vLLM's {{term pynccl | PyNcclCommunicator}} send and receive, wrapped in four
+{{term custom-op | custom ops}} ({{cite afd_plugin/connectors/gpu/p2p.py:979-1122}}). The wrapping keeps the
+transfers traceable by <code>torch.compile</code> and capturable by a CUDA graph
+({{cite afd_plugin/connectors/gpu/p2p.py:36-42}}).</p>
+
+<h2>Deep dive</h2>
+<p>The blocks below give the capture handshake, the FFN graph cache, why the two sides must agree on shapes,
+and a worked example.</p>
+
+<x-deepdive title="The attention capture handshake, step by step">
+<p>Native vLLM prepares graph inputs once before each warm-up forward and once before each capture forward. AFD
+must publish control at that exact seam. The capture wrapper sets this up
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:509-553}}).</p>
+<ol>
+  <li><strong>Collect the FULL descriptors.</strong> The wrapper reads the manager's FULL capture descriptors
+    and mirrors the native profile-only truncation
+    ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:511-517}}).</li>
+  <li><strong>Make an event tracker.</strong> It expects each descriptor twice: once for warm-up, once for
+    capture ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:62-64}}).</li>
+  <li><strong>Scope two input-preparation seams.</strong> One wraps the native capture input preparation; one
+    wraps the ubatch prepare path ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:537-540}}).</li>
+  <li><strong>Publish one event per forward.</strong> The non-ubatch seam sends the DP metadata before the
+    forward and marks the step as warm-up or capture
+    ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:214-227}}).</li>
+  <li><strong>Check the count.</strong> After native capture, the tracker asserts it saw the exact expected
+    count, so capture order cannot drift ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:91-97}}).</li>
+</ol>
+<p>At run time, the <code>run_fullgraph</code> hook publishes one padded payload before each replay. For a DBO
+step with two stages, the prepare seam already sent the full two-stage payload, so the hook only asserts and
+delegates ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:275-280}}).</p>
+</x-deepdive>
+
+<x-deepdive title="The FFN graph key and the graph cache">
+<p>The FFN runner holds its graphs in a plain dictionary, <code>_cuda_graphs</code>, keyed by the FFN graph key
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:97}}). The key comes from
+<code>make_ffn_graph_key</code> ({{cite afd_plugin/v1/worker/cuda_graph.py:104-133}}).</p>
+<p>The key is built from the per-stage token counts in the DP metadata. When the attention count is a whole
+multiple of the FFN count, the helper sums each FFN rank's group of attention counts, so the key matches what
+the FFN rank will actually receive ({{cite afd_plugin/v1/worker/cuda_graph.py:177-199}}).</p>
+<p>The run mode comes from a pure function:</p>
+<table>
+  <thead><tr><th>Condition</th><th>Mode</th></tr></thead>
+  <tbody>
+    <tr><td>is_warmup</td><td>WARMUP ({{cite afd_plugin/v1/worker/cuda_graph.py:144-145}})</td></tr>
+    <tr><td>is_graph_capturing</td><td>CAPTURE ({{cite afd_plugin/v1/worker/cuda_graph.py:146-147}})</td></tr>
+    <tr><td>replaying, enabled, and a graph exists for the key</td><td>REPLAY ({{cite afd_plugin/v1/worker/cuda_graph.py:148-149}})</td></tr>
+    <tr><td>otherwise</td><td>EAGER ({{cite afd_plugin/v1/worker/cuda_graph.py:150}})</td></tr>
+  </tbody>
+</table>
+<p>The graph cache is on only when the policy enables it for the FFN role
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:94-96}}, {{cite afd_plugin/v1/worker/cuda_graph.py:83}}).</p>
+</x-deepdive>
+
+<x-deepdive title="Why both sides must agree on shapes">
+<p>A CUDA graph records fixed tensor addresses. A replay reuses them, so the FFN side must receive into stable
+buffers of the exact captured shape. The control plane prepares these.</p>
+<p>When a DP metadata payload arrives, <code>update_state_from_dp_metadata</code> computes the per-stage tensor
+metadata. On an FFN rank, and only when graphs are enabled, it preallocates receive buffers so capture and
+replay reuse stable allocations ({{cite afd_plugin/connectors/gpu/p2p.py:820-851}}). Hidden-state receive
+buffers are cached only while capturing; eager steps allocate per receive
+({{cite afd_plugin/connectors/gpu/p2p.py:829-840}}).</p>
+<p>So the shape chain is: the attention side sends the token counts in the DP metadata; both sides build the
+same FFN graph key from those counts; the FFN side preallocates buffers for that shape. If the shapes do not
+match a captured key, the FFN side falls back to eager for that step
+({{cite afd_plugin/v1/worker/cuda_graph.py:148-150}}). This is why <code>FULL_DECODE_ONLY</code> fits AFD:
+pure-decode steps have one token per request, so the shapes are stable and few.</p>
+</x-deepdive>
+
+<x-deepdive title="Worked example: a 2A2F decode step with graphs on">
+<p>Take the graph recipe: 2A2F, DP1, TP2, <code>FULL_DECODE_ONLY</code>, capture size 64
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-29}}).</p>
+<ol>
+  <li><strong>Start-up.</strong> The attention runner calls native <code>capture_model</code>. For the size-64
+    descriptor it sends one warm-up payload, then one capture payload
+    ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:509-553}}).</li>
+  <li><strong>FFN capture.</strong> The FFN loop receives the warm-up and capture payloads, and
+    <code>capture_model</code> records one graph for that key
+    ({{cite afd_plugin/v1/worker/ffn_worker.py:182-189}}).</li>
+  <li><strong>Decode.</strong> A pure-decode step arrives. The attention side replays its native graph; the
+    <code>run_fullgraph</code> hook sends one padded payload first
+    ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:295-299}}).</li>
+  <li><strong>FFN replay.</strong> The FFN side builds the same key, finds the stored graph, and calls
+    <code>graph.replay()</code> ({{cite afd_plugin/v1/worker/ffn_model_runner.py:175-177}}).</li>
+  <li><strong>A prefill arrives.</strong> The token count differs, so no key matches; both sides run eager for
+    that step.</li>
+</ol>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<x-simplified><p>This page shows the graph policy and the two control seams. It does not show the native CUDA
+graph internals, which belong to vLLM. It cites the AFD wrappers only.</p></x-simplified>
+<ul>
+  <li><strong>An unsupported graph mode.</strong> Any mode other than <code>FULL_DECODE_ONLY</code> raises at
+    config validation ({{cite afd_plugin/v1/worker/cuda_graph.py:61-66}}).</li>
+  <li><strong>Ubatching with the wrong count.</strong> A graph with ubatching needs exactly two ubatches, or
+    the policy raises ({{cite afd_plugin/v1/worker/cuda_graph.py:72-77}}).</li>
+  <li><strong>A shape that no captured key covers.</strong> The FFN side does not crash; it runs that step
+    eager, because the run mode falls back to <code>EAGER</code>
+    ({{cite afd_plugin/v1/worker/cuda_graph.py:148-150}}).</li>
+  <li><strong>Capture order drift.</strong> If native capture prepares inputs the wrong number of times, the
+    event tracker raises, so a silent mismatch cannot happen
+    ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:73-88}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> A CUDA graph replays fixed addresses. The two roles must agree on the token
+shapes, or the FFN side cannot reuse a graph. AFD keeps the shapes stable by limiting graphs to pure-decode
+steps and keying each graph on the DP metadata.</p>
+
+<x-quiz>
+  <x-q level="easy">Which CUDA graph mode does AFD support on GPU?
+    <x-a><p>Only <code>FULL_DECODE_ONLY</code>. The supported-modes set holds one name
+      ({{cite afd_plugin/v1/worker/cuda_graph.py:20-21}}), and any other mode raises
+      ({{cite afd_plugin/v1/worker/cuda_graph.py:61-66}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">Where does the FFN side store its captured graphs?
+    <x-a><p>In a plain dictionary, <code>_cuda_graphs</code>, keyed by the FFN graph key
+      ({{cite afd_plugin/v1/worker/ffn_model_runner.py:97}}, {{cite afd_plugin/v1/worker/cuda_graph.py:104-133}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Native FULL replay does not build a forward context. How does the attention side still
+    publish control?
+    <x-a><p>It wraps the graph manager's <code>run_fullgraph</code> and sends one padded control payload just
+      before each native replay ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:270-303}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">A prefill step arrives while graphs are on. What happens?
+    <x-a><p>The token count does not match any captured key, so the run mode is <code>EAGER</code> and both
+      sides run that step without a graph ({{cite afd_plugin/v1/worker/cuda_graph.py:148-150}}). Graphs cover
+      pure-decode steps only.</p></x-a>
+  </x-q>
+  <x-q level="hard">Why can the FFN side reuse one captured graph across decode steps, and what prepares the
+    receive buffers?
+    <x-a><p>Pure-decode steps have stable token shapes, so the FFN graph key repeats. When graphs are enabled,
+      <code>update_state_from_dp_metadata</code> preallocates receive buffers of the captured shape while
+      capturing, so replay reuses stable addresses
+      ({{cite afd_plugin/connectors/gpu/p2p.py:820-851}}).</p></x-a>
+  </x-q>
+</x-quiz>

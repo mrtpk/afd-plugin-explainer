@@ -1,0 +1,196 @@
+---
+title: Reference: compat patches
+nav_title: Compat patches
+level: Advanced
+related: concepts/compat-patches, concepts/worker-selection, concepts/roles, concepts/dbo, concepts/npu-overview
+summary: Every AFD compat patch, its vLLM target at the pinned commit, how and when it installs, what it changes, and the page that explains it. Hand-checked, one row per replaced function.
+---
+<x-sentence>This table lists every {{term patch}} in <code>afd_plugin/compat/patches/</code>, its vLLM target at the pinned commit, its install mechanism, when it is active, and what it changes.</x-sentence>
+
+<h2>How to read this table</h2>
+<p>Each row is one replaced function. The <strong>vLLM target</strong> is the function the patch stands in for,
+at the pinned vLLM commit ({{project vllm_short_sha}}). The <strong>install</strong> column says where and how
+AFD installs the patch and what gates it. The <strong>active when</strong> column says which configs the patch
+actually changes; the others see native behavior. Every GPU patch is behind the
+{{term version-gate | version gate}} <code>is_target_vllm_compatible</code>
+({{cite afd_plugin/compat/vllm.py:53-68}}). The concept page is {{link concepts/compat-patches}}.</p>
+
+<h2>GPU patches</h2>
+
+<h3>config_validation ({{cite afd_plugin/compat/patches/config_validation.py:1 | config_validation.py}})</h3>
+<table>
+  <thead>
+    <tr><th>vLLM target</th><th>Install</th><th>Active when</th><th>Effect</th><th>Page</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>EngineArgs.create_engine_config</code> ({{cite vllm:vllm/engine/arg_utils.py:2040}})</td>
+      <td>import time, gated; original saved once ({{cite afd_plugin/compat/patches/config_validation.py:235-261}})</td>
+      <td>an AFD config is present</td>
+      <td>rewrites <code>worker_cls</code> to the AFD role worker when it was <code>"auto"</code> ({{cite afd_plugin/compat/patches/config_validation.py:92-93}}, {{cite afd_plugin/compat/patches/config_validation.py:179-197}}); relaxes one ubatch backend check ({{cite afd_plugin/compat/patches/config_validation.py:62-89}})</td>
+      <td>{{link concepts/worker-selection}}</td>
+    </tr>
+    <tr>
+      <td><code>VllmConfig.__post_init__</code> ({{cite vllm:vllm/config/vllm.py:1254}})</td>
+      <td>import time, gated ({{cite afd_plugin/compat/patches/config_validation.py:243-260}})</td>
+      <td>AFD config with ubatching, on config revalidation</td>
+      <td>presents a validation-safe all2all backend during revalidation, then restores it ({{cite afd_plugin/compat/patches/config_validation.py:128-157}})</td>
+      <td>{{link concepts/worker-selection}}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>engine_core ({{cite afd_plugin/compat/patches/engine_core.py:1 | engine_core.py}})</h3>
+<table>
+  <thead>
+    <tr><th>vLLM target</th><th>Install</th><th>Active when</th><th>Effect</th><th>Page</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>EngineCore.__init__</code> ({{cite vllm:vllm/v1/engine/core.py:108}})</td>
+      <td>import time, gated ({{cite afd_plugin/compat/patches/engine_core.py:722-727}})</td>
+      <td>role is <code>ffn</code></td>
+      <td>returns after the executor is built; no scheduler, no KV cache ({{cite afd_plugin/compat/patches/engine_core.py:56-68}}, {{cite afd_plugin/compat/patches/engine_core.py:599-623}})</td>
+      <td>{{link concepts/roles}}</td>
+    </tr>
+    <tr>
+      <td><code>EngineCore._initialize_kv_caches</code> ({{cite vllm:vllm/v1/engine/core.py:254}})</td>
+      <td>import time, gated ({{cite afd_plugin/compat/patches/engine_core.py:724}})</td>
+      <td>role is <code>ffn</code>, late-loaded path</td>
+      <td>returns a minimal KV cache config and sets zero blocks for FFN daemons ({{cite afd_plugin/compat/patches/engine_core.py:257-264}}, {{cite afd_plugin/compat/patches/engine_core.py:635-647}})</td>
+      <td>{{link concepts/roles}}</td>
+    </tr>
+    <tr>
+      <td><code>EngineCore.shutdown</code> ({{cite vllm:vllm/v1/engine/core.py:756}})</td>
+      <td>import time, gated ({{cite afd_plugin/compat/patches/engine_core.py:725}})</td>
+      <td>role is <code>ffn</code></td>
+      <td>stops the FFN worker loop before tearing down the executor ({{cite afd_plugin/compat/patches/engine_core.py:216-228}})</td>
+      <td>{{link concepts/roles}}</td>
+    </tr>
+    <tr>
+      <td><code>EngineCoreProc.run_busy_loop</code> ({{cite vllm:vllm/v1/engine/core.py:1403}})</td>
+      <td>import time, gated ({{cite afd_plugin/compat/patches/engine_core.py:726}})</td>
+      <td>FFN engine</td>
+      <td>runs the connector loop: <code>collective_rpc("start_ffn_server_loop")</code>, then polls worker errors ({{cite afd_plugin/compat/patches/engine_core.py:411-419}}, {{cite afd_plugin/compat/patches/engine_core.py:650-662}})</td>
+      <td>{{link concepts/ffn-runtime}}</td>
+    </tr>
+    <tr>
+      <td><code>DPEngineCoreProc.run_busy_loop</code> ({{cite vllm:vllm/v1/engine/core.py:2181}})</td>
+      <td>import time, gated ({{cite afd_plugin/compat/patches/engine_core.py:727}})</td>
+      <td>FFN engine (DP path)</td>
+      <td>same connector loop for the DP engine process ({{cite afd_plugin/compat/patches/engine_core.py:416-419}})</td>
+      <td>{{link concepts/ffn-runtime}}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>gpu_mrv2_ubatching ({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:1 | gpu_mrv2_ubatching.py}})</h3>
+<table>
+  <thead>
+    <tr><th>vLLM target</th><th>Install</th><th>Active when</th><th>Effect</th><th>Page</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>maybe_build_ubatch_runner</code> ({{cite vllm:vllm/v1/worker/gpu/ubatch_utils.py:538}})</td>
+      <td>scoped: <code>use_gpu_mrv2_ubatch_factory</code> ({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:263-272}})</td>
+      <td>inside AFD <code>initialize_kv_cache</code>, DP size 1 ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:479-486}})</td>
+      <td>builds the ubatch runner at DP1 and binds DP1 child metadata ({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:47-73}})</td>
+      <td>{{link concepts/dbo}}</td>
+    </tr>
+    <tr>
+      <td><code>dispatch_cg_and_sync_dp</code> ({{cite vllm:vllm/v1/worker/gpu/dp_utils.py:214}})</td>
+      <td>scoped: <code>use_gpu_mrv2_dbo_dispatch</code> ({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:274-282}})</td>
+      <td>inside one AFD <code>execute_model</code> call ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:340-349}})</td>
+      <td>applies the DBO threshold and ubatch descriptor at DP1 with no DP handshake ({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:194-226}})</td>
+      <td>{{link concepts/dbo}}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>NPU-gated patches</h2>
+<p>These two modules install at import time but only change behavior for async-DP configs, which are
+{{term async-dp | NPU only}}. On GPU, <code>async_dp</code> must be false, so they run as transparent
+re-implementations ({{cite afd_plugin/config.py:303-308}}).</p>
+
+<h3>async_dp_engine ({{cite afd_plugin/compat/patches/async_dp_engine.py:1 | async_dp_engine.py}})</h3>
+<table>
+  <thead>
+    <tr><th>vLLM target</th><th>Install</th><th>Active when</th><th>Effect</th><th>Page</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>EngineCoreProc.run_engine_core</code> ({{cite vllm:vllm/v1/engine/core.py:1283}})</td>
+      <td>import time, gated ({{cite afd_plugin/compat/patches/async_dp_engine.py:424-432}})</td>
+      <td>NPU async attention config</td>
+      <td>selects <code>EngineCoreProc</code> instead of <code>DPEngineCoreProc</code> ({{cite afd_plugin/compat/patches/async_dp_engine.py:60-63}})</td>
+      <td>{{link concepts/npu-overview}}</td>
+    </tr>
+    <tr>
+      <td><code>launch_core_engines</code> ({{cite vllm:vllm/v1/engine/utils.py:1104}})</td>
+      <td>import time, gated ({{cite afd_plugin/compat/patches/async_dp_engine.py:428-429}})</td>
+      <td>NPU async config</td>
+      <td>disables DP wave coordination on the coordinator ({{cite afd_plugin/compat/patches/async_dp_engine.py:248-252}})</td>
+      <td>{{link concepts/npu-overview}}</td>
+    </tr>
+    <tr>
+      <td><code>DPAsyncMPClient.add_request_async</code> ({{cite vllm:vllm/v1/engine/core_client.py:1486}})</td>
+      <td>import time, gated ({{cite afd_plugin/compat/patches/async_dp_engine.py:430}})</td>
+      <td>NPU async config</td>
+      <td>skips the <code>FIRST_REQ</code> wakeup for async configs ({{cite afd_plugin/compat/patches/async_dp_engine.py:389-401}})</td>
+      <td>{{link concepts/npu-overview}}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>async_dp_forward_context ({{cite afd_plugin/compat/patches/async_dp_forward_context.py:1 | async_dp_forward_context.py}})</h3>
+<table>
+  <thead>
+    <tr><th>vLLM target</th><th>Install</th><th>Active when</th><th>Effect</th><th>Page</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>set_forward_context</code> ({{cite vllm:vllm/forward_context.py:269}})</td>
+      <td>import time, gated; also rebinds the symbol in importing modules ({{cite afd_plugin/compat/patches/async_dp_forward_context.py:207-212}})</td>
+      <td>NPU async-DP config</td>
+      <td>skips native DP metadata construction only for async configs ({{cite afd_plugin/compat/patches/async_dp_forward_context.py:88-127}})</td>
+      <td>{{link concepts/npu-overview}}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>NPU device patches</h2>
+<p>These install only when the device is NPU ({{cite afd_plugin/__init__.py:204-209}}). Their upstream targets are
+in vLLM-Ascend, which is not one of the two pinned repositories, so the row cites the AFD module. They are
+covered on {{link concepts/npu-overview}}.</p>
+<table>
+  <thead>
+    <tr><th>AFD module</th><th>Upstream (external)</th><th>Effect</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>{{cite afd_plugin/compat/patches/npu/ascend_config.py:1 | npu/ascend_config.py}}</td>
+      <td>vLLM-Ascend <code>ascend_config</code></td>
+      <td>keeps AFD settings outside the strict Ascend config namespace ({{cite afd_plugin/compat/patches/npu/ascend_config.py:3}})</td>
+    </tr>
+    <tr>
+      <td>{{cite afd_plugin/compat/patches/npu/ascend_platform.py:1 | npu/ascend_platform.py}}</td>
+      <td>vLLM-Ascend <code>platform.py</code> ({{cite afd_plugin/compat/patches/npu/ascend_platform.py:5}})</td>
+      <td>patches Ascend platform config normalization for AFD DBO ({{cite afd_plugin/compat/patches/npu/ascend_platform.py:3}})</td>
+    </tr>
+    <tr>
+      <td>{{cite afd_plugin/compat/patches/npu/mla_graph.py:1 | npu/mla_graph.py}}</td>
+      <td>vLLM-Ascend <code>attention/mla_v1.py</code> ({{cite afd_plugin/compat/patches/npu/mla_graph.py:5}})</td>
+      <td>routes Ascend MLA {{term acl-graph | ACL graph}} parameters through AFD forward contexts ({{cite afd_plugin/compat/patches/npu/mla_graph.py:3}})</td>
+    </tr>
+    <tr>
+      <td>{{cite afd_plugin/compat/patches/npu/mrv2_ubatching.py:1 | npu/mrv2_ubatching.py}}</td>
+      <td>vLLM native ubatch runner (Ascend baseline) ({{cite afd_plugin/compat/patches/npu/mrv2_ubatching.py:3-4}})</td>
+      <td>scopes Ascend seams for the native ubatch runner ({{cite afd_plugin/compat/patches/npu/mrv2_ubatching.py:3-8}})</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>What is not patched</h2>
+<p>AFD does not patch the API server, the scheduler, the sampler or the attention and KV kernels. The attention
+runner wraps native methods instead of replacing them ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:569-595}}),
+and sampling stays native ({{cite vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050}}).</p>

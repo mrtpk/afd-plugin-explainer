@@ -1,0 +1,197 @@
+---
+title: Tour: Start-up
+nav_title: Start-up
+level: Advanced
+prerequisites: concepts/roles, concepts/worker-selection
+related: tours/life-of-a-request, tours/one-decode-step, concepts/plugin-entry-point, concepts/connector-contract, concepts/cuda-graphs, code/ffn-worker
+summary: Follow both servers from vllm serve to ready, stop by stop: plugin load, the worker_cls rewrite, the FFN EngineCore early return, the runner swap, the connector handshake, and graph capture on both roles.
+---
+<x-sentence>Follow both AFD servers from <code>vllm serve</code> to ready. The plugin loads, the config patch picks the role worker, the two roles meet at the {{term connector}}, and both sides capture graphs.</x-sentence>
+
+<h2>The idea</h2>
+<p>AFD runs two <code>vllm serve</code> processes, one per role, with the same model. Each process loads the
+{{term plugin}}, which rewrites the worker class for its role. The {{term attention-role | attention}} server
+comes up like a normal vLLM server. The {{term ffn-role | FFN}} server stops its {{term enginecore | EngineCore}}
+early and runs a connector loop instead. The two roles then meet at the connector and capture CUDA graphs.</p>
+<p>This tour uses the graph recipe for one attention server and one FFN server: 2A2F, DP1, TP2, with DBO and
+<code>FULL_DECODE_ONLY</code> graphs
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-32}}).</p>
+<p>Keep one rule in mind. The two roles start as separate processes and can come up in either order. They
+synchronize at one point: the collective connector handshake. Everything before it is per-process; the handshake
+is where the roles meet.</p>
+
+<h2>The picture</h2>
+<p>The two diagrams split the start-up in half. The first follows the attention server; the second follows the
+FFN server. Read each top to bottom.</p>
+<x-diagram name="b4_startup_attention" alt="A vertical sequence of seven step cards for the attention server. 1, vllm serve with role attention, tagged vLLM, from the recipe. 2, plugin load register_afd in process 0, which adds patches, routing, the DBO op and models. 3, the patched create_engine_config rewrites worker_cls from auto to AFDAttentionWorker. 4, AFDAttentionWorker.init_device swaps the runner class to AFDAttentionModelRunnerV2. 5, load_model defers the connector init to the end so attention and FFN weights load together. 6, KV cache for attention only, then graph capture that sends warm-up and capture control. 7, ready: the attention server accepts requests, with a note that the FFN handshake must also finish. Arrows connect the cards top to bottom." caption="Figure: half 1. The attention server loads the plugin, the config patch picks the AFD worker, and the runner swap builds the AFD model runner. The connector init is deferred to the end of load_model." />
+<x-diagram name="b4_startup_ffn" alt="A vertical sequence of seven step cards for the FFN server. 1, vllm serve with role ffn, same recipe. 2, plugin load register_afd, with a once-per-process guard. 3, create_engine_config rewrites worker_cls to AFDFFNWorker. 4, the FFN EngineCore returns after the executor: no scheduler, zero blocks. 5, AFDFFNWorker.init_device swaps the runner class to GPUFFNModelRunner. 6, initialize_from_config joins the connector and starts the loop. 7, the FFN EngineCore calls collective_rpc start_ffn_server_loop and the loop runs. A legend marks plugin or patch, FFN role, and native vLLM or state." caption="Figure: half 2. The FFN EngineCore returns after the executor; its worker loads the model, joins the connector, and runs a daemon loop driven by the control plane." />
+
+<x-stop n="1" title="vllm serve starts both roles">
+<p>Each role is a separate <code>vllm serve</code> command with its own
+{{term additional-config | --additional-config}}. The only difference between the two in this recipe is
+<code>role</code> ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:11-19}}).</p>
+<x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh" lines="11-29" highlight="13,23,28" caption="The attention server: role, DBO flags, and FULL_DECODE_ONLY graphs." />
+<p>Both commands set <code>VLLM_USE_V2_MODEL_RUNNER=1</code>
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:5}}).
+AFD needs the V2 model runner on. See {{link concepts/worker-selection}}.</p>
+</x-stop>
+
+<x-stop n="2" title="vLLM loads the plugin in process 0">
+<p>vLLM loads general plugins at the start of <code>add_cli_args</code>, in the launch process
+({{cite vllm:vllm/engine/arg_utils.py:3009}}), and again when <code>EngineArgs</code> is built
+({{cite vllm:vllm/engine/arg_utils.py:839}}). Both run in process 0 only. The loader has a once-per-process
+guard, so repeat calls are cheap ({{cite vllm:vllm/plugins/__init__.py:82-85}}).</p>
+<p>The plugin entry point is <code>afd = "afd_plugin:register_afd"</code>
+({{cite pyproject.toml:45-46}}). The loader calls it. See {{link learn/vllm-plugins}}.</p>
+</x-stop>
+
+<x-stop n="3" title="register_afd installs the patches">
+<p><code>register_afd</code> runs once per process. It checks the vLLM version (warn only), imports the four
+patch modules, registers the routing strategy and the DBO op, and registers the AFD model wrappers
+({{cite afd_plugin/__init__.py:142-216}}).</p>
+<x-code file="afd_plugin/__init__.py" lines="172-192" highlight="172,190" caption="register_afd: import the patch modules, then register the routing strategy and the DBO op." />
+<p>The patch imports install the {{term patch | compat patches}} at import time, behind the
+{{term version-gate | version gate}}. One of them, <code>config_validation</code>, is what rewrites the worker
+class next. See {{link concepts/compat-patches}}.</p>
+</x-stop>
+
+<x-stop n="4" title="The config patch rewrites worker_cls">
+<p>When vLLM builds the engine config, the patched <code>create_engine_config</code> runs. It rewrites
+<code>worker_cls</code> to the AFD role worker, but only when the value was <code>"auto"</code>
+({{cite afd_plugin/compat/patches/config_validation.py:60}},
+{{cite afd_plugin/compat/patches/config_validation.py:92-93}}).</p>
+<x-code file="afd_plugin/compat/patches/config_validation.py" lines="179-197" highlight="192" caption="_select_afd_worker_for_auto: pick the AFD role worker for the platform default." />
+<p>The attention role gets <code>AFDAttentionWorker</code>; the FFN role gets <code>AFDFFNWorker</code>
+({{cite afd_plugin/validation.py:290-291}}). See {{link concepts/worker-selection}}.</p>
+</x-stop>
+
+<x-stop n="5" title="The FFN EngineCore returns early">
+<p>The {{term enginecore | EngineCore}} process builds the model executor. For an FFN config, the patched
+<code>__init__</code> returns right after that, so it sets up no scheduler and no KV cache
+({{cite afd_plugin/compat/patches/engine_core.py:56-68}}).</p>
+<x-code file="afd_plugin/compat/patches/engine_core.py" lines="56-69" highlight="59,68" caption="FFN EngineCore: initialize the daemon, then return before scheduler and KV setup." />
+<p>The FFN path sets zero GPU and CPU blocks and installs a no-op scheduler, which is not None so the native
+readiness handshake still works ({{cite afd_plugin/compat/patches/engine_core.py:605-614}}). The attention
+EngineCore is unchanged.</p>
+</x-stop>
+
+<x-stop n="6" title="The workers load the plugin and swap the runner">
+<p>Each worker process loads the plugin again before the worker class is resolved
+({{cite vllm:vllm/v1/worker/worker_base.py:271}}), then resolves the class
+({{cite vllm:vllm/v1/worker/worker_base.py:273-277}}). The guard makes the repeat load a no-op.</p>
+<p>In <code>init_device</code>, the AFD worker validates the stack, then swaps the native runner class for the
+AFD runner while native construction runs ({{cite afd_plugin/v1/worker/attention_worker.py:82-87}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_worker.py" lines="82-88" highlight="83" caption="The attention worker swaps in AFDAttentionModelRunnerV2 for native construction." />
+<p>The FFN worker does the same swap for <code>GPUFFNModelRunner</code>
+({{cite afd_plugin/v1/worker/ffn_worker.py:93-98}}). See {{link concepts/worker-selection}}.</p>
+</x-stop>
+
+<x-stop n="7" title="load_model defers the connector init (attention)">
+<p>The attention runner loads the model, then initializes the connector at the end of <code>load_model</code>, so
+attention and FFN weight loading overlap ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:454-462}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="454-462" highlight="460,462" caption="load_model: native weight loading, then init_afd_connector at the end." />
+<p>The connector itself is built earlier, in the runner constructor
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:384-390}}). Only the rendezvous is deferred.</p>
+</x-stop>
+
+<x-stop n="8" title="The two roles meet at the connector handshake">
+<p><code>init_afd_connector</code> is a collective call: every attention and FFN rank runs it, and the two roles
+meet here ({{cite afd_plugin/connectors/base.py:124}}). The P2P connector builds its process groups at a
+{{term rendezvous}} on the configured host and port
+({{cite afd_plugin/connectors/gpu/p2p.py:245-276}}).</p>
+<x-code file="afd_plugin/connectors/gpu/p2p.py" lines="269-276" caption="The AFD world group: all ranks, with the configured timeout." />
+<p>Either role can reach this point first. The group setup blocks until both roles arrive, or until the timeout
+({{cite afd_plugin/connectors/gpu/p2p.py:271}}). See {{link concepts/topology}}.</p>
+<x-deepdive title="The three process groups and their timeouts">
+<p><code>init_afd_connector</code> builds three groups ({{cite afd_plugin/connectors/gpu/p2p.py:245-316}}):</p>
+<ol>
+  <li><strong>The AFD world group</strong>, named <code>"afd"</code>. It holds every attention and FFN rank. Its
+    timeout is <code>afd_process_group_timeout_s</code>, 120 seconds by default
+    ({{cite afd_plugin/connectors/gpu/p2p.py:269-276}}).</li>
+  <li><strong>The control group</strong>, named <code>"p2p"</code>. It holds the FFN ranks and the first
+    <code>min_size</code> attention ranks, with a fixed 30-minute timeout
+    ({{cite afd_plugin/connectors/gpu/p2p.py:306-314}}).</li>
+  <li><strong>The data-plane subgroups</strong>. Each FFN rank and its attention peers share one subgroup, built
+    on a <code>PrefixStore</code> over the world rendezvous, with a 300-second timeout
+    ({{cite afd_plugin/connectors/gpu/p2p.py:278-304}}).</li>
+</ol>
+<p>The subgroups reuse the world's rendezvous store, so they need no port of their own
+({{cite afd_plugin/connectors/gpu/p2p.py:280-288}}). See {{link concepts/topology}}.</p>
+</x-deepdive>
+</x-stop>
+
+<x-stop n="9" title="KV cache on the attention side only">
+<p>Only the attention side owns a KV cache. The FFN worker returns an empty KV spec, so vLLM allocates no FFN
+blocks ({{cite afd_plugin/v1/worker/ffn_worker.py:102-105}}). The FFN worker then joins the connector and starts
+its loop instead of allocating a cache ({{cite afd_plugin/v1/worker/ffn_worker.py:107-113}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_worker.py" lines="107-113" highlight="112,113" caption="initialize_from_config: skip KV allocation, join the connector, start the loop." />
+<p>The attention runner allocates its KV cache as usual, with a scoped seam that enables DP1 DBO
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:473-486}}). See {{link concepts/roles}}.</p>
+</x-stop>
+
+<x-stop n="10" title="Both sides capture CUDA graphs">
+<p>The attention runner wraps native <code>capture_model</code> to publish warm-up and capture control for each
+FULL descriptor ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:509-553}}). The FFN worker performs no
+warm-up of its own ({{cite afd_plugin/v1/worker/ffn_worker.py:115-120}}); its graphs are captured from the server
+loop when the warm-up and capture payloads arrive
+({{cite afd_plugin/v1/worker/ffn_worker.py:182-189}}).</p>
+<p>So graph capture is driven by the attention side and mirrored on the FFN side. See {{link concepts/cuda-graphs}}.</p>
+</x-stop>
+
+<x-stop n="11" title="The FFN server loop starts">
+<p>The FFN EngineCore busy loop starts the worker loop with a collective RPC
+({{cite afd_plugin/compat/patches/engine_core.py:650-659}}). The worker starts a daemon thread, the
+{{term ffn-server-loop | FFN server loop}} ({{cite afd_plugin/v1/worker/ffn_worker.py:133-158}}).</p>
+<x-code file="afd_plugin/compat/patches/engine_core.py" lines="650-659" highlight="653" caption="The FFN EngineCore runs the connector loop through collective_rpc." />
+<p>The loop blocks on the control plane for the first payload. The FFN server is now driven by the attention
+side ({{cite afd_plugin/v1/worker/ffn_worker.py:168-176}}). See {{link code/ffn-worker}}.</p>
+</x-stop>
+
+<x-stop n="12" title="Ready">
+<p>Both servers are up. The attention API server accepts requests; the FFN server runs its loop. The
+{{link tours/life-of-a-request}} tour follows one request from here, and
+{{link tours/one-decode-step}} follows one step in detail.</p>
+</x-stop>
+
+<h2>What can go wrong</h2>
+<ul>
+  <li><strong>A host or port mismatch.</strong> The two roles meet at the same rendezvous. Different values make
+    the handshake block until the timeout ({{cite afd_plugin/connectors/gpu/p2p.py:271-276}}).</li>
+  <li><strong>An explicit non-AFD worker.</strong> The config patch rewrites <code>worker_cls</code> only when it
+    was <code>"auto"</code>; an explicit non-AFD worker is rejected later
+    ({{cite afd_plugin/validation.py:357-367}}).</li>
+  <li><strong>A mismatched vLLM.</strong> On a non-matching, non-dev vLLM the install gate skips the patches, so
+    <code>worker_cls</code> is never rewritten and AFD does not take effect
+    ({{cite afd_plugin/compat/vllm.py:53-68}}).</li>
+  <li><strong>V2 runner off.</strong> AFD needs the V2 model runner on; the validator raises when V2 resolves to
+    off ({{cite afd_plugin/validation.py:90-91}}). The recipes set the env variable
+    ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:5}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The two roles start apart and meet once, at the connector handshake. If the
+patches do not install, or the roles do not meet, start-up cannot complete.</p>
+
+<x-quiz>
+  <x-q level="easy">What is the only difference between the two <code>vllm serve</code> commands in this recipe?
+    <x-a><p>The <code>role</code> field in the AFD config: one is <code>attention</code>, one is <code>ffn</code>
+      ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:13}},
+      {{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:39}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">Why does the FFN EngineCore not set up a scheduler or KV cache?
+    <x-a><p>For an FFN config it returns right after the executor is built; it runs a connector loop instead
+      ({{cite afd_plugin/compat/patches/engine_core.py:56-68}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">The two roles start as separate processes. Where do they synchronize?
+    <x-a><p>At the collective connector handshake, <code>init_afd_connector</code>. Every rank runs it, and the
+      group setup blocks until both roles arrive ({{cite afd_plugin/connectors/base.py:124}},
+      {{cite afd_plugin/connectors/gpu/p2p.py:269-276}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Why is the attention connector rendezvous deferred to the end of <code>load_model</code>?
+    <x-a><p>So attention and FFN weight loading overlap across the two roles
+      ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:454-462}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">The FFN worker does no warm-up of its own. How are its CUDA graphs captured?
+    <x-a><p>The attention side drives capture by sending warm-up and capture control. The FFN server loop reads
+      those payloads and calls <code>capture_model</code>
+      ({{cite afd_plugin/v1/worker/ffn_worker.py:115-120}}, {{cite afd_plugin/v1/worker/ffn_worker.py:182-189}}).</p></x-a>
+  </x-q>
+</x-quiz>

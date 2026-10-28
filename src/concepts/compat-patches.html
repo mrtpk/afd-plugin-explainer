@@ -1,0 +1,192 @@
+---
+title: Compat patches: how AFD changes vLLM without editing it
+nav_title: Compat patches
+level: Advanced
+prerequisites: concepts/plugin-entry-point, concepts/worker-selection
+related: reference/compat-patches, concepts/dbo, concepts/roles, learn/vllm-plugins, code/validation-py
+summary: AFD edits no vLLM source. It imports patch modules that replace vLLM functions in place, behind a version gate. This page covers the discipline, the gates, and what each GPU patch changes.
+---
+<x-sentence>AFD changes no vLLM source. {{term register-afd}} imports {{term patch | patch}} modules that replace vLLM functions in place, each behind a {{term version-gate | version gate}}.</x-sentence>
+
+<h2>The idea</h2>
+<p>AFD is an external {{term plugin}}. It must not edit the vLLM source. Instead, it replaces a few vLLM
+functions at run time with its own versions. Each replacement is a {{term patch}}, in
+<code>afd_plugin/compat/patches/</code>. {{term register-afd}} imports the patch modules once at start-up
+({{cite afd_plugin/__init__.py:172-181}}).</p>
+<p>Every patch copies the matching vLLM function from the pinned release and marks only the AFD difference
+between <code>PATCH START</code> and <code>PATCH END</code> comments. The patched signature must match the
+original ({{cite AGENTS.md:161-168}}). A {{term version-gate | version gate}} decides whether a patch installs,
+so AFD does not break a vLLM it was not built for.</p>
+<p><strong>An everyday comparison.</strong> Think of a train that swaps one carriage for a custom one before it
+leaves, and swaps the original back when it returns. The comparison stops here: a patch checks the train model
+first, and some patches swap the carriage only for the length of one trip.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b4_compat_patches" alt="Two panels. Panel 1, two version checks: a box for assert_vllm_version_supported with strict false, which only warns if not exactly 0.30.0, and a box for is_target_vllm_compatible, the install gate, which allows 0.30.0 and dev builds. Panel 2, five GPU patch modules imported by register_afd: config_validation replacing create_engine_config and __post_init__ at import time, engine_core replacing the FFN EngineCore and busy loop at import time, gpu_mrv2_ubatching providing DP1 DBO seams through scoped context managers, async_dp_engine selecting the EngineCoreProc at import time for NPU async only, async_dp_forward_context replacing set_forward_context at import time for NPU async only, and the NPU patches under npu that run only on NPU. A legend marks GPU import-time, GPU scoped, and runtime- or device-gated." caption="Figure: a start-up check only warns; each patch has its own install gate. Patches install at import time, except the DP1 DBO seams, which are scoped to AFD calls." />
+<p>Read panel 1 as two separate checks. One warns at start-up; the other gates each install. Panel 2 lists the
+GPU patch modules and how each one installs.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: Patch discipline</h3>
+<p>The patches package is a closed namespace: it raises on any unexpected attribute, so nothing leaks
+({{cite afd_plugin/compat/patches/__init__.py:12-13}}). Each patch function carries comments that give the
+reason, the change, and the upstream target ({{cite AGENTS.md:165-170}}), and marks the AFD lines with
+<code>PATCH START</code> and <code>PATCH END</code>.</p>
+<x-code file="afd_plugin/compat/patches/__init__.py" lines="1-13" caption="The patches package: idempotent, version-aware, documented." />
+
+<h3>Step 2: Two version checks</h3>
+<p>The first check runs in <code>register_afd</code>. It is not strict, so a vLLM that is not exactly the target
+release only warns ({{cite afd_plugin/compat/vllm.py:38-50}}, {{cite afd_plugin/__init__.py:162-170}}).</p>
+<p>The second check is the install gate, <code>is_target_vllm_compatible</code>. It allows the target release
+and any dev build, and returns true when vLLM is absent so CPU imports still work
+({{cite afd_plugin/compat/vllm.py:53-68}}).</p>
+<x-code file="afd_plugin/compat/vllm.py" lines="53-68" highlight="66,68" caption="The install gate: dev builds pass; otherwise the version must start with the target." />
+
+<h3>Step 3: config_validation</h3>
+<p>This patch replaces two vLLM functions: <code>EngineArgs.create_engine_config</code>
+({{cite vllm:vllm/engine/arg_utils.py:2040 | create_engine_config}}) and
+<code>VllmConfig.__post_init__</code> ({{cite vllm:vllm/config/vllm.py:1254 | VllmConfig.__post_init__}}). It
+installs at import time, behind the gate ({{cite afd_plugin/compat/patches/config_validation.py:235-261}}).</p>
+<p>What it changes: it rewrites <code>worker_cls</code> to the AFD role worker, but only when the value was
+<code>"auto"</code> ({{cite afd_plugin/compat/patches/config_validation.py:92-93}},
+{{cite afd_plugin/compat/patches/config_validation.py:179-197}}). It also relaxes one vLLM ubatching backend
+check for AFD configs ({{cite afd_plugin/compat/patches/config_validation.py:200-214}}). See
+{{link concepts/worker-selection}}.</p>
+
+<h3>Step 4: engine_core</h3>
+<p>This patch replaces <code>EngineCore.__init__</code>, <code>_initialize_kv_caches</code> and
+<code>shutdown</code>, plus the busy loops of <code>EngineCoreProc</code> and <code>DPEngineCoreProc</code>
+({{cite afd_plugin/compat/patches/engine_core.py:722-727}}). The vLLM targets are in
+<code>vllm/v1/engine/core.py</code> ({{cite vllm:vllm/v1/engine/core.py:108 | EngineCore.__init__}},
+{{cite vllm:vllm/v1/engine/core.py:1403 | EngineCoreProc.run_busy_loop}}).</p>
+<p>What it changes: for an {{term ffn-role | FFN}} config, <code>__init__</code> returns right after the executor
+is built, so the FFN EngineCore has no scheduler and no KV cache
+({{cite afd_plugin/compat/patches/engine_core.py:56-68}}). The busy loop instead runs the connector loop
+({{cite afd_plugin/compat/patches/engine_core.py:411-419}}). See {{link concepts/roles}}.</p>
+
+<h3>Step 5: gpu_mrv2_ubatching</h3>
+<p>This patch is different: it installs through {{term scoped-patch | scoped}} context managers, not at import
+time ({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:263-282}}). It replaces
+<code>maybe_build_ubatch_runner</code> ({{cite vllm:vllm/v1/worker/gpu/ubatch_utils.py:538 | maybe_build_ubatch_runner}})
+and <code>dispatch_cg_and_sync_dp</code> ({{cite vllm:vllm/v1/worker/gpu/dp_utils.py:214 | dispatch_cg_and_sync_dp}})
+only inside AFD's own <code>initialize_kv_cache</code> and <code>execute_model</code> calls. It re-enables DBO
+at one data-parallel rank. See {{link concepts/dbo}}.</p>
+
+<h3>Step 6: async_dp patches</h3>
+<p>Two patches support async-DP, which is {{term async-dp | NPU-only}}. They install at import time but only
+change behavior for async configs, gated at run time
+({{cite afd_plugin/config.py:303-308}}). On GPU, <code>async_dp</code> must be false, so these patches run as
+transparent re-implementations.</p>
+<ul>
+  <li><code>async_dp_engine</code> replaces <code>EngineCoreProc.run_engine_core</code>
+    ({{cite vllm:vllm/v1/engine/core.py:1283 | run_engine_core}}), <code>launch_core_engines</code>
+    ({{cite vllm:vllm/v1/engine/utils.py:1104 | launch_core_engines}}) and
+    <code>DPAsyncMPClient.add_request_async</code>
+    ({{cite vllm:vllm/v1/engine/core_client.py:1486 | add_request_async}}), selecting a non-DP engine for async
+    attention ({{cite afd_plugin/compat/patches/async_dp_engine.py:60-63}}).</li>
+  <li><code>async_dp_forward_context</code> replaces <code>set_forward_context</code>
+    ({{cite vllm:vllm/forward_context.py:269 | set_forward_context}}) and skips DP metadata only for async
+    configs ({{cite afd_plugin/compat/patches/async_dp_forward_context.py:88-127}}).</li>
+</ul>
+
+<h3>Step 7: NPU patches</h3>
+<p>The patches under <code>afd_plugin/compat/patches/npu/</code> install only when the device is NPU
+({{cite afd_plugin/__init__.py:204-209}}). They are covered on {{link concepts/npu-overview}}. In one line
+each:</p>
+<ul>
+  <li><code>npu/ascend_config</code>: keep AFD settings out of the strict Ascend config namespace
+    ({{cite afd_plugin/compat/patches/npu/ascend_config.py:3}}).</li>
+  <li><code>npu/ascend_platform</code>: patch the Ascend platform config normalization for AFD DBO
+    ({{cite afd_plugin/compat/patches/npu/ascend_platform.py:3-5}}).</li>
+  <li><code>npu/mla_graph</code>: route Ascend MLA {{term acl-graph | ACL graph}} parameters through AFD forward
+    contexts ({{cite afd_plugin/compat/patches/npu/mla_graph.py:3-5}}).</li>
+  <li><code>npu/mrv2_ubatching</code>: scope Ascend seams for the native ubatch runner
+    ({{cite afd_plugin/compat/patches/npu/mrv2_ubatching.py:3-8}}).</li>
+</ul>
+
+<h2>Deep dive</h2>
+<p>The blocks below give the install gate and its guards, the monkey-patch rule, and a pointer to the full
+table.</p>
+
+<x-deepdive title="The install gate and the hasattr guards">
+<p>The config patch installs at the bottom of its module, inside an <code>if</code> on the gate
+({{cite afd_plugin/compat/patches/config_validation.py:235-261}}). It saves each original function once, using a
+<code>hasattr</code> guard, then stores it and assigns the patched function.</p>
+<ol>
+  <li><strong>Save once.</strong> The <code>hasattr</code> guard writes the original only if it is not already
+    saved, so a reload does not overwrite it
+    ({{cite afd_plugin/compat/patches/config_validation.py:236}},
+    {{cite afd_plugin/compat/patches/config_validation.py:243}}).</li>
+  <li><strong>Read the saved original.</strong> The module keeps a reference to the saved original
+    ({{cite afd_plugin/compat/patches/config_validation.py:250-257}}).</li>
+  <li><strong>Assign the patch.</strong> The assignment runs once per process, because Python caches the module
+    import ({{cite afd_plugin/compat/patches/config_validation.py:259-260}}).</li>
+</ol>
+<p>On a non-matching, non-dev vLLM the gate is false, so no patch installs. Then <code>worker_cls</code> is never
+rewritten and AFD does not take effect; <code>register_afd</code> still registers models, the routing strategy
+and the DBO op.</p>
+</x-deepdive>
+
+<x-deepdive title="The monkey-patch rule: why order matters">
+<p>Python binds names in two ways. A <code>from module import name</code> binds the name to the original object.
+A later change to <code>module.name</code> changes only new attribute lookups, not names already bound by a
+from-import.</p>
+<p>So a patch must run before the code that reads the attribute. The config patch installs at
+<code>register_afd</code> time, before any engine or worker builds a config
+({{cite afd_plugin/__init__.py:172-181}}). The <code>set_forward_context</code> patch also rebinds the symbol in
+modules that already imported it, so those modules see the patched version
+({{cite afd_plugin/compat/patches/async_dp_forward_context.py:208-212}}).</p>
+</x-deepdive>
+
+<x-deepdive title="The full patch table">
+<p>The reference page lists every patch with its vLLM target line at the pinned commit, its install mechanism and
+gate, when it is active, and what it changes. See {{link reference/compat-patches}}.</p>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<x-simplified><p>This page shows the GPU patches in full and names the NPU patches. It does not describe the
+vLLM functions' insides, only what AFD replaces and why.</p></x-simplified>
+<ul>
+  <li><strong>A vLLM that is not the target release.</strong> The start-up check only warns
+    ({{cite afd_plugin/compat/vllm.py:48-50}}), but every install gate is false, so no patch installs
+    ({{cite afd_plugin/compat/patches/config_validation.py:235}}).</li>
+  <li><strong>A patch that imports but cannot apply.</strong> The patch imports are wrapped in a
+    <code>try</code> that only logs on failure ({{cite afd_plugin/__init__.py:172-181}}).</li>
+  <li><strong>A worker set to a non-AFD class.</strong> The patch rewrites <code>worker_cls</code> only when it
+    was <code>"auto"</code>; an explicit non-AFD worker is rejected later
+    ({{cite afd_plugin/validation.py:357-367}}). See {{link concepts/worker-selection}}.</li>
+  <li><strong>A signature drift after a vLLM upgrade.</strong> A patched function must match the vLLM signature,
+    or the call fails. The patch comments record the exact upstream target ({{cite AGENTS.md:165-170}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The patches are how AFD runs inside unmodified vLLM. The version gate keeps
+AFD from breaking a vLLM it was not built for, and the scoped patches keep AFD changes out of native requests.</p>
+
+<x-quiz>
+  <x-q level="easy">How does AFD change vLLM behavior without editing vLLM?
+    <x-a><p>It imports patch modules that replace vLLM functions in place at run time
+      ({{cite afd_plugin/__init__.py:172-181}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">What does the <code>config_validation</code> patch rewrite, and only when?
+    <x-a><p>It rewrites <code>worker_cls</code> to the AFD role worker, only when it was <code>"auto"</code>
+      ({{cite afd_plugin/compat/patches/config_validation.py:92-93}},
+      {{cite afd_plugin/compat/patches/config_validation.py:175-176}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">What is the difference between the two version checks?
+    <x-a><p>The start-up check (<code>assert_vllm_version_supported</code>, strict false) only warns
+      ({{cite afd_plugin/compat/vllm.py:38-50}}). The install gate
+      (<code>is_target_vllm_compatible</code>) decides whether each patch installs, and allows dev builds
+      ({{cite afd_plugin/compat/vllm.py:53-68}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Which GPU patch does not install at import time, and how does it install?
+    <x-a><p><code>gpu_mrv2_ubatching</code>. It installs through scoped context managers, only inside AFD's
+      <code>initialize_kv_cache</code> and <code>execute_model</code> calls
+      ({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:263-282}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">The async-DP patches install on GPU too. Why do they not change GPU behavior?
+    <x-a><p>They change behavior only for async configs, gated at run time by <code>is_afd_async_dp</code>
+      ({{cite afd_plugin/config.py:303-308}}). On GPU <code>async_dp</code> must be false, so the patches run as
+      transparent re-implementations of the native functions
+      ({{cite afd_plugin/compat/patches/async_dp_forward_context.py:88-127}}).</p></x-a>
+  </x-q>
+</x-quiz>

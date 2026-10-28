@@ -26,7 +26,7 @@ Update it after every subagent finishes and after every user decision.
 | B1 Basics + boundary | done (280k) | done (6 defects, 215k) | yes |
 | B2 Roles, topology, connectors | done (277k) | done (2 defects) | yes |
 | B3 Model split + execution | done (260k) | done (2 defects, 252k) | yes |
-| B4 Graphs, DBO, patches | running | – | – |
+| B4 Graphs, DBO, patches | done (306k) | running | yes (pending) |
 | B5 Deploy, NPU, reference | – | – | – |
 | F Final | – | – | – |
 
@@ -55,6 +55,7 @@ Update it after every subagent finishes and after every user decision.
 
 ## Done
 
+- 2026-10-28: B4 writer done: concepts cuda-graphs, dbo (+ dbo-timeline visual), compat-patches; reference/compat-patches; tours start-up, one-decode-step; 6 diagrams; b4.json (5 terms). Build 0 errors; site check 35 pages 0 problems; dbo-timeline tested on both pages (40 px, aria-live, 390). No suspected bugs.
 - 2026-10-28: FC-B3 done: ~190 claims, 2 defects (sampling mechanism: native sample_tokens, not execute_model; Qwen3.5 registered class). Supervisor verified in vLLM and fixed the same claim on tours/life-of-a-request (stops 4, 12, quiz) and request-stepper.js stop 12. Lesson 12 sharpened. Sampled: code/attention-worker, code/ffn-worker, code/deepseek-v2-py. No suspected bugs.
 - BUDGET NOTE: sample-checked (not full): code/attention-worker, code/ffn-worker, code/deepseek-v2-py (B3). List in README.
 - FINAL-PASS TODO: check the AFDForwardContextMetadata fields behind glossary b3 "afd-forward-metadata" ("connector, transaction id, per-stage token counts").
@@ -92,7 +93,7 @@ Update it after every subagent finishes and after every user decision.
 
 ## Next step
 
-B4 WRITER RUNNING (no pause, user instruction). If cut off: resume it, do not restart. B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → FC-B1 (no pause, user instruction) (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → B2 → B3 with no pauses → PAUSE after B3 fact-checked. Then B4, B5 with pauses, then F.
+FC-B4 RUNNING (no pause, user instruction). If cut off: resume it, do not restart. B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → FC-B1 (no pause, user instruction) (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → B2 → B3 with no pauses → PAUSE after B3 fact-checked. Then B4, B5 with pauses, then F.
 
 ## Questions for the user
 
@@ -105,6 +106,7 @@ B4 WRITER RUNNING (no pause, user instruction). If cut off: resume it, do not re
 - DONE (supervisor, tooling): two-repo support in build.py (2026-10-28).
 - FACT-CHECK FOCUS: worker selection only when `worker_cls == "auto"`; explicit wrong worker is rejected later (`validation.py:357-367`).
 - FACT-CHECK FOCUS: "every connector has a control plane" is false (async CAM has none).
+- FACT-CHECK FOCUS (FC-B4): attention_metadata.py:115-116, :252-257 and attention_model_runner_v2.py:153-157 reused from facts (re-open); config.py:303-308; reference/compat-patches config_validation row cites :62-89 for the backend relax (decision fn :200-214); async_dp_engine.py:248-252 and :389-401 (grep only).
 - FACT-CHECK FOCUS (FC-B3): INFERRED 27 layers for DeepSeek-V2-Lite; deduction that on CUDA every MoE layer uses the remote-experts shell regardless of the gate flag (GateOnlyRemoteMoE only on NPU); sampling once per step via delegation to native execute_model.
 - FACT-CHECK FOCUS (FC-B2): 4A2F/3A2F derivations (pages + topology-mapper.js) from topology.py:136, :164-170; min_size == F under A >= F and control group = FFN ranks + first F attention ranks (topology.py:42-43, p2p.py:310); recv src → attention role rank f (p2p.py:902); INFERRED 32,768-byte figure.
 - FACT-CHECK FOCUS (FC-B1): vllm-v1-map first box "API server process (AsyncLLM)" wording; "patches do not install on a non-matching vLLM, so AFD does not activate" (check all 4 patch gates); config_validation.py:235-248 "guard against re-patching" wording; async_dp cannot be active on GPU (validation.py:93-97 + config.py:331-334).
@@ -131,4 +133,5 @@ B4 WRITER RUNNING (no pause, user instruction). If cut off: resume it, do not re
 | 2026-10-28 | explainer-worker: FC-B2 (full + sample for 2 module pages) | done; ~70 claims, 2 defects |
 | 2026-10-28 | explainer-worker: B3 writer | done; 7 pages, 4 diagrams |
 | 2026-10-28 | explainer-worker: FC-B3 (full + sample for 3 module pages) | done; ~190 claims, 2 defects |
-| 2026-10-28 | explainer-worker: B4 writer | running |
+| 2026-10-28 | explainer-worker: B4 writer | done; 6 pages, 6 diagrams, dbo-timeline, 306k |
+| 2026-10-28 | explainer-worker: FC-B4 | running |

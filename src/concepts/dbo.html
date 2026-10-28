@@ -1,0 +1,186 @@
+---
+title: Dual-batch overlap (DBO): two stages per step
+nav_title: Dual-batch overlap
+level: Advanced
+prerequisites: concepts/attention-runtime, concepts/ffn-runtime
+related: concepts/cuda-graphs, concepts/control-plane, concepts/compat-patches, tours/one-decode-step, code/attention-worker
+summary: DBO splits one step into exactly two stages. While one stage waits on the FFN side, the other computes attention, so the two roles stay busy. AFD adds a yield op and scoped patches for DP1.
+scripts: viz/dbo-timeline.js
+---
+<x-sentence>{{term dbo | Dual-batch overlap}} splits one {{term step}} into exactly two {{term stage | stages}}. While one stage waits on the {{term ffn-role | FFN side}}, the other computes attention.</x-sentence>
+
+<h2>The idea</h2>
+<p>In AFD the attention side sends hidden states to the FFN side and waits for the result. If it waited with
+nothing else to do, the GPU would idle. {{term dbo | Dual-batch overlap}} (DBO) cuts each step into two
+{{term stage | stages}}. The attention side sends stage 0, then works on stage 1 while the FFN side computes
+stage 0. The two roles overlap.</p>
+<p>DBO is a native vLLM feature. The plugin reuses it and adds two things: a {{term dbo-yield | yield}} op that
+hands control to the other stage between send and receive, and scoped {{term patch | patches}} that let DBO run
+even with one data-parallel rank.</p>
+<p><strong>An everyday comparison.</strong> Think of a cook with two pans. They start pan 1, and while it
+simmers they start pan 2, instead of standing and watching pan 1. The comparison stops here: AFD always uses
+exactly two pans, never three, and a validator enforces that.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b4_dbo" alt="Two panels. Panel 1, two stages overlap on one layer. An attention lane shows: attn stage 0 compute, send stage 0, attn stage 1 while stage 0 waits, send stage 1, then recv stage 0 and recv stage 1. A violet marker reads DBO yield between send and receive. An FFN lane below shows ffn stage 0 and ffn stage 1, each doing recv, compute, send, lined up under the sends. Panel 2, DP1 DBO: two boxes, use_gpu_mrv2_ubatch_factory scoped in initialize_kv_cache, and use_gpu_mrv2_dbo_dispatch scoped in the execute_model context. A legend marks attention stage, FFN stage, and DBO yield or scoped patch." caption="Figure: one layer runs two stages. The yield between send and receive lets stage 1 run while the FFN side works on stage 0. Times are illustrative." />
+<p>Read the top panel left to right. The overlap is the point: stage 1 of the attention side runs at the same
+time as stage 0 on the FFN side. The yield is what hands control across. The visual below lets you step through
+the same events.</p>
+
+<x-viz id="dbo-timeline" title="Step through a DBO step" caption="Pick the number of layers, then press <em>Step</em>, or press Tab then Enter. Watch columns t2 and t3, where attention and FFN work overlap.">
+<p>This interactive visual steps through the send, yield, FFN compute and receive events of one step. It needs
+JavaScript. The steps and deep dives below say the same thing in text.</p>
+</x-viz>
+<x-simplified><p>The visual shows the event order from the code, not real timing. It leaves out the
+control-plane publish before the loop, CUDA graphs, the per-peer split, and the rank mapping. The deep dives
+give those, with citations.</p></x-simplified>
+
+<h2>In the code</h2>
+
+<h3>Step 1: Exactly two stages</h3>
+<p>DBO turns on with <code>--enable-dbo</code>. In vLLM that sets the number of microbatches to two
+({{cite vllm:vllm/config/parallel.py:599-601}}). AFD requires exactly two. The GPU validator raises for any
+other count ({{cite afd_plugin/validation.py:126-131}}).</p>
+<x-code file="afd_plugin/validation.py" lines="126-132" highlight="128,129" caption="The GPU validator: DBO or ubatching needs exactly two microbatches." />
+
+<h3>Step 2: Each stage carries a stage index on the wire</h3>
+<p>Each stage gets a {{term stage | stage index}}, 0 or 1. The ubatch helper clones the parent AFD metadata per
+stage and sets the index and the stage count
+({{cite afd_plugin/v1/worker/ubatch_wrapper.py:26-36}}).</p>
+<x-code file="afd_plugin/v1/worker/ubatch_wrapper.py" lines="26-36" highlight="28,29" caption="build_ubatch_afd_metadata: set stage_idx and num_stages for one ubatch." />
+<p>The {{term remote-ffn-proxy | RemoteFFNProxy}} reads the stage index from the forward context and records it
+in the transfer metadata ({{cite afd_plugin/model_executor/models/deepseek_v2.py:136-143}}). So the FFN side
+knows which stage each tensor belongs to.</p>
+
+<h3>Step 3: The proxy yields between send and receive</h3>
+<p>Inside the proxy, the order is: send the hidden states, {{term dbo-yield | yield}}, then receive the FFN
+output ({{cite afd_plugin/model_executor/models/deepseek_v2.py:146-158}}). The yield is what lets the other
+stage run while this one waits.</p>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="146-158" highlight="151,155" caption="_send_and_receive: send, then maybe_apply_dbo_yield, then recv." />
+<p>The yield calls a {{term custom-op | custom op}}, <code>manual_dbo_yield</code>, registered once per process
+({{cite afd_plugin/v1/worker/dbo.py:27-49}}). The op yields only when vLLM DBO is active; otherwise it does
+nothing ({{cite afd_plugin/v1/worker/dbo.py:52-54}}).</p>
+<x-code file="afd_plugin/v1/worker/dbo.py" lines="12-24" highlight="23" caption="maybe_apply_dbo_yield: call the custom op, which yields when DBO is on." />
+
+<h3>Step 4: The thresholds decide when a step splits</h3>
+<p>A step splits into two stages only when it is large enough. The recipes set two thresholds:
+<code>--dbo-decode-token-threshold</code> and <code>--dbo-prefill-token-threshold</code>
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:23-25}}).</p>
+<x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh" lines="23-25" caption="The graph recipe turns on DBO and sets both thresholds." />
+<p>vLLM reads these in <code>check_ubatch_thresholds</code>: a decode batch splits when its token count reaches
+the decode threshold, a batch with a prefill when it reaches the prefill threshold
+({{cite vllm:vllm/v1/worker/ubatch_utils.py:141-149}}).</p>
+
+<h3>Step 5: DP1 DBO through scoped patches</h3>
+<p>Native vLLM builds no ubatch runner when the data-parallel size is one. AFD coordinates the two stages
+locally, so it re-enables DP1 with two {{term scoped-patch | scoped patches}}
+({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:263-282}}).</p>
+<x-code file="afd_plugin/compat/patches/gpu_mrv2_ubatching.py" lines="263-282" caption="Two context managers scope the DP1 DBO seams to AFD's own calls." />
+
+<h2>Deep dive</h2>
+<p>The blocks below give the two scoped patches, the threshold logic with numbers, and the yield mechanism.</p>
+
+<x-deepdive title="The two scoped patches, in detail">
+<p>AFD never edits vLLM. It swaps two module functions only for the time of one AFD call, then restores them.</p>
+<p><strong>The factory seam.</strong> <code>use_gpu_mrv2_ubatch_factory</code> replaces
+<code>maybe_build_ubatch_runner</code> while the attention runner initializes its KV cache
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:473-486}}). Native code returns None at DP1; the
+patched factory builds the native <code>UBatchRunner</code> and binds a DP1 child-context metadata factory
+({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:47-73}}).</p>
+<p><strong>The dispatch seam.</strong> <code>use_gpu_mrv2_dbo_dispatch</code> replaces
+<code>dispatch_cg_and_sync_dp</code> for one <code>execute_model</code> call
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:340-349}}). Native DP1 dispatch returns before the
+DBO threshold decision; the patch applies the native threshold and ubatch policy locally, with no DP handshake
+({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:194-226}}).</p>
+<p><strong>The child metadata.</strong> At DP1 the native <code>DPMetadata.make</code> asserts DP greater than
+one. The patch builds the same metadata directly, one forward context per microbatch
+({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:83-115}}).</p>
+<p>Both seams restore the original function in a <code>finally</code> block, so they affect only AFD's own
+calls ({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:268-271}},
+{{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:279-282}}).</p>
+</x-deepdive>
+
+<x-deepdive title="The thresholds, with defaults and numbers">
+<p>The thresholds are fields on the vLLM parallel config. Their defaults are large:</p>
+<table>
+  <thead><tr><th>Field</th><th>Default</th><th>Set in the recipe</th></tr></thead>
+  <tbody>
+    <tr><td><code>dbo_decode_token_threshold</code></td><td>32 ({{cite vllm:vllm/config/parallel.py:227}})</td><td>2</td></tr>
+    <tr><td><code>dbo_prefill_token_threshold</code></td><td>512 ({{cite vllm:vllm/config/parallel.py:232}})</td><td>12</td></tr>
+  </tbody>
+</table>
+<p>The recipe lowers both so small test batches still split
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:24-25}}).
+The check is simple ({{cite vllm:vllm/v1/worker/ubatch_utils.py:141-149}}):</p>
+<ol>
+  <li>If ubatching is off, do not split.</li>
+  <li>For a uniform decode batch, split when the token count reaches the decode threshold.</li>
+  <li>Otherwise, split when the token count reaches the prefill threshold.</li>
+</ol>
+<p><strong>A worked example.</strong> With the recipe values and a pure-decode step of 8 tokens, 8 is at least
+2, so the step splits into two stages of 4. A decode step of 1 token does not reach 2, so it runs as a single
+batch, with no DBO.</p>
+<p>At DP1 this decision runs inside the patched dispatch, which also guards against an empty trailing stage
+({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:213-215}}). At DP greater than one, native code makes
+the decision across ranks.</p>
+</x-deepdive>
+
+<x-deepdive title="The yield mechanism">
+<p>The yield is a no-return custom op, <code>torch.ops.vllm.manual_dbo_yield</code>. Its real implementation
+calls <code>dbo_yield</code> only when <code>dbo_enabled</code> is true
+({{cite afd_plugin/v1/worker/dbo.py:33-34}}, {{cite afd_plugin/v1/worker/dbo.py:52-54}}). Its fake
+implementation does nothing, so <code>torch.compile</code> can trace through it
+({{cite afd_plugin/v1/worker/dbo.py:36-37}}).</p>
+<p>Registration is idempotent. A second call returns early, and a RuntimeError that says the op is already
+registered is swallowed ({{cite afd_plugin/v1/worker/dbo.py:30-49}}). The op is registered once at plugin
+start-up ({{cite afd_plugin/__init__.py:190-192}}).</p>
+<p>The op takes the hidden-state tensor as its argument and marks it as mutated, so the compiler keeps the yield
+in the right place relative to the send and the receive
+({{cite afd_plugin/v1/worker/dbo.py:40-45}}). The tensor value is not changed.</p>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<x-simplified><p>This page shows the two-stage model and the AFD additions. It does not show the native
+microbatch slicing and thread handoff inside vLLM; those stay in vLLM and are cited where AFD scopes them.</p></x-simplified>
+<ul>
+  <li><strong>The wrong number of ubatches.</strong> Any count other than two raises at config validation
+    ({{cite afd_plugin/validation.py:126-131}}).</li>
+  <li><strong>Thresholds set below the microbatch count.</strong> vLLM requires each threshold to be at least
+    the number of microbatches ({{cite vllm:vllm/config/parallel.py:1093-1099}}).</li>
+  <li><strong>A step that is too small.</strong> A step under the threshold does not split, so it runs with no
+    overlap ({{cite vllm:vllm/v1/worker/ubatch_utils.py:144-149}}). This is expected, not an error.</li>
+  <li><strong>DBO with a graph but not two ubatches.</strong> The graph policy raises when ubatching is on with
+    any count other than two ({{cite afd_plugin/v1/worker/cuda_graph.py:72-77}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> DBO keeps both roles busy. The attention side does useful work on one stage
+while the FFN side works on the other, instead of waiting. The two-stage limit and the yield placement are what
+make the overlap correct.</p>
+
+<x-quiz>
+  <x-q level="easy">How many stages does DBO split a step into?
+    <x-a><p>Exactly two. <code>--enable-dbo</code> sets the microbatch count to two
+      ({{cite vllm:vllm/config/parallel.py:599-601}}), and the validator rejects any other count
+      ({{cite afd_plugin/validation.py:126-131}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">What does the proxy do between the send and the receive?
+    <x-a><p>It calls the DBO yield op, <code>manual_dbo_yield</code>, which hands control to the other stage
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:151-154}}, {{cite afd_plugin/v1/worker/dbo.py:33-34}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">A pure-decode step has 1 token, with the recipe thresholds. Does it use DBO?
+    <x-a><p>No. 1 is below the decode threshold of 2, so <code>check_ubatch_thresholds</code> returns false and
+      the step runs as a single batch ({{cite vllm:vllm/v1/worker/ubatch_utils.py:144-149}},
+      {{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:24}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Why does the yield op have a fake implementation that does nothing?
+    <x-a><p>So <code>torch.compile</code> can trace through it. The real op yields only when DBO is active; the
+      fake op returns None ({{cite afd_plugin/v1/worker/dbo.py:36-37}}, {{cite afd_plugin/v1/worker/dbo.py:52-54}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">Native vLLM does not build a ubatch runner at DP1. How does AFD run DBO there without editing
+    vLLM?
+    <x-a><p>It installs two scoped patches. <code>use_gpu_mrv2_ubatch_factory</code> builds the runner at DP1
+      during KV initialization; <code>use_gpu_mrv2_dbo_dispatch</code> applies the threshold policy locally
+      during one <code>execute_model</code> call. Both restore the original on exit
+      ({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:47-73}},
+      {{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:194-226}}).</p></x-a>
+  </x-q>
+</x-quiz>

@@ -1,0 +1,176 @@
+---
+title: Tour: One decode step
+nav_title: One decode step
+level: Advanced
+prerequisites: tours/life-of-a-request, concepts/dbo
+related: concepts/cuda-graphs, concepts/control-plane, concepts/attention-runtime, concepts/ffn-runtime
+summary: Follow one decode step on 2A2F with DBO and FULL_DECODE_ONLY graphs: one control-plane publish, graph replay on both sides, two stages of send and receive per layer, then one native sampling call.
+scripts: viz/dbo-timeline.js
+---
+<x-sentence>Follow one decode {{term step}} on 2A2F with {{term dbo | DBO}} and {{term full-decode-only | FULL_DECODE_ONLY}} graphs. The {{term control-plane | control plane}} publishes once; each layer runs two {{term stage | stages}}.</x-sentence>
+
+<h2>The idea</h2>
+<p>One decode step produces one new token per request. On AFD, the attention side runs the step and the FFN side
+answers each layer. With DBO, each layer runs two {{term stage | stages}} that overlap. With graphs, both sides
+replay instead of running eager.</p>
+<p>This tour follows the graph recipe: 2A2F, DP1, TP2, DBO on, <code>FULL_DECODE_ONLY</code>
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-29}}).
+Rank A0 maps to F0 and A1 to F1 ({{cite afd_plugin/distributed/topology.py:135-136}}).</p>
+<p>Keep the two frequencies apart. The control plane publishes {{term dp-metadata | DP metadata}}
+<strong>once per step</strong>, before the layer loop. The {{term data-plane | data plane}} sends tensors
+<strong>once per layer and stage</strong>. Sampling runs <strong>once per step</strong>, after the last layer.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b4_one_decode_step" alt="Two panels. Panel 1, once per step: card 1, the control-plane publish on the attention side; card 2, the FFN side receives one DP-metadata payload; card 3, sample_tokens after the last layer, native. Panel 2, per layer and per stage: an attention row with graph replay showing stage 0 send, a DBO yield, stage 1 send, then recv of both stages; an FFN row with graph key lookup and replay showing recv_attn_output per stage, compute, and send_ffn_output, with dashed arrows between the two rows. A legend marks control plane or yield, attention, and FFN." caption="Figure: the control plane publishes once. Then every layer runs two stages of send and receive, with graph replay on each side. Sampling runs once after the last layer." />
+<p>Read the top panel as the once-per-step work and the bottom panel as the per-layer, per-stage work. The visual
+below steps through the same send, yield, compute and receive events.</p>
+
+<x-viz id="dbo-timeline" title="Step through the decode step" caption="Pick the number of layers, then press <em>Step</em>. Watch columns t2 and t3, where attention and FFN work overlap.">
+<p>This interactive visual steps through the events of one step. It needs JavaScript. The stops below say the
+same thing in text.</p>
+</x-viz>
+<x-simplified><p>The visual shows the event order, not real timing. It leaves out the control-plane publish
+before the loop, the graph replay, the per-peer split, and sampling. The stops give those, with citations.</p></x-simplified>
+
+<x-stop n="1" title="The scheduler builds one step">
+<p>The attention server's {{term enginecore | EngineCore}} and scheduler build one step, then the executor runs
+it ({{cite vllm:vllm/v1/engine/core.py:600-601}}). This is native vLLM. The FFN server has no such loop; it is
+connector-driven ({{cite afd_plugin/v1/worker/ffn_worker.py:32-38}}).</p>
+</x-stop>
+
+<x-stop n="2" title="The runner wraps native execute_model">
+<p>The executor calls the AFD runner's <code>execute_model</code>. It wraps the native method in an AFD execution
+context, then delegates ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:569-595}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="580-594" highlight="582,586" caption="execute_model: scope the AFD context, then call native execute_model." />
+<p>Native code still does the request, attention and KV work. The wrapper adds AFD state around it. See
+{{link concepts/attention-runtime}}.</p>
+</x-stop>
+
+<x-stop n="3" title="The AFD context installs the provider and the replay hook">
+<p>The context scopes four things: the DP1 DBO dispatch seam, the FULL replay hook, the ubatch prepare seam, and
+the metadata provider ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:340-349}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="341-349" highlight="343,345" caption="_use_afd_execution_context: the replay hook and the metadata provider." />
+<p>The replay hook is used only in <code>FULL_DECODE_ONLY</code> mode with a graph manager
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:323-327}}). See {{link concepts/cuda-graphs}}.</p>
+</x-stop>
+
+<x-stop n="4" title="The control plane publishes DP metadata once">
+<p>Before the layer loop, the attention side publishes the {{term dp-metadata | DP metadata}}. With DBO, the
+ubatch prepare seam sends it after it slices the step into two stages
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:153-157}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="153-158" highlight="156,157" caption="The prepare seam sends the DP metadata once, after slicing into stages." />
+<p>That call updates the local control state and sends one payload
+({{cite afd_plugin/v1/worker/attention_metadata.py:115-116}}). It is the first thing that crosses the connector
+each step. See {{link concepts/control-plane}}.</p>
+<x-deepdive title="The two publish paths, both once per step">
+<p>There are two code paths to the same publish, chosen by whether the step uses DBO. Both run once per step,
+before the layer loop.</p>
+<ol>
+  <li><strong>With DBO.</strong> The ubatch prepare seam calls <code>send_dp_metadata</code> after it slices the
+    step into two stages ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:153-157}}).</li>
+  <li><strong>Without ubatching.</strong> The metadata provider calls it from
+    <code>install_afd_metadata_on_forward_context</code>
+    ({{cite afd_plugin/v1/worker/attention_metadata.py:252-257}}).</li>
+</ol>
+<p>The FFN side waits for exactly one payload per step either way
+({{cite afd_plugin/v1/worker/ffn_worker.py:176}}). A per-step call must not be folded into the per-layer
+sequence. The payload carries the per-stage token counts that set the tensor shapes. See
+{{link concepts/wire-data}}.</p>
+</x-deepdive>
+</x-stop>
+
+<x-stop n="5" title="The attention side replays its graph">
+<p>For a pure-decode step, native FULL replay runs. The replay hook publishes one padded control payload just
+before the replay ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:286-303}}). For a DBO step with two
+stages, the prepare seam already sent the full two-stage payload, so the hook asserts and delegates
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:275-280}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="275-280" caption="The replay hook with two stages: the full payload was already sent." />
+</x-stop>
+
+<x-stop n="6" title="Per layer and stage: send, yield, the other stage">
+<p>Inside each layer, the {{term remote-ffn-proxy | proxy}} sends its hidden states, yields, then receives. The
+yield lets the other stage run while this one waits
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:146-158}}).</p>
+<x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="146-158" highlight="146,151,155" caption="_send_and_receive: send_attn_output, DBO yield, recv_ffn_output." />
+<p>This runs once per layer and once per {{term stage}}. With DBO there are two stages per layer. See
+{{link concepts/dbo}}.</p>
+</x-stop>
+
+<x-stop n="7" title="The FFN side receives one DP-metadata payload per step">
+<p>The {{term ffn-server-loop | FFN server loop}} blocks on the control plane for exactly one payload per step
+({{cite afd_plugin/v1/worker/ffn_worker.py:176}}), then dispatches to execute or capture
+({{cite afd_plugin/v1/worker/ffn_worker.py:182-196}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_worker.py" lines="176-196" highlight="176,191" caption="The FFN loop: one recv per step, then execute_model or capture_model." />
+<p>So the control plane runs once per step on the FFN side too, matching the attention side.</p>
+</x-stop>
+
+<x-stop n="8" title="The FFN side looks up and replays its graph">
+<p>The FFN runner builds the {{term ffn-graph-key | FFN graph key}} from the DP metadata and replays the stored
+graph for a pure-decode step ({{cite afd_plugin/v1/worker/ffn_model_runner.py:166-177}}). If no graph matches
+the key, it runs eager instead.</p>
+<x-code file="afd_plugin/v1/worker/ffn_model_runner.py" lines="166-184" highlight="166,175,179" caption="execute_model: build the key, replay the stored graph, or run the forward." />
+<p>See {{link concepts/cuda-graphs}}.</p>
+</x-stop>
+
+<x-stop n="9" title="Per layer and stage: recv, compute, send">
+<p>The eager path, <code>_ffn_forward</code>, loops over layers and stages. For each pair it receives the hidden
+states, runs the FFN or MoE compute, and sends the result back
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:222-269}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_model_runner.py" lines="230-268" highlight="236,263,268" caption="The inner loop: recv_attn_output, compute, send_ffn_output." />
+<p>When the FFN side replays a graph, this same work is recorded in the graph instead of run step by step. See
+{{link concepts/ffn-runtime}}.</p>
+</x-stop>
+
+<x-stop n="10" title="After the last layer: sample, then output">
+<p>After the forward pass, the worker makes a separate native call, <code>sample_tokens</code>
+({{cite vllm:vllm/v1/worker/gpu_worker.py:1142-1147}}). Native Model Runner V2 computes the logits and samples
+there ({{cite vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050}}). The AFD attention runner does not override
+this method, so it samples natively.</p>
+<p>The FFN runner has no sampler; its <code>sample_tokens</code> raises
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}}). So sampling runs once per step, on the attention
+side. The step is done; the next step repeats the whole path.</p>
+</x-stop>
+
+<h2>What can go wrong</h2>
+<ul>
+  <li><strong>Folding the per-step publish into the layer loop.</strong> The control plane publishes once, before
+    the layers; it does not publish again inside the loop
+    ({{cite afd_plugin/v1/worker/attention_metadata.py:115-116}}).</li>
+  <li><strong>A shape that no captured graph covers.</strong> The FFN side runs that step eager instead of
+    replaying ({{cite afd_plugin/v1/worker/cuda_graph.py:148-150}}).</li>
+  <li><strong>A step too small for DBO.</strong> A step below the threshold runs as one stage, with no overlap
+    ({{cite vllm:vllm/v1/worker/ubatch_utils.py:144-149}}).</li>
+  <li><strong>Expecting the FFN side to sample.</strong> It never does; its <code>sample_tokens</code> raises
+    ({{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> One step has one control-plane publish, then every layer and stage of send
+and receive, then one sampling call. The frequencies must not be mixed, or the two roles fall out of step.</p>
+
+<x-quiz>
+  <x-q level="easy">How many times does the control plane publish per step?
+    <x-a><p>Once, before the layer loop. The attention side sends one DP-metadata payload
+      ({{cite afd_plugin/v1/worker/attention_metadata.py:115-116}}); the FFN loop receives one
+      ({{cite afd_plugin/v1/worker/ffn_worker.py:176}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">What does the FFN runner do when a graph matches the key?
+    <x-a><p>It calls <code>graph.replay()</code> and returns, instead of running the layers eager
+      ({{cite afd_plugin/v1/worker/ffn_model_runner.py:175-177}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">In a DBO step, why does the FULL replay hook not send a new control payload?
+    <x-a><p>Because the ubatch prepare seam already sent the full two-stage payload. The hook asserts the staged
+      metadata and delegates to the native replay
+      ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:275-280}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Which side samples the token, and when?
+    <x-a><p>The attention side, once per step, after the last layer. The AFD runner inherits the native
+      <code>sample_tokens</code> ({{cite vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050}}); the FFN runner's
+      raises ({{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">List the per-stage data-plane calls for one layer, in order, across both roles.
+    <x-a><p>Attention <code>send_attn_output</code> ({{cite afd_plugin/model_executor/models/deepseek_v2.py:146}});
+      DBO yield; FFN <code>recv_attn_output</code> ({{cite afd_plugin/v1/worker/ffn_model_runner.py:236}}); FFN
+      compute; FFN <code>send_ffn_output</code> ({{cite afd_plugin/v1/worker/ffn_model_runner.py:268}}); attention
+      <code>recv_ffn_output</code> ({{cite afd_plugin/model_executor/models/deepseek_v2.py:155}}). This runs for
+      each of the two stages.</p></x-a>
+  </x-q>
+</x-quiz>
