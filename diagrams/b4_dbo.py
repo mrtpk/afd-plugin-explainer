@@ -57,9 +57,9 @@ d.panel(y2, P2_H, 2, "DP1 DBO: scoped patches re-enable what native vLLM exclude
 
 by = y2 + 66
 d.box(46, by, 480, 40, "use_gpu_mrv2_ubatch_factory",
-      ["scoped in initialize_kv_cache  (:263-272, :480)"], col=VIOLET, align="left")
+      ["scoped in initialize_kv_cache  (:263-271, :480)"], col=VIOLET, align="left")
 d.box(560, by, 494, 40, "use_gpu_mrv2_dbo_dispatch",
-      ["scoped in execute_model context  (:274-283, :342)"], col=VIOLET, align="left")
+      ["scoped in execute_model context  (:274-282, :342)"], col=VIOLET, align="left")
 
 # ---- legend + footnotes ----------------------------------------------------
 y = y2 + P2_H + 18

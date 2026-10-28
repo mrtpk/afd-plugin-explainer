@@ -35,8 +35,8 @@ d.box(580, cy, 474, 56, "is_target_vllm_compatible()  = version gate",
 # ---- Panel 2: the five GPU patch modules -----------------------------------
 y2 = y0 + P1_H + 20
 P2_H = 250
-d.panel(y2, P2_H, 2, "Five GPU patch modules, imported by register_afd",
-        "Install style differs: import-time method swap, or a scoped context manager (__init__.py:172-181).")
+d.panel(y2, P2_H, 2, "Five GPU patch modules",
+        "register_afd imports four at import time (__init__.py:172-181); gpu_mrv2_ubatching installs through scoped context managers.")
 
 col_w = 335
 gap = 20

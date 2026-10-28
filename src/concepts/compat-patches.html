@@ -22,7 +22,7 @@ leaves, and swaps the original back when it returns. The comparison stops here: 
 first, and some patches swap the carriage only for the length of one trip.</p>
 
 <h2>The picture</h2>
-<x-diagram name="b4_compat_patches" alt="Two panels. Panel 1, two version checks: a box for assert_vllm_version_supported with strict false, which only warns if not exactly 0.30.0, and a box for is_target_vllm_compatible, the install gate, which allows 0.30.0 and dev builds. Panel 2, five GPU patch modules imported by register_afd: config_validation replacing create_engine_config and __post_init__ at import time, engine_core replacing the FFN EngineCore and busy loop at import time, gpu_mrv2_ubatching providing DP1 DBO seams through scoped context managers, async_dp_engine selecting the EngineCoreProc at import time for NPU async only, async_dp_forward_context replacing set_forward_context at import time for NPU async only, and the NPU patches under npu that run only on NPU. A legend marks GPU import-time, GPU scoped, and runtime- or device-gated." caption="Figure: a start-up check only warns; each patch has its own install gate. Patches install at import time, except the DP1 DBO seams, which are scoped to AFD calls." />
+<x-diagram name="b4_compat_patches" alt="Two panels. Panel 1, two version checks: a box for assert_vllm_version_supported with strict false, which only warns if not exactly 0.30.0, and a box for is_target_vllm_compatible, the install gate, which allows 0.30.0 and dev builds. Panel 2, the GPU patch modules. register_afd imports four at import time: config_validation replacing create_engine_config and __post_init__, engine_core replacing the FFN EngineCore and busy loop, async_dp_engine selecting the EngineCoreProc for NPU async only, and async_dp_forward_context replacing set_forward_context for NPU async only. A fifth module, gpu_mrv2_ubatching, provides the DP1 DBO seams through scoped context managers, not at import time. The NPU patches under npu run only on NPU. A legend marks GPU import-time, GPU scoped, and runtime- or device-gated." caption="Figure: a start-up check only warns; each patch has its own install gate. Patches install at import time, except the DP1 DBO seams, which are scoped to AFD calls." />
 <p>Read panel 1 as two separate checks. One warns at start-up; the other gates each install. Panel 2 lists the
 GPU patch modules and how each one installs.</p>
 
@@ -84,7 +84,7 @@ transparent re-implementations.</p>
     ({{cite vllm:vllm/v1/engine/utils.py:1104 | launch_core_engines}}) and
     <code>DPAsyncMPClient.add_request_async</code>
     ({{cite vllm:vllm/v1/engine/core_client.py:1486 | add_request_async}}), selecting a non-DP engine for async
-    attention ({{cite afd_plugin/compat/patches/async_dp_engine.py:60-63}}).</li>
+    attention ({{cite afd_plugin/compat/patches/async_dp_engine.py:117-120}}).</li>
   <li><code>async_dp_forward_context</code> replaces <code>set_forward_context</code>
     ({{cite vllm:vllm/forward_context.py:269 | set_forward_context}}) and skips DP metadata only for async
     configs ({{cite afd_plugin/compat/patches/async_dp_forward_context.py:88-127}}).</li>

@@ -26,8 +26,8 @@ Update it after every subagent finishes and after every user decision.
 | B1 Basics + boundary | done (280k) | done (6 defects, 215k) | yes |
 | B2 Roles, topology, connectors | done (277k) | done (2 defects) | yes |
 | B3 Model split + execution | done (260k) | done (2 defects, 252k) | yes |
-| B4 Graphs, DBO, patches | done (306k) | running | yes (pending) |
-| B5 Deploy, NPU, reference | – | – | – |
+| B4 Graphs, DBO, patches | done (306k) | done (7 defects) | yes |
+| B5 Deploy, NPU, reference | running | – | – |
 | F Final | – | – | – |
 
 ## USER INSTRUCTIONS
@@ -55,6 +55,8 @@ Update it after every subagent finishes and after every user decision.
 
 ## Done
 
+- 2026-10-28: FC-B4 done (full): ~210 claims, 7 defects (async_dp_engine selection :117-120 in 2 places; config_validation cite :200-214; "five patch modules imported by register_afd" → four + scoped gpu_mrv2_ubatching in diagram and alt; 3 off-by-one ranges). All 13 vLLM patch targets verified. No suspected bugs.
+- FINAL-PASS TODO: "no scheduler" for the FFN EngineCore → "no real scheduler (a no-op stand-in)" on concepts/compat-patches step 4, reference/compat-patches __init__ row, concepts/roles (check), tours/life-of-a-request (check). Source: engine_core.py:599-623.
 - 2026-10-28: B4 writer done: concepts cuda-graphs, dbo (+ dbo-timeline visual), compat-patches; reference/compat-patches; tours start-up, one-decode-step; 6 diagrams; b4.json (5 terms). Build 0 errors; site check 35 pages 0 problems; dbo-timeline tested on both pages (40 px, aria-live, 390). No suspected bugs.
 - 2026-10-28: FC-B3 done: ~190 claims, 2 defects (sampling mechanism: native sample_tokens, not execute_model; Qwen3.5 registered class). Supervisor verified in vLLM and fixed the same claim on tours/life-of-a-request (stops 4, 12, quiz) and request-stepper.js stop 12. Lesson 12 sharpened. Sampled: code/attention-worker, code/ffn-worker, code/deepseek-v2-py. No suspected bugs.
 - BUDGET NOTE: sample-checked (not full): code/attention-worker, code/ffn-worker, code/deepseek-v2-py (B3). List in README.
@@ -93,7 +95,7 @@ Update it after every subagent finishes and after every user decision.
 
 ## Next step
 
-FC-B4 RUNNING (no pause, user instruction). If cut off: resume it, do not restart. B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → FC-B1 (no pause, user instruction) (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → B2 → B3 with no pauses → PAUSE after B3 fact-checked. Then B4, B5 with pauses, then F.
+B5 WRITER RUNNING (no pause, user instruction). If cut off: resume it, do not restart. B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → FC-B1 (no pause, user instruction) (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → B2 → B3 with no pauses → PAUSE after B3 fact-checked. Then B4, B5 with pauses, then F.
 
 ## Questions for the user
 
@@ -134,4 +136,5 @@ FC-B4 RUNNING (no pause, user instruction). If cut off: resume it, do not restar
 | 2026-10-28 | explainer-worker: B3 writer | done; 7 pages, 4 diagrams |
 | 2026-10-28 | explainer-worker: FC-B3 (full + sample for 3 module pages) | done; ~190 claims, 2 defects |
 | 2026-10-28 | explainer-worker: B4 writer | done; 6 pages, 6 diagrams, dbo-timeline, 306k |
-| 2026-10-28 | explainer-worker: FC-B4 | running |
+| 2026-10-28 | explainer-worker: FC-B4 (full) | done; ~210 claims, 7 defects |
+| 2026-10-28 | explainer-worker: B5 writer | running |

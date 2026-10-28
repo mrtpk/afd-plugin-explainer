@@ -27,7 +27,7 @@ actually changes; the others see native behavior. Every GPU patch is behind the
       <td><code>EngineArgs.create_engine_config</code> ({{cite vllm:vllm/engine/arg_utils.py:2040}})</td>
       <td>import time, gated; original saved once ({{cite afd_plugin/compat/patches/config_validation.py:235-261}})</td>
       <td>an AFD config is present</td>
-      <td>rewrites <code>worker_cls</code> to the AFD role worker when it was <code>"auto"</code> ({{cite afd_plugin/compat/patches/config_validation.py:92-93}}, {{cite afd_plugin/compat/patches/config_validation.py:179-197}}); relaxes one ubatch backend check ({{cite afd_plugin/compat/patches/config_validation.py:62-89}})</td>
+      <td>rewrites <code>worker_cls</code> to the AFD role worker when it was <code>"auto"</code> ({{cite afd_plugin/compat/patches/config_validation.py:92-93}}, {{cite afd_plugin/compat/patches/config_validation.py:179-197}}); relaxes one ubatch backend check ({{cite afd_plugin/compat/patches/config_validation.py:200-214}})</td>
       <td>{{link concepts/worker-selection}}</td>
     </tr>
     <tr>
@@ -92,7 +92,7 @@ actually changes; the others see native behavior. Every GPU patch is behind the
   <tbody>
     <tr>
       <td><code>maybe_build_ubatch_runner</code> ({{cite vllm:vllm/v1/worker/gpu/ubatch_utils.py:538}})</td>
-      <td>scoped: <code>use_gpu_mrv2_ubatch_factory</code> ({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:263-272}})</td>
+      <td>scoped: <code>use_gpu_mrv2_ubatch_factory</code> ({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:263-271}})</td>
       <td>inside AFD <code>initialize_kv_cache</code>, DP size 1 ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:479-486}})</td>
       <td>builds the ubatch runner at DP1 and binds DP1 child metadata ({{cite afd_plugin/compat/patches/gpu_mrv2_ubatching.py:47-73}})</td>
       <td>{{link concepts/dbo}}</td>
@@ -122,7 +122,7 @@ re-implementations ({{cite afd_plugin/config.py:303-308}}).</p>
       <td><code>EngineCoreProc.run_engine_core</code> ({{cite vllm:vllm/v1/engine/core.py:1283}})</td>
       <td>import time, gated ({{cite afd_plugin/compat/patches/async_dp_engine.py:424-432}})</td>
       <td>NPU async attention config</td>
-      <td>selects <code>EngineCoreProc</code> instead of <code>DPEngineCoreProc</code> ({{cite afd_plugin/compat/patches/async_dp_engine.py:60-63}})</td>
+      <td>selects <code>EngineCoreProc</code> instead of <code>DPEngineCoreProc</code> ({{cite afd_plugin/compat/patches/async_dp_engine.py:117-120}})</td>
       <td>{{link concepts/npu-overview}}</td>
     </tr>
     <tr>
