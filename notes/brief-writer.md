@@ -17,7 +17,9 @@ glossary terms you own. This file gives everything else. It is binding.
 2. plan.md §1-2 (goal and decisions) and §13 (your batch).
 3. instructions-svg.md (STYLE.md §10 overrides it: canvas 1100, min text 11).
 4. notes/facts.md: [FC] and [S] entries are verified; [W] entries are not. Still open the code and cite it yourself.
-5. The model page of your page type (finished and fact-checked): (set after Phase 1).
+5. The model page of your page type (finished and fact-checked): concept src/concepts/connector-contract.html ·
+   tour src/tours/life-of-a-request.html · module src/code/init-py.html · basics src/learn/vllm-plugins.html ·
+   reference src/reference/afd-config.html (+ tools/gen_afd_config.py for generated tables) · visual assets/viz/request-stepper.js.
 6. skills/codebase-explainer/references/writing-and-accuracy.md and page-templates.md.
 7. notes/survey/*.md: a guide with file:line hints. NOT a source.
 
@@ -59,6 +61,13 @@ glossary terms you own. This file gives everything else. It is binding.
    which architecture string the code registers.
 10. GENERAL PYTHON (after S1): be precise about patches: from-imports bind the original object; a module
    attribute patch affects only later lookups.
+11. SUBCLASS / REPLACE (after S2): cite the class line AND the construction branch that installs a stand-in.
+   Name the class built on each role, and separate dense from MoE layers (dense mlp → RemoteFFNProxy; MoE →
+   AFDDeepseekV2RemoteExpertsMoE shell with remote experts).
+12. SAMPLING (after S2): logits and sampling run once per step, every step, after the last layer, attention side.
+13. NATIVE vLLM SEQUENCES (after S2): cite the narrowest line (vllm:vllm/v1/engine/core.py:600-601), never a bare file.
+14. DEVICE SCOPE (after S2): say when a key or patch is GPU-only or NPU-only and when it takes effect (async_dp:
+   NPU only, gated at run time, false on GPU).
 
 ## Ownership
 - You own only: your page files, src/glossary/<batch>.json, diagrams/<batch>_*.py, and your visual

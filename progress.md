@@ -1,7 +1,7 @@
 # AFD Plugin Explainer — Progress
 
 Last update: 2026-10-28
-Current phase: **1c Fact check S2** — W-S2 committed (fact check pending); usage pause; next: FC-S2.
+Current phase: **2 Full build** — Phase 1 done (8 sample pages fact-checked, site check clean); usage pause; next: B1 writer.
 
 This file is the memory of the project. A new session must be able to continue from it alone.
 Update it after every subagent finishes and after every user decision.
@@ -12,8 +12,8 @@ Update it after every subagent finishes and after every user decision.
 |---|---|---|
 | 0a Survey | done | notes/survey/survey.md, vllm-plugin-hooks.md; 5 claims spot-checked by supervisor (all true) |
 | 0b Plan approval | done | 2026-10-28: "defaults ok" |
-| 1 Foundation + samples | running | 1a-0 done (kit, git, explainer.json, two-repo build.py) |
-| Full build (plan §13) | not started | |
+| 1 Foundation + samples | done | 8 pages fact-checked; site check 0 problems (2026-10-28) |
+| Full build (plan §13) | next | B1 first |
 | F Final pass | not started | |
 
 ## Full build — batch status
@@ -22,7 +22,7 @@ Update it after every subagent finishes and after every user decision.
 |---|---|---|---|
 | F1 Foundation | done (186k tokens) | done in FC-S1 | yes |
 | S1 Samples (home, learn/vllm-plugins, code/index, code/init-py) | done (239k tokens) | done (6 defects, 208k tokens) | yes |
-| S2 Samples (tour life-of-a-request, reference/afd-config) | done (260k tokens) | – | yes (pending) |
+| S2 Samples (tour life-of-a-request, reference/afd-config) | done (260k tokens) | done (6 defects) | yes |
 | B1 Basics + boundary | – | – | – |
 | B2 Roles, topology, connectors | – | – | – |
 | B3 Model split + execution | – | – | – |
@@ -47,6 +47,9 @@ Update it after every subagent finishes and after every user decision.
 
 ## Done
 
+- 2026-10-28: Phase 1d: supervisor site check `node tools/site_check.js` (all pages × 1280/390, deep dives open, links + anchors, JS errors, images): 8 pages, 417 internal links, 0 problems.
+- 2026-10-28: FC-S2 done (full): ~110 claims, 6 defects (stop 7 subclass/replace citations + dense vs MoE wording; stop 2 narrow vLLM cites; sampling "once per step" in loop table and diagram; async_dp where-read row). Generator output fully correct. No suspected bugs. Lessons 11-14 added to brief-writer; model-page line filled in.
+- FINAL-PASS TODO: "sampling once per step after the last layer" on concepts/attention-runtime, concepts/ffn-runtime, tours/one-decode-step; dense-proxy vs MoE-shell wording on concepts/model-wrappers, concepts/moe-handoff; async_dp NPU-only, run-time gated on concepts/afd-config, concepts/compat-patches (source: facts.md "Added after the S2 fact check").
 - 2026-10-28: W-S2 done: tours/life-of-a-request (12 stops, 2 diagrams, request-stepper visual), reference/afd-config (generated tables + hand tables, worked example from 2a2f_eager_dbo_dp1tp2.sh), tools/gen_afd_config.py (ast, --check green), diagrams s2_*, s2.json (4 terms). Supervisor browser test: stepper works with click and keyboard at 1280 and 390, buttons >= 40 px, aria-live updates, 0 JS errors, 0 overflow; afd-config page 0 overflow. No suspected bugs. Observation: async connector accepts camelCase key `dynamicQuant` (async_cam.py ~:83, :183) → FAQ.
 - FINAL-PASS TODO (supervisor): request-stepper.js injects its CSS with a <style> element; move to assets/viz/viz.css for consistency (optional). Delete unused assets/viz/example_stepper.js.
 - 2026-10-28: FC-S1 done (full): ~120 claims, 6 defects fixed (call order: control plane once per step, not per layer; Qwen table; monkey-patch precision; UniProc simplification note; topology citation; diagram label). Writer notes #1, #2, #4, #6 confirmed. Supervisor fixed: tools/gen_folder_tree.py binary detection (whole-file NUL scan; repo total 164,972 → 139,046 lines; connectors/ 30,259 → 4,333); core.json full-decode-only (GPU: cuda_graph.py:20-21; NPU accepts FULL too). Accuracy lessons 7-10 added to notes/brief-writer.md. Facts merged.
@@ -68,7 +71,7 @@ Update it after every subagent finishes and after every user decision.
 
 ## Next step
 
-Usage pause after W-S2. Then FC-S2 (full): tours/life-of-a-request, assets/viz/request-stepper.js (rules in its header), reference/afd-config (hand tables + generator output; run tools/gen_afd_config.py --check), diagrams s2_*, src/glossary/s2.json. Then commit "S2 fact-checked", pause; then Phase 1d: supervisor site check of all sample pages, update the "model page" line in notes/brief-writer.md, then the full build (B1).
+Usage pause after Phase 1 (user may comment on the sample pages). Then B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → pause → FC-B1 (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → pause. Then B2..B5 the same way, then F.
 
 ## Questions for the user
 
@@ -97,3 +100,4 @@ Usage pause after W-S2. Then FC-S2 (full): tours/life-of-a-request, assets/viz/r
 | 2026-10-28 | explainer-worker: W-S1 writer | done, 239k tokens, 73 tool calls; 0 errors, 44 expected link warnings |
 | 2026-10-28 | explainer-worker: FC-S1 fact check (full) | done, 208k tokens, 73 tool calls; ~120 claims, 6 defects |
 | 2026-10-28 | explainer-worker: W-S2 writer | done, 260k tokens, 76 tool calls; 0 errors |
+| 2026-10-28 | explainer-worker: FC-S2 fact check (full) | done; ~110 claims, 6 defects |

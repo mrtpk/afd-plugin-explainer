@@ -74,7 +74,7 @@ d.legend(30, y, [(BLUE, "vLLM native"), (VIOLET, "control plane (DP metadata)"),
                  (EMERALD, "data plane (hidden states)")])
 y += 40
 y = d.footnotes(30, y, [
-    "Simplified: one attention rank (A0). Left out: KV cache, sampling (last step only), the per-peer split, CUDA graphs.",
+    "Simplified: one attention rank (A0). Left out: KV cache, sampling (after the last layer), the per-peer split, CUDA graphs.",
     "Native logits and sampling run after the last layer, on the attention side (not shown here).",
 ])
 d.save(height=y + 14)

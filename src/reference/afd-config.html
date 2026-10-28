@@ -91,7 +91,8 @@ code.</p>
       <td>The world size and the per-FFN {{term p2p-subgroup | subgroups}}
       ({{cite afd_plugin/distributed/topology.py:118-146}}).</td></tr>
     <tr><td><code>async_dp</code></td><td>{{cite afd_plugin/config.py:303-308}}</td>
-      <td>Whether AFD applies the async data-parallel patches at import time.</td></tr>
+      <td>Selects AFD async mode through <code>is_afd_async_dp</code>. It gates the NPU async-DP patches
+      ({{cite afd_plugin/compat/npu/runtime.py:44-53}}); on GPU it must be false.</td></tr>
     <tr><td><code>compute_gate_on_attention</code></td><td>{{cite afd_plugin/v1/worker/ffn_model_runner.py:211-215}}</td>
       <td>Whether the attention side computes the MoE gate; the FFN side then runs only the expert layers.</td></tr>
     <tr><td><code>afd_process_group_timeout_s</code></td><td>{{cite afd_plugin/connectors/gpu/p2p.py:275}}</td>

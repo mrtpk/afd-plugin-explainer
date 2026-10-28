@@ -55,8 +55,8 @@ changes nothing here. The request now enters the engine.</p>
 
 <x-stop n="2" title="EngineCore and the scheduler batch the request">
 <p>The attention server's {{term enginecore | EngineCore}} and scheduler are native vLLM
-({{cite vllm:vllm/v1/engine/core.py | v1/engine/core.py}}). The scheduler puts the request into a step and
-calls the executor.</p>
+({{cite vllm:vllm/v1/engine/core.py:589 | EngineCore.step}}). The scheduler builds a step, then the executor
+runs it ({{cite vllm:vllm/v1/engine/core.py:600-601}}).</p>
 <p>The FFN server has no such loop for requests. Its worker runs a connector loop instead
 ({{cite afd_plugin/v1/worker/ffn_worker.py:32-38}}). So the scheduler lives on the attention side only. See
 {{link concepts/roles}}.</p>
@@ -117,12 +117,16 @@ layer loop.</p>
 
 <x-stop n="7" title="The native model forward runs the decoder layers">
 <p>Native <code>execute_model</code> runs the model forward. The AFD {{term model-wrapper | model wrapper}}
-subclasses the native model, so the attention of each layer runs locally. Only the FFN stage of each layer is
-replaced ({{cite afd_plugin/model_executor/models/deepseek_v2.py:117-125}}).</p>
+subclasses the native model ({{cite afd_plugin/model_executor/models/deepseek_v2.py:725}}), and its decoder layer
+subclasses the native layer ({{cite afd_plugin/model_executor/models/deepseek_v2.py:375}}). On the attention
+role, the layer builds the native attention module and replaces only the FFN stage
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:459-517}}).</p>
 <x-code file="afd_plugin/model_executor/models/deepseek_v2.py" lines="117-125" caption="RemoteFFNProxy: a parameter-free module that stands in for the FFN stage." />
-<p>The replacement is a {{term remote-ffn-proxy | RemoteFFNProxy}}. It holds no weights. Its
-<code>forward</code> sends and receives through the connector instead of computing the FFN. The loop over layers
-is native vLLM.</p>
+<p>A dense layer gets a {{term remote-ffn-proxy | RemoteFFNProxy}}, which holds no weights
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:516-517}}). A MoE layer gets a native MoE shell whose
+experts are the same proxy ({{cite afd_plugin/model_executor/models/deepseek_v2.py:493-500}},
+{{cite afd_plugin/model_executor/models/deepseek_v2.py:332-335}}). Either way, the proxy's <code>forward</code>
+sends and receives through the connector instead of computing the FFN. The loop over layers is native vLLM.</p>
 </x-stop>
 
 <x-stop n="8" title="The attention side sends hidden states (per layer and stage)">
@@ -198,7 +202,7 @@ Each step runs the whole path again: one control-plane publish, then every layer
       <td>{{cite afd_plugin/model_executor/models/deepseek_v2.py:146}}, {{cite afd_plugin/model_executor/models/deepseek_v2.py:155}}</td></tr>
     <tr><td>Once per layer and stage</td><td>recv_attn_output, FFN compute, send_ffn_output</td>
       <td>{{cite afd_plugin/v1/worker/ffn_model_runner.py:236}}, {{cite afd_plugin/v1/worker/ffn_model_runner.py:268}}</td></tr>
-    <tr><td>Once per step (last step of the request)</td><td>logits and sampling (attention side)</td>
+    <tr><td>Once per step (after the last layer)</td><td>logits and sampling (attention side)</td>
       <td>{{cite afd_plugin/v1/worker/attention_model_runner_v2.py:586-594}}</td></tr>
   </tbody>
 </table>
