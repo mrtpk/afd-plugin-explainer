@@ -1,0 +1,34 @@
+{
+  "_about": "The ONLY file with project-specific values. build.py reads it. Keys that start with _ are comments.",
+  "project": "afd-plugin",
+  "site_name": "AFD Plugin Explained",
+  "brand_mark": "AF",
+  "repo_path": "../afd-plugin",
+  "_repo_path": "Path of the target repo checkout, relative to this folder. The build reads code from it and never changes it.",
+  "repo_url": "https://github.com/vllm-project/afd-plugin",
+  "repo_host": "github",
+  "_repo_host": "github, gitlab or gitea. Sets the format of the code links.",
+  "repo_label": "vllm-project/afd-plugin",
+  "sha": "7452d52748fec2a858b63e4cb22941dadd7a3ee3",
+  "_sha": "The full 40-character commit id that the site explains. The build fails if the checkout is at another commit.",
+  "extra_repos": {
+    "_about": "Other pinned repos that pages cite. Cite with the key as prefix: {{cite vllm:path:line}}, <x-code repo=\"vllm\" ...>. The build fails if a checkout is at another commit.",
+    "vllm": {
+      "name": "vLLM",
+      "path": "../vllm",
+      "url": "https://github.com/vllm-project/vllm",
+      "host": "github",
+      "label": "vllm-project/vllm (v0.30.0)",
+      "sha": "ced6857afa0ea7b2e3f0846a62e1394e90f15607"
+    }
+  },
+  "language_style": "ste",
+  "_language_style": "ste = ASD-STE100 Simplified Technical English (the build warns on sentences over ste_max_words); plain = no sentence-length check.",
+  "ste_max_words": 25,
+  "comment_language": "",
+  "_comment_language": "Language of code comments that <x-tr> translates, for example Chinese. Empty = the label says only 'Translated comments'.",
+  "prism_components": ["prism-core", "prism-clike", "prism-c", "prism-cpp", "prism-python", "prism-bash", "prism-json", "prism-yaml", "prism-toml"],
+  "_prism_components": "Prism language files to load from cdnjs. Add for example prism-rust, prism-go, prism-java, prism-typescript.",
+  "lang_by_ext": {".toml": "toml", ".yaml": "yaml", ".yml": "yaml"},
+  "_lang_by_ext": "Extra file-extension to Prism-language mappings, for example {\".rs\": \"rust\", \".go\": \"go\"}."
+}
