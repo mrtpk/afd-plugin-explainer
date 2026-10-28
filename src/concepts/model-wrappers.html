@@ -129,9 +129,11 @@ layer (dense or MoE) uses a plain <code>RemoteFFNProxy</code>
 ({{cite afd_plugin/model_executor/models/qwen3_moe.py:157}}); there is no remote-experts shell. The FFN role
 builds the native <code>Qwen3MoeSparseMoeBlock</code> or <code>Qwen3MoeMLP</code>
 ({{cite afd_plugin/model_executor/models/qwen3_moe.py:167-180}}).</p>
-<p><strong>Qwen3.5 / 3.6 MoE</strong> ({{cite afd_plugin/model_executor/models/qwen3_5.py:373-374}}). The
-wrapper supports CUDA and text-only execution; a multimodal config raises
-({{cite afd_plugin/model_executor/models/qwen3_5.py:22-29}}). It uses a remote-experts shell built on the
+<p><strong>Qwen3.5 / 3.6 MoE.</strong> The code registers the architecture
+<code>Qwen3_5MoeForConditionalGeneration</code> as <code>AFDQwen3_5MoeForConditionalGeneration</code>
+({{cite afd_plugin/model_executor/models/qwen3_5.py:444}}). It supports CUDA only
+({{cite afd_plugin/model_executor/models/model_utils.py:34-38}}) and text-only execution; a multimodal config
+raises ({{cite afd_plugin/model_executor/models/qwen3_5.py:22-29}}). It uses a remote-experts shell built on the
 native <code>Qwen3NextSparseMoeBlock</code> ({{cite afd_plugin/model_executor/models/qwen3_5.py:88-90}}), and
 reuses <code>AFDAttentionFusedMoE</code> from the DeepSeek wrapper
 ({{cite afd_plugin/model_executor/models/qwen3_5.py:15}}).</p>

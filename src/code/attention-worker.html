@@ -66,7 +66,7 @@ hook. The worker replaces that symbol for the native construction window, then r
 <h3>execute_model: scope the context, then delegate</h3>
 <p>The runner adds nothing to the forward itself. It opens the AFD context and calls <code>super</code>
 ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:580-595}}).</p>
-<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="580-595" highlight="582,586" caption="The AFD context scopes the metadata provider and replay hook; native V2 runs and samples." />
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="580-595" highlight="582,586" caption="The AFD context scopes the metadata provider and replay hook; native V2 runs the forward. Sampling is a separate native step." />
 
 <h3>send_dp_metadata: publish one control payload</h3>
 <p>The mixin builds one payload with the per-stage DP metadata and the graph flags, updates the connector state,

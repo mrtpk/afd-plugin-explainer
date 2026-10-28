@@ -64,7 +64,8 @@ glossary terms you own. This file gives everything else. It is binding.
 11. SUBCLASS / REPLACE (after S2): cite the class line AND the construction branch that installs a stand-in.
    Name the class built on each role, and separate dense from MoE layers (dense mlp → RemoteFFNProxy; MoE →
    AFDDeepseekV2RemoteExpertsMoE shell with remote experts).
-12. SAMPLING (after S2): logits and sampling run once per step, every step, after the last layer, attention side.
+12. SAMPLING (after S2, B3): logits and sampling run once per step, every step, attention side, in the native
+   sample_tokens call (vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050), NOT inside execute_model.
 13. NATIVE vLLM SEQUENCES (after S2): cite the narrowest line (vllm:vllm/v1/engine/core.py:600-601), never a bare file.
 14. DEVICE SCOPE (after S2): say when a key or patch is GPU-only or NPU-only and when it takes effect (async_dp:
    NPU only, gated at run time, false on GPU).

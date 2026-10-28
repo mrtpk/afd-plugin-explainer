@@ -78,8 +78,8 @@ then substitutes <code>AFDAttentionModelRunnerV2</code> for the native runner cl
 native method. It wraps it in an AFD execution context, then delegates
 ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:570-594}}).</p>
 <x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="580-594" highlight="582,586" caption="execute_model: scope the AFD context, then call native execute_model." />
-<p>Native <code>execute_model</code> still does all the request, attention, KV and sampling work. The wrapper
-only installs AFD state around it ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:555-568}}).</p>
+<p>Native <code>execute_model</code> still does the request, attention and KV work. Sampling is a separate
+native call (stop 12). The wrapper only installs AFD state around it ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:555-568}}).</p>
 </x-stop>
 
 <x-stop n="5" title="The execution context installs the metadata provider">
@@ -181,9 +181,10 @@ control plane does not publish again inside this loop.</p>
 </x-stop>
 
 <x-stop n="12" title="The attention side samples the token and returns it">
-<p>After the last layer, native <code>execute_model</code> computes the logits and samples the token. The AFD
-runner delegated all of this to native vLLM ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:586-594}}).
-So sampling runs on the attention side.</p>
+<p>After the forward pass, the worker makes a second call, <code>sample_tokens</code>
+({{cite vllm:vllm/v1/worker/gpu_worker.py:1142-1147}}). Native Model Runner V2 computes the logits and samples
+there ({{cite vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050}}). The AFD attention runner does not override
+this method, so it samples natively. So sampling runs on the attention side, once per step.</p>
 <x-code file="afd_plugin/v1/worker/ffn_model_runner.py" lines="405-406" caption="The FFN runner never samples: sample_tokens raises." />
 <p>The FFN runner has no sampler; its <code>sample_tokens</code> raises
 ({{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}}). The attention server returns the token to the
@@ -241,8 +242,8 @@ each layer. If a request reaches the FFN server, or the two roles do not meet, t
       ({{cite afd_plugin/v1/worker/ffn_worker.py:176}}).</p></x-a>
   </x-q>
   <x-q level="medium">Which side samples the token?
-    <x-a><p>The attention side. Native <code>execute_model</code> computes the logits and samples
-      ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:586-594}}). The FFN runner's
+    <x-a><p>The attention side. The AFD attention runner inherits the native <code>sample_tokens</code>, which
+      computes the logits and samples ({{cite vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050}}). The FFN runner's
       <code>sample_tokens</code> raises ({{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}}).</p></x-a>
   </x-q>
   <x-q level="hard">List the data-plane calls for one layer and stage, in order, across both servers.

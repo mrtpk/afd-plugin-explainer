@@ -25,8 +25,8 @@ Update it after every subagent finishes and after every user decision.
 | S2 Samples (tour life-of-a-request, reference/afd-config) | done (260k tokens) | done (6 defects) | yes |
 | B1 Basics + boundary | done (280k) | done (6 defects, 215k) | yes |
 | B2 Roles, topology, connectors | done (277k) | done (2 defects) | yes |
-| B3 Model split + execution | done | running | yes (pending) |
-| B4 Graphs, DBO, patches | – | – | – |
+| B3 Model split + execution | done (260k) | done (2 defects, 252k) | yes |
+| B4 Graphs, DBO, patches | running | – | – |
 | B5 Deploy, NPU, reference | – | – | – |
 | F Final | – | – | – |
 
@@ -55,6 +55,9 @@ Update it after every subagent finishes and after every user decision.
 
 ## Done
 
+- 2026-10-28: FC-B3 done: ~190 claims, 2 defects (sampling mechanism: native sample_tokens, not execute_model; Qwen3.5 registered class). Supervisor verified in vLLM and fixed the same claim on tours/life-of-a-request (stops 4, 12, quiz) and request-stepper.js stop 12. Lesson 12 sharpened. Sampled: code/attention-worker, code/ffn-worker, code/deepseek-v2-py. No suspected bugs.
+- BUDGET NOTE: sample-checked (not full): code/attention-worker, code/ffn-worker, code/deepseek-v2-py (B3). List in README.
+- FINAL-PASS TODO: check the AFDForwardContextMetadata fields behind glossary b3 "afd-forward-metadata" ("connector, transaction id, per-stage token counts").
 - 2026-10-28: B3 writer done: concepts model-wrappers, moe-handoff, attention-runtime, ffn-runtime; code attention-worker, ffn-worker, deepseek-v2-py; 4 diagrams; b3.json (3 terms). Build 0 errors; site check 0 problems. No suspected bugs; no docs-vs-code differences in scope.
 - 2026-10-28: FC-B2 done: ~70 claims, 2 citation defects (p2p-py lifecycle cite split; roles engine_core.py:605-606). Mapper re-derived for A = F, F+1, 2F, 2F+1 and A < F: all match the code. Sampled: code/connectors-core, code/p2p-py. No suspected bugs.
 - BUDGET NOTE: sample-checked (not full): code/connectors-core, code/p2p-py (B2). List in README.
@@ -89,7 +92,7 @@ Update it after every subagent finishes and after every user decision.
 
 ## Next step
 
-FC-B3 RUNNING (no pause, user instruction). If cut off: resume it, do not restart. B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → FC-B1 (no pause, user instruction) (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → B2 → B3 with no pauses → PAUSE after B3 fact-checked. Then B4, B5 with pauses, then F.
+B4 WRITER RUNNING (no pause, user instruction). If cut off: resume it, do not restart. B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → FC-B1 (no pause, user instruction) (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → B2 → B3 with no pauses → PAUSE after B3 fact-checked. Then B4, B5 with pauses, then F.
 
 ## Questions for the user
 
@@ -127,4 +130,5 @@ FC-B3 RUNNING (no pause, user instruction). If cut off: resume it, do not restar
 | 2026-10-28 | explainer-worker: B2 writer | done; 6 pages, 4 diagrams, topology-mapper, 277k |
 | 2026-10-28 | explainer-worker: FC-B2 (full + sample for 2 module pages) | done; ~70 claims, 2 defects |
 | 2026-10-28 | explainer-worker: B3 writer | done; 7 pages, 4 diagrams |
-| 2026-10-28 | explainer-worker: FC-B3 | running |
+| 2026-10-28 | explainer-worker: FC-B3 (full + sample for 3 module pages) | done; ~190 claims, 2 defects |
+| 2026-10-28 | explainer-worker: B4 writer | running |

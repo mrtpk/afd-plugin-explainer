@@ -48,8 +48,14 @@ order: the rendezvous waits until weights are loaded, so attention and FFN weigh
 the whole forward to <code>super().execute_model</code>
 ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:569-595}}).</p>
 <x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="580-595" highlight="582,586" caption="The AFD context scopes the metadata provider; native V2 runs the model and samples." />
-<p>Because the forward is native, logits and sampling are native too. They run once per {{term step}}, after the
-last layer, on the attention side ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:586}}).</p>
+<p>The forward is native, so logits and sampling are native too. The delegation at line 586 runs the model
+forward ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:586}}). Native V2 does the sampling in a
+separate method, <code>sample_tokens</code>, after the forward
+({{cite vllm:vllm/v1/worker/gpu/model_runner.py:1997}},
+{{cite vllm:vllm/v1/worker/gpu/model_runner.py:2048}}). The attention runner does not override
+<code>sample_tokens</code>, so it samples natively. The FFN runner overrides it to raise
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}}). Sampling runs once per {{term step}}, after the
+last layer, on the attention side.</p>
 
 <h3>Step 4: The AFD metadata provider installs the sidecar</h3>
 <p>Model wrappers read AFD metadata from the vLLM forward context. The provider installs it as vLLM makes each
@@ -147,9 +153,10 @@ runs with no connector in scope.</p>
       ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:358}}).</p></x-a>
   </x-q>
   <x-q level="easy">Where does sampling run in AFD?
-    <x-a><p>On the attention side, in native V2, once per step after the last layer. The AFD
-      <code>execute_model</code> delegates to <code>super</code>
-      ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:586}}).</p></x-a>
+    <x-a><p>On the attention side, in native V2, once per step after the last layer. Native V2 samples in
+      <code>sample_tokens</code>, which the attention runner inherits
+      ({{cite vllm:vllm/v1/worker/gpu/model_runner.py:2048}}). The FFN runner overrides it to raise
+      ({{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}}).</p></x-a>
   </x-q>
   <x-q level="medium">Why does <code>load_model</code> initialize the connector at the end?
     <x-a><p>So the collective rendezvous waits until weights are loaded, letting attention and FFN weight

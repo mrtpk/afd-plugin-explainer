@@ -68,7 +68,7 @@
       where: "deepseek_v2.py · recv_ffn_output" },
     { n: 12, title: "Attention samples the token and returns it", side: "attn",
       proc: "attention server · attention worker", cross: "",
-      where: "attention_model_runner_v2.py · native sampling" }
+      where: "native GPUModelRunnerV2.sample_tokens (inherited)" }
   ];
 
   var SIDE_COLOR = { attn: "var(--viz-c1)", ffn: "var(--viz-c3)", both: "var(--viz-c5)" };
