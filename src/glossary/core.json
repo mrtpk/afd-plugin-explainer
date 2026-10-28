@@ -120,7 +120,7 @@
   },
   "model-runner-v2": {
     "term": "Model Runner V2",
-    "short": "The vLLM v1 model runner, version 2. Both roles need VLLM_USE_V2_MODEL_RUNNER=1. AFD adds a seam over it.",
+    "short": "The vLLM v1 model runner, version 2. Both AFD roles need it on; the README sets VLLM_USE_V2_MODEL_RUNNER=1. AFD adds a seam over it.",
     "page": "concepts/attention-runtime"
   },
   "model-wrapper": {

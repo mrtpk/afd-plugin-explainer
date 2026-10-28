@@ -66,8 +66,8 @@ d.legend(30, y, [(BLUE, "AFD rewrite step"), (NEUTRAL, "native vLLM"), (TEAL, "r
                  (VIOLET, "NPU")])
 y += 34
 y = d.footnotes(30, y,
-                ["Both roles need VLLM_USE_V2_MODEL_RUNNER=1; the validator rejects a config without it "
-                 "(validation.py:90-91).",
+                ["Both roles need the V2 model runner on (VLLM_USE_V2_MODEL_RUNNER=1); the validator "
+                 "rejects a config with it off (validation.py:90-91).",
                  "An explicit wrong worker is rejected by assert_compatible_afd_stack, not silently fixed "
                  "(validation.py:343-367)."])
 d.save(height=y + 12)

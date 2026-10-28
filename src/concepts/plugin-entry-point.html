@@ -86,8 +86,8 @@ rest go on. An unwrapped step lets its error propagate and stop the process.</p>
 <p>The two guards work at different levels, and the order matters.</p>
 <ol>
   <li>vLLM calls <code>load_general_plugins</code> from five call sites, in four kinds of process
-      ({{cite vllm:vllm/plugins/__init__.py:87-90}}). The {{link learn/vllm-plugins}} page lists
-      them.</li>
+      (for example {{cite vllm:vllm/v1/engine/core.py:119}} and {{cite vllm:vllm/v1/worker/worker_base.py:271}}).
+      The {{link learn/vllm-plugins}} page lists all five.</li>
   <li>The vLLM guard <code>plugins_loaded</code> stops a second call in the same process
       ({{cite vllm:vllm/plugins/__init__.py:82-85}}). It is module state, so a new process starts
       it at <code>False</code> again.</li>
@@ -97,8 +97,9 @@ rest go on. An unwrapped step lets its error propagate and stop the process.</p>
 </ol>
 <p>Because the vLLM guard resets per process, the registration steps run again in each process.
 So each step must be safe to run more than once. <code>ModelRegistry.register_model</code> and
-the module-attribute patches both satisfy this: the patch modules guard against re-patching
-their own target ({{cite afd_plugin/compat/patches/config_validation.py:235-248}}).</p>
+the module-attribute patches both satisfy this: the patch install saves each original target
+once, behind a <code>hasattr</code> guard, so a repeat keeps the real original
+({{cite afd_plugin/compat/patches/config_validation.py:235-248}}).</p>
 </x-deepdive>
 
 <x-deepdive title="Two different version checks">

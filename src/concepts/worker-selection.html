@@ -105,8 +105,9 @@ same module inside <code>init_device</code>, after the patch is in place
 ({{cite vllm:vllm/v1/worker/gpu_worker.py:475-482}}). A module-attribute patch changes only later
 attribute lookups, so the swap must be active during that import. The <code>finally</code> keeps
 the swap from leaking past the call.</p>
-<p>Both roles also need the V2 model runner. The GPU runner check raises when
-<code>VLLM_USE_V2_MODEL_RUNNER</code> is not set ({{cite afd_plugin/validation.py:90-91}}).</p>
+<p>Both roles also need the V2 model runner. The GPU runner check raises when the V2 model
+runner is off ({{cite afd_plugin/validation.py:90-91}}). vLLM reads the flag from
+<code>VLLM_USE_V2_MODEL_RUNNER</code>; the AFD recipes set it to <code>1</code>.</p>
 </x-deepdive>
 
 <h2>What can go wrong</h2>
@@ -118,8 +119,9 @@ the swap from leaking past the call.</p>
       worker is rejected with both names ({{cite afd_plugin/validation.py:357-367}}).</li>
   <li><strong>Unsupported platform.</strong> A platform whose default worker AFD does not know
       raises in the mapping ({{cite afd_plugin/validation.py:306-309}}).</li>
-  <li><strong>No V2 model runner.</strong> Without <code>VLLM_USE_V2_MODEL_RUNNER</code> the GPU
-      check raises ({{cite afd_plugin/validation.py:90-91}}).</li>
+  <li><strong>No V2 model runner.</strong> With the V2 model runner off
+      (<code>VLLM_USE_V2_MODEL_RUNNER=0</code>) the GPU check raises
+      ({{cite afd_plugin/validation.py:90-91}}).</li>
 </ul>
 <p><strong>Why it matters.</strong> The two servers must run the matching role workers. AFD picks
 them when the field is <code>"auto"</code>, and refuses a wrong one, so a mismatch cannot reach the

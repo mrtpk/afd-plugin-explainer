@@ -23,7 +23,7 @@ Update it after every subagent finishes and after every user decision.
 | F1 Foundation | done (186k tokens) | done in FC-S1 | yes |
 | S1 Samples (home, learn/vllm-plugins, code/index, code/init-py) | done (239k tokens) | done (6 defects, 208k tokens) | yes |
 | S2 Samples (tour life-of-a-request, reference/afd-config) | done (260k tokens) | done (6 defects) | yes |
-| B1 Basics + boundary | done | running | yes (pending) |
+| B1 Basics + boundary | done (280k) | done (6 defects, 215k) | yes |
 | B2 Roles, topology, connectors | – | – | – |
 | B3 Model split + execution | – | – | – |
 | B4 Graphs, DBO, patches | – | – | – |
@@ -51,6 +51,9 @@ Update it after every subagent finishes and after every user decision.
 
 ## Done
 
+- 2026-10-28: FC-B1 done: ~120 claims; 6 defects (4 line counts; "VLLM_USE_V2_MODEL_RUNNER set/not set" → "V2 runner on/off" in 6 places; patch-guard wording). Sampled: code/config-py, code/validation-py (sections listed in the FC report: first screen, key tables, every default/number/order, ~1 in 3 prose). Supervisor verified the V2 default in vLLM (config/vllm.py:675-722), fixed core.json model-runner-v2 term and a weak citation on plugin-entry-point (line 89: cite two call sites instead of the func() loop). Lessons 15-17 added. No suspected bugs.
+- FINAL-PASS TODO: FAQ "docs vs code": README.md:204 says both roles require VLLM_USE_V2_MODEL_RUNNER=1; vLLM picks V2 by default when unset (vllm:vllm/config/vllm.py:692-694 + :695-722). Also any later page that says "set/not set" for V2 on/off.
+- BUDGET NOTE: sample-checked (not full): code/config-py, code/validation-py (B1). List in README.
 - 2026-10-28: B1 writer done: 8 pages, 6 diagrams b1_*, b1.json (2 terms). Build 0 errors; site check 0 problems. Facts merged [W]. No suspected bugs.
 - 2026-10-28: Phase 1d: supervisor site check `node tools/site_check.js` (all pages × 1280/390, deep dives open, links + anchors, JS errors, images): 8 pages, 417 internal links, 0 problems.
 - 2026-10-28: FC-S2 done (full): ~110 claims, 6 defects (stop 7 subclass/replace citations + dense vs MoE wording; stop 2 narrow vLLM cites; sampling "once per step" in loop table and diagram; async_dp where-read row). Generator output fully correct. No suspected bugs. Lessons 11-14 added to brief-writer; model-page line filled in.
@@ -76,7 +79,7 @@ Update it after every subagent finishes and after every user decision.
 
 ## Next step
 
-FC-B1 RUNNING. If cut off: resume it, do not restart. B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → FC-B1 (no pause, user instruction) (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → B2 → B3 with no pauses → PAUSE after B3 fact-checked. Then B4, B5 with pauses, then F.
+B2 WRITER RUNNING (no pause, user instruction). If cut off: resume it, do not restart. B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → FC-B1 (no pause, user instruction) (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → B2 → B3 with no pauses → PAUSE after B3 fact-checked. Then B4, B5 with pauses, then F.
 
 ## Questions for the user
 
@@ -108,4 +111,4 @@ FC-B1 RUNNING. If cut off: resume it, do not restart. B1 writer (plan §13: lear
 | 2026-10-28 | explainer-worker: W-S2 writer | done, 260k tokens, 76 tool calls; 0 errors |
 | 2026-10-28 | explainer-worker: FC-S2 fact check (full) | done; ~110 claims, 6 defects |
 | 2026-10-28 | explainer-worker: B1 writer | done; 8 pages, 6 diagrams, 0 errors |
-| 2026-10-28 | explainer-worker: FC-B1 | running |
+| 2026-10-28 | explainer-worker: FC-B1 (full + sample for 2 module pages) | done; ~120 claims, 6 defects, 215k tokens |

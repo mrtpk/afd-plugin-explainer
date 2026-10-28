@@ -50,7 +50,7 @@ d.step_card(x, cy + 3 * pitch, w, ch, 4, "Worker (per device)", BLUE,
                   ("hook", "worker_cls rewritten to the AFD role worker", VIOLET)])
 d.step_card(x, cy + 4 * pitch, w, ch, 5, "Model Runner V2", BLUE,
             tag="gpu_worker.py:469-482", key_w=52,
-            rows=[("vLLM", "built when VLLM_USE_V2_MODEL_RUNNER is set"),
+            rows=[("vLLM", "built when the V2 model runner is on"),
                   ("hook", "runner class swapped in Worker.init_device", VIOLET)])
 d.step_card(x, cy + 5 * pitch, w, ch, 6, "The model", EMERALD,
             tag="__init__.py:211-214", key_w=52,

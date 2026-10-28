@@ -68,6 +68,11 @@ glossary terms you own. This file gives everything else. It is binding.
 13. NATIVE vLLM SEQUENCES (after S2): cite the narrowest line (vllm:vllm/v1/engine/core.py:600-601), never a bare file.
 14. DEVICE SCOPE (after S2): say when a key or patch is GPU-only or NPU-only and when it takes effect (async_dp:
    NPU only, gated at run time, false on GPU).
+15. ENV DEFAULTS (after B1): "env unset" is not "feature off". Trace the getter (VLLM_USE_V2_MODEL_RUNNER unset →
+   vLLM picks V2 by default, vllm:vllm/config/vllm.py:675-722). State the feature state; cite the env read apart.
+16. LINE COUNTS (after B1): "at a glance" file line counts must equal `wc -l` (four were off by one in B1).
+17. GUARD WORDING (after B1): say exactly what a guard protects (a hasattr guard that saves the original once
+   is not a re-patch guard).
 
 ## Ownership
 - You own only: your page files, src/glossary/<batch>.json, diagrams/<batch>_*.py, and your visual

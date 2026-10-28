@@ -53,7 +53,7 @@ AFD hook. The vLLM lines are in the pinned vLLM checkout; the hook lines are in 
         ({{cite afd_plugin/compat/patches/config_validation.py:92-93}}). See
         {{link concepts/worker-selection}}.</td></tr>
     <tr><td><strong>Model Runner V2</strong></td>
-      <td>Built when <code>VLLM_USE_V2_MODEL_RUNNER</code> is set
+      <td>Built when the V2 model runner is on; vLLM reads <code>VLLM_USE_V2_MODEL_RUNNER</code>
         ({{cite vllm:vllm/config/vllm.py:692-694}}, {{cite vllm:vllm/v1/worker/gpu_worker.py:469-482}}).</td>
       <td>The AFD worker swaps the runner class in <code>init_device</code>
         ({{cite afd_plugin/v1/worker/attention_worker.py:82-87}}). See {{link concepts/attention-runtime}}.</td></tr>
@@ -117,7 +117,7 @@ normal chain. The {{link concepts/roles}} page covers this split.</p>
       ({{cite vllm:vllm/v1/engine/core.py:134}}, {{cite vllm:vllm/v1/engine/core.py:162}}).</p></x-a>
   </x-q>
   <x-q level="easy">When is the Model Runner V2 used?
-    <x-a><p>When <code>VLLM_USE_V2_MODEL_RUNNER</code> is set
+    <x-a><p>When the V2 model runner is on; vLLM reads it from <code>VLLM_USE_V2_MODEL_RUNNER</code>
       ({{cite vllm:vllm/config/vllm.py:692-694}}, {{cite vllm:vllm/v1/worker/gpu_worker.py:469-482}}).
       AFD needs it on both roles.</p></x-a>
   </x-q>
