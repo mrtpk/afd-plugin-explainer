@@ -1,0 +1,135 @@
+---
+title: connectors/base.py, factory.py, metadata.py: the connector core
+nav_title: connectors/base.py
+level: Intermediate
+prerequisites: concepts/connector-contract
+related: concepts/control-plane, concepts/wire-data, code/p2p-py
+summary: Three files hold the connector contract, the factory and the shared metadata objects. This page maps the files and reads the metadata objects and the factory loader.
+---
+<x-sentence>Three files form the {{term connector}} core: <code>base.py</code> (the contract), <code>factory.py</code> (name to class) and <code>metadata.py</code> (the shared data objects).</x-sentence>
+
+<h2>Purpose</h2>
+<p>These files hold the parts every connector shares. The contract and the factory are explained on the
+{{link concepts/connector-contract}} page; this page maps the three files and reads the metadata objects and
+the factory loader.</p>
+<table>
+  <thead><tr><th>Item</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Files (lines, origin)</td><td><code>base.py</code> (310), <code>factory.py</code> (105), <code>metadata.py</code> (438); AFD-owned</td></tr>
+    <tr><td>Main types</td><td><code>AFDConnectorBase</code>, <code>AFDControlPlane</code>, <code>AFDConnectorFactory</code>, the <code>AFD*</code> metadata dataclasses</td></tr>
+    <tr><td>Runs in</td><td>every attention and FFN worker process; metadata encode/decode on the CPU</td></tr>
+    <tr><td>Called by</td><td>the role runners and the model wrappers ({{cite afd_plugin/v1/worker/ffn_model_runner.py:80-85}})</td></tr>
+    <tr><td>Calls</td><td><code>importlib</code>, <code>torch</code>, <code>json</code>, and the AFD config helpers</td></tr>
+    <tr><td>Not in this file</td><td>the transports: the GPU P2P connector is in <code>connectors/gpu/p2p.py</code>, the NPU ones in <code>connectors/npu/</code></td></tr>
+  </tbody>
+</table>
+
+<h2>Where it sits</h2>
+<h3>Who calls it</h3>
+<p>The factory builds a connector for a runner. The FFN runner calls <code>create_connector</code> at
+construction ({{cite afd_plugin/v1/worker/ffn_model_runner.py:80-85}}); the attention runner does the same.
+The model wrappers build the metadata objects for each transfer
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:140-145}}).</p>
+<h3>What it calls</h3>
+<p><code>base.py</code> reads the AFD config helper <code>connector_extra_config_from_source</code>
+({{cite afd_plugin/connectors/base.py:105-107}}). <code>factory.py</code> imports the connector module lazily
+with <code>importlib</code> ({{cite afd_plugin/connectors/factory.py:38-45}}). <code>metadata.py</code> encodes
+the control payload with <code>json</code> ({{cite afd_plugin/connectors/metadata.py:344-346}}).</p>
+
+<h2>Key classes and functions</h2>
+<table>
+  <thead><tr><th>Name</th><th>Line</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td><code>AFDConnectorBase</code></td><td>{{cite afd_plugin/connectors/base.py:37}}</td><td>the connector contract (see {{link concepts/connector-contract}})</td></tr>
+    <tr><td><code>AFDControlPlane</code></td><td>{{cite afd_plugin/connectors/base.py:258}}</td><td>the control-plane contract</td></tr>
+    <tr><td><code>AFDConnectorFactory</code></td><td>{{cite afd_plugin/connectors/factory.py:23}}</td><td>name &rarr; class, build an instance</td></tr>
+    <tr><td><code>AFDDPMetadata</code></td><td>{{cite afd_plugin/connectors/metadata.py:23}}</td><td>per-DP-rank token counts for the control plane</td></tr>
+    <tr><td><code>AFDControlPayload</code></td><td>{{cite afd_plugin/connectors/metadata.py:107}}</td><td>the control-plane envelope (per-stage metadata + flags)</td></tr>
+    <tr><td><code>AFDTransferMetadata</code></td><td>{{cite afd_plugin/connectors/metadata.py:171}}</td><td>layer, stage and per-peer lengths for one transfer</td></tr>
+    <tr><td><code>AFDTransferContext</code></td><td>{{cite afd_plugin/connectors/metadata.py:234}}</td><td>transfer metadata plus optional backend state</td></tr>
+    <tr><td><code>AFDA2FTransferPayload</code></td><td>{{cite afd_plugin/connectors/metadata.py:261}}</td><td>the FFN-side receive payload (hidden states + extras)</td></tr>
+    <tr><td><code>encode_control_payload</code></td><td>{{cite afd_plugin/connectors/metadata.py:320}}</td><td>payload &rarr; compact JSON bytes</td></tr>
+    <tr><td><code>send_control_payload</code></td><td>{{cite afd_plugin/connectors/metadata.py:376}}</td><td>send the size tensor and the byte tensor</td></tr>
+  </tbody>
+</table>
+
+<h2>Walk through the main methods</h2>
+
+<h3>AFDTransferMetadata: the per-transfer record</h3>
+<p>This dataclass describes one layer-and-stage transfer. It validates its lengths and derives the total
+token count ({{cite afd_plugin/connectors/metadata.py:171-200}}).</p>
+<x-code file="afd_plugin/connectors/metadata.py" lines="188-200" highlight="199" caption="The fields, the validation and total_tokens." />
+<ol>
+  <li>Line 188-190. The fields: <code>layer_idx</code>, <code>stage_idx</code>, and the per-peer
+      <code>seq_lens</code> list.</li>
+  <li>Line 192-196. <code>__post_init__</code> rejects an empty list and any non-positive length.</li>
+  <li>Line 198-200. <code>total_tokens</code> is the sum of the lengths; it is the expected leading
+      dimension.</li>
+</ol>
+<p>Two class methods build the attention form (one length) and the FFN form (a list of lengths)
+({{cite afd_plugin/connectors/metadata.py:202-228}}). The shape check is
+<code>validate_tensor_shape</code> ({{cite afd_plugin/connectors/metadata.py:230-231}}).</p>
+
+<h3>encode_control_payload: the wire format</h3>
+<p>The control payload is serialized to compact JSON, with only the fields the FFN side reads back
+({{cite afd_plugin/connectors/metadata.py:320-346}}).</p>
+<x-code file="afd_plugin/connectors/metadata.py" lines="329-346" highlight="344" caption="Per-stage token counts and the flags, as sorted compact JSON." />
+<ol>
+  <li>Line 329-335. One entry per stage: the per-DP-rank token list and its max.</li>
+  <li>Line 337-343. The graph-capture, warm-up, replay and profile flags.</li>
+  <li>Line 344-346. <code>json.dumps</code> with sorted keys and no spaces. The {{link concepts/control-plane}}
+      page reads the send and receive.</li>
+</ol>
+
+<h3>AFDConnectorFactory: name to class</h3>
+<p>The factory keeps a registry of loaders. <code>register_connector</code> stores a loader that imports the
+module lazily ({{cite afd_plugin/connectors/factory.py:26-47}}); <code>create_connector</code> looks the name
+up, resolves the {{term role-rank | role rank}}, and builds the instance
+({{cite afd_plugin/connectors/factory.py:49-68}}).</p>
+<x-code file="afd_plugin/connectors/factory.py" lines="38-47" caption="The lazy loader: import the module, check the subclass, return the class." />
+<p>Three connectors are registered at import time; an unknown name raises
+({{cite afd_plugin/connectors/factory.py:58-59}}, {{cite afd_plugin/connectors/factory.py:88-102}}).</p>
+
+<h2>Deep dive</h2>
+<x-deepdive title="The metadata objects at a glance">
+<p>The dataclasses split the control plane from the data plane.</p>
+<table>
+  <thead><tr><th>Object</th><th>Plane</th><th>Carries</th></tr></thead>
+  <tbody>
+    <tr><td><code>AFDDPMetadata</code></td><td>control</td><td>per-DP-rank token counts ({{cite afd_plugin/connectors/metadata.py:23-44}})</td></tr>
+    <tr><td><code>AFDControlPayload</code></td><td>control</td><td>per-stage DP metadata + flags ({{cite afd_plugin/connectors/metadata.py:135-139}})</td></tr>
+    <tr><td><code>AFDTransferMetadata</code></td><td>data</td><td>layer, stage, per-peer lengths ({{cite afd_plugin/connectors/metadata.py:188-190}})</td></tr>
+    <tr><td><code>AFDTransferContext</code></td><td>data</td><td>metadata + optional backend state ({{cite afd_plugin/connectors/metadata.py:257-258}})</td></tr>
+    <tr><td><code>AFDA2FTransferPayload</code></td><td>data</td><td>hidden states, context, optional logits and IDs ({{cite afd_plugin/connectors/metadata.py:279-282}})</td></tr>
+  </tbody>
+</table>
+<p><code>AFDTransferContext.states</code> defaults to <code>None</code> so the generated
+<code>__init__</code> stays traceable by <code>torch.compile</code>
+({{cite afd_plugin/connectors/metadata.py:244-249}}).</p>
+</x-deepdive>
+
+<h2>Related concepts</h2>
+<ul>
+  <li>{{link concepts/connector-contract}} — the ABC, the lifecycle and the factory in full.</li>
+  <li>{{link concepts/control-plane}} — how the control payload is published and received.</li>
+  <li>{{link concepts/wire-data}} — how the transfer metadata drives the fan-in and split.</li>
+  <li>{{link code/p2p-py}} — the GPU connector that implements the contract.</li>
+</ul>
+
+<x-quiz>
+  <x-q level="easy">Which file holds the shared metadata dataclasses?
+    <x-a><p><code>connectors/metadata.py</code>. It defines <code>AFDDPMetadata</code>,
+      <code>AFDControlPayload</code>, <code>AFDTransferMetadata</code> and the transfer payloads
+      ({{cite afd_plugin/connectors/metadata.py:23}}, {{cite afd_plugin/connectors/metadata.py:171}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">How does the factory load a connector class?
+    <x-a><p>Lazily. <code>register_connector</code> stores a loader that imports the module with
+      <code>importlib</code> and checks the subclass only when the name is first used
+      ({{cite afd_plugin/connectors/factory.py:38-47}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">What is <code>total_tokens</code>, and where is it checked?
+    <x-a><p>It is the sum of the per-peer <code>seq_lens</code>
+      ({{cite afd_plugin/connectors/metadata.py:198-200}}). <code>validate_tensor_shape</code> checks that a
+      tensor's leading dimension equals it ({{cite afd_plugin/connectors/metadata.py:230-231}}).</p></x-a>
+  </x-q>
+</x-quiz>

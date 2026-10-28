@@ -1,0 +1,179 @@
+---
+title: Data on the wire: tensors per layer and stage
+nav_title: Data on the wire
+level: Advanced
+prerequisites: concepts/connector-contract
+related: concepts/control-plane, concepts/moe-handoff, code/p2p-py
+summary: The data plane moves hidden states between the two roles once per layer and stage. This page shows the tensors that cross, the transfer metadata, the fan-in and split, and the custom ops.
+---
+<x-sentence>The {{term data-plane | data plane}} moves hidden-state tensors between the roles once per layer and {{term stage}}. The FFN rank fans in its peers, computes, and splits the output back.</x-sentence>
+
+<h2>The idea</h2>
+<p>For each layer and stage, the attention rank sends its hidden states to its FFN rank. The FFN rank may own
+more than one attention peer, so it concatenates the inputs along the token dimension, runs the feed-forward,
+then splits the output back and returns each slice to the rank that produced it.</p>
+<p>Each transfer carries a small metadata record: the layer index, the stage index and the per-peer token
+lengths. The token lengths set the expected tensor shape and the split sizes. The transfers go through custom
+ops, so they stay usable under <code>torch.compile</code> and CUDA graph capture.</p>
+<p><strong>An everyday comparison.</strong> Think of parcels with shipping labels. The label says how many
+boxes and for which address, so the depot can combine shipments and later separate them again. The comparison
+stops here: the "parcels" also carry optional extras next to the hidden states, the router logits and the
+token IDs, which only some models send.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b2_wire_data" alt="Two panels. Panel 1: for one layer and stage, the attention rank sends hidden_states [n, H], optional router_logits [n, E] when the gate runs on attention, and optional int32 input_ids [n] for DeepSeek-V4 hash MoE, in that wire order; the FFN rank receives, computes, and sends the FFN output [n, H] back. Panel 2: a 4A2F fan-in example with H=2048 inferred — A0 sends [8,2048] and A1 sends [8,2048], F0 concatenates to [16,2048] with seq_lens=[8,8], and splits the output back to [8,2048] for A0 and [8,2048] for A1." caption="Figure: hidden states cross A to F, the FFN output crosses back; one FFN rank fans in its peers and splits the output by the recorded sequence lengths." />
+<p>Read panel 1 as one exchange for one layer and stage. Read panel 2 as the fan-in when one FFN rank owns two
+attention peers.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: What the attention rank sends</h3>
+<p><code>send_attn_output</code> sends the hidden states first, then the optional router logits, then the
+optional token IDs ({{cite afd_plugin/connectors/gpu/p2p.py:323-390}}). The hidden states are a CUDA tensor of
+shape <code>(num_tokens, hidden_size)</code>; the hidden size comes from the model config
+({{cite afd_plugin/connectors/gpu/p2p.py:195-197}}).</p>
+<x-code file="afd_plugin/connectors/gpu/p2p.py" lines="346-370" highlight="347,369" caption="The shape check, then the optional router logits and int32 token IDs." />
+<p>The leading dimension must equal <code>total_tokens</code>, unless <code>torch.compile</code> is tracing
+({{cite afd_plugin/connectors/gpu/p2p.py:347-353}}). The token IDs must be a one-dimensional
+<code>int32</code> tensor ({{cite afd_plugin/connectors/gpu/p2p.py:363-370}}).</p>
+
+<h3>Step 2: The transfer metadata</h3>
+<p>Each transfer carries an <code>AFDTransferMetadata</code>: the layer index, the stage index and the
+per-peer sequence lengths ({{cite afd_plugin/connectors/metadata.py:188-190}}). The sum of the lengths is the
+expected leading dimension ({{cite afd_plugin/connectors/metadata.py:198-200}}).</p>
+<x-code file="afd_plugin/connectors/metadata.py" lines="198-200" caption="total_tokens is the sum of the per-peer sequence lengths." />
+<p>The shape check compares <code>shape[0]</code> with <code>total_tokens</code>
+({{cite afd_plugin/connectors/metadata.py:230-231}}).</p>
+
+<h3>Step 3: The FFN rank fans in its peers</h3>
+<p><code>recv_attn_output</code> receives one tensor from every attention peer in the subgroup, concatenates
+them along the token dimension, and records each peer's length in the returned metadata
+({{cite afd_plugin/connectors/gpu/p2p.py:428-552}}).</p>
+<x-code file="afd_plugin/connectors/gpu/p2p.py" lines="520-544" highlight="521,543" caption="Concatenate the peer tensors; record the per-peer sequence lengths." />
+<p>With one peer the single tensor is the whole input ({{cite afd_plugin/connectors/gpu/p2p.py:520-524}}). All
+of a step's receives run in one NCCL group, so the peers' transfers proceed together
+({{cite afd_plugin/connectors/gpu/p2p.py:514-519}}).</p>
+
+<h3>Step 4: The FFN rank splits the output back</h3>
+<p><code>send_ffn_output</code> splits the output along the token dimension by the recorded sequence lengths,
+then sends each slice to the attention rank that produced it
+({{cite afd_plugin/connectors/gpu/p2p.py:554-613}}).</p>
+<x-code file="afd_plugin/connectors/gpu/p2p.py" lines="601-613" caption="Split by the recorded lengths; send each slice to its peer." />
+<p>When the recorded lengths do not cover every peer, the split falls back to an even split, which raises if
+the tokens do not divide evenly ({{cite afd_plugin/connectors/gpu/p2p.py:590-599}}).</p>
+
+<h3>Step 5: The transfers are custom ops</h3>
+<p>The sends and receives are wrapped in four custom ops: <code>afd_p2p_send</code>,
+<code>afd_p2p_recv</code>, and the <code>_group</code> variants
+({{cite afd_plugin/connectors/gpu/p2p.py:979-1122}}). The wrapping keeps the transfers traceable by
+<code>torch.compile</code> and capturable by CUDA graphs
+({{cite afd_plugin/connectors/gpu/p2p.py:983-986}}). Each op runs on the current CUDA stream
+({{cite afd_plugin/connectors/gpu/p2p.py:1002-1006}}). The {{link code/p2p-py}} page reads the custom ops in
+full.</p>
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="Worked example: two peers into one FFN rank (4A2F)">
+<p>Take a 4A2F topology, so FFN rank 0 owns attention ranks A0 and A1
+({{cite afd_plugin/distributed/topology.py:136}}). The hidden size is
+<strong>2048</strong> for DeepSeek-V2-Lite; this value is <em>inferred</em> from the checkpoint config, not
+stored in either repository. Take one decode step with 8 tokens on A0 and 8 on A1, in <code>bf16</code>
+(inferred from the recipe).</p>
+<ul>
+  <li><strong>A0 sends:</strong> <code>hidden_states</code> of shape <code>[8, 2048]</code>, metadata
+      <code>seq_lens = [8]</code>.</li>
+  <li><strong>A1 sends:</strong> <code>hidden_states</code> of shape <code>[8, 2048]</code>, metadata
+      <code>seq_lens = [8]</code>.</li>
+  <li><strong>On the wire:</strong> each tensor is <code>8 &times; 2048 &times; 2 bytes = 32,768 bytes</code>,
+      per layer, per direction.</li>
+  <li><strong>F0 receives and concatenates:</strong> <code>[16, 2048]</code>, with
+      <code>seq_lens = [8, 8]</code> ({{cite afd_plugin/connectors/gpu/p2p.py:540-544}}).</li>
+  <li><strong>F0 computes and splits back:</strong> two slices of <code>[8, 2048]</code>; the first returns to
+      A0, the second to A1 ({{cite afd_plugin/connectors/gpu/p2p.py:601-613}}).</li>
+</ul>
+<p>The FFN rank derives the per-peer shapes from the DP metadata before it receives
+({{cite afd_plugin/connectors/gpu/p2p.py:776-807}}); see {{link concepts/control-plane}}.</p>
+</x-deepdive>
+
+<x-deepdive title="The two optional tensors">
+<p>Two tensors cross next to the hidden states, in this wire order: hidden states, then router logits, then
+token IDs ({{cite afd_plugin/connectors/gpu/p2p.py:336-338}}).</p>
+<table>
+  <thead>
+    <tr><th>Tensor</th><th>Shape / dtype</th><th>When it is sent</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>hidden_states</code></td><td><code>[n, hidden_size]</code>, model dtype</td><td>always</td></tr>
+    <tr><td><code>router_logits</code></td><td><code>[n, num_experts]</code></td><td>when the gate runs on the attention side ({{cite afd_plugin/v1/worker/ffn_model_runner.py:225-229}})</td></tr>
+    <tr><td><code>input_ids</code></td><td><code>int32 [n]</code></td><td>for the DeepSeek-V4 hash MoE ({{cite afd_plugin/connectors/gpu/p2p.py:210-214}})</td></tr>
+  </tbody>
+</table>
+<p>The FFN side asks for the router logits only when <code>compute_gate_on_attention</code> is set, through a
+routing spec ({{cite afd_plugin/v1/worker/ffn_model_runner.py:225-229}}). It asks for the token IDs only when
+the model needs them ({{cite afd_plugin/v1/worker/ffn_model_runner.py:221}}). The router logits width and
+dtype come from the model ({{cite afd_plugin/connectors/gpu/p2p.py:481-491}}). The {{link concepts/moe-handoff}}
+page reads the gate placement.</p>
+</x-deepdive>
+
+<x-deepdive title="Receive buffers and the current stream">
+<p>Each receive writes into a buffer. In eager mode the connector allocates a fresh tensor per receive. When
+CUDA graphs are on, the receive reuses a buffer preallocated during the control-plane update, so the
+allocation stays stable for capture and replay
+({{cite afd_plugin/connectors/gpu/p2p.py:472-477}},
+{{cite afd_plugin/connectors/gpu/p2p.py:911-936}}). The attention side's <code>recv_ffn_output</code> takes a
+preallocated <code>ref_tensor</code> for the same reason
+({{cite afd_plugin/connectors/gpu/p2p.py:392-426}}). The custom ops issue the transfers on the current CUDA
+stream, inside one NCCL group when there is more than one peer
+({{cite afd_plugin/connectors/gpu/p2p.py:1037-1070}}).</p>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<x-simplified><p>This page shows the GPU data plane. The NPU connectors move the same tensors with CAM
+operators; see {{link concepts/npu-overview}}. The page leaves out the backend transfer state the NPU
+connectors carry on the transfer context, and the graph key details, which the {{link concepts/cuda-graphs}}
+page covers.</p></x-simplified>
+<ul>
+  <li><strong>Shape mismatch.</strong> A hidden-state tensor whose leading dimension is not
+      <code>total_tokens</code> raises, unless <code>torch.compile</code> is tracing
+      ({{cite afd_plugin/connectors/gpu/p2p.py:347-353}}).</li>
+  <li><strong>An uneven split.</strong> When the recorded lengths do not cover every peer and the tokens do
+      not divide evenly, the split raises
+      ({{cite afd_plugin/connectors/gpu/p2p.py:590-599}}).</li>
+  <li><strong>A CPU tensor.</strong> The hidden states must be on the GPU; a CPU tensor is rejected
+      ({{cite afd_plugin/connectors/gpu/p2p.py:634-635}}).</li>
+  <li><strong>Wrong token-ID dtype.</strong> The token IDs must be <code>int32</code> and one-dimensional
+      ({{cite afd_plugin/connectors/gpu/p2p.py:363-370}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The two roles must agree on the shapes. The recorded sequence lengths are
+the only record of which tokens belong to which peer, so the FFN rank uses them to split the output back.</p>
+
+<x-quiz>
+  <x-q level="easy">What crosses from the attention rank to the FFN rank for one layer and stage?
+    <x-a><p>The hidden states <code>[n, hidden_size]</code>, then optional router logits and optional
+      <code>int32</code> token IDs, in that order
+      ({{cite afd_plugin/connectors/gpu/p2p.py:336-338}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">How does the FFN rank know how to split its output back?
+    <x-a><p>From the recorded sequence lengths. <code>recv_attn_output</code> records each peer's token length
+      ({{cite afd_plugin/connectors/gpu/p2p.py:540-544}}), and <code>send_ffn_output</code> splits by those
+      lengths ({{cite afd_plugin/connectors/gpu/p2p.py:590-613}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Why are the sends and receives wrapped in custom ops?
+    <x-a><p>So the transfers stay traceable by <code>torch.compile</code> and capturable by CUDA graphs
+      ({{cite afd_plugin/connectors/gpu/p2p.py:983-986}}). The connector registers four ops, with fake
+      implementations for tracing ({{cite afd_plugin/connectors/gpu/p2p.py:979-1122}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">When does the attention side send the <code>int32</code> token IDs?
+    <x-a><p>For the DeepSeek-V4 hash MoE, when the model asks for them
+      ({{cite afd_plugin/connectors/gpu/p2p.py:210-214}},
+      {{cite afd_plugin/v1/worker/ffn_model_runner.py:221}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">In 4A2F with 8 tokens on A0 and 8 on A1, what shape does F0 run the FFN on, and what does it
+    send back?
+    <x-a><p>F0 concatenates to <code>[16, 2048]</code> with <code>seq_lens = [8, 8]</code>
+      ({{cite afd_plugin/connectors/gpu/p2p.py:540-544}}), then splits the output into two
+      <code>[8, 2048]</code> slices, one per peer
+      ({{cite afd_plugin/connectors/gpu/p2p.py:601-613}}). The 2048 is inferred from the DeepSeek-V2-Lite
+      checkpoint.</p></x-a>
+  </x-q>
+</x-quiz>

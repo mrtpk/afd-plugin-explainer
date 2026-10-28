@@ -1,0 +1,163 @@
+---
+title: connectors/gpu/p2p.py: the GPU P2P connector
+nav_title: connectors/gpu/p2p.py
+level: Advanced
+prerequisites: concepts/connector-contract
+related: concepts/control-plane, concepts/wire-data, concepts/topology
+summary: The GPU connector moves hidden states with vLLM's NCCL wrapper. This page maps the class layout, the collective init, the four data calls, the control plane and the custom ops.
+---
+<x-sentence>The GPU {{term connector}} is <code>P2pNcclAFDConnector</code>. It moves hidden states with vLLM's {{term pynccl | PyNcclCommunicator}} over point-to-point NCCL.</x-sentence>
+
+<h2>Purpose</h2>
+<p>This file implements the connector contract for CUDA. It builds the {{term afd-world | AFD world}}, the
+per-subgroup communicators and the control-plane group, and moves tensors through four custom ops. The
+contract itself is on {{link concepts/connector-contract}}; this page reads the implementation.</p>
+<table>
+  <thead><tr><th>Item</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>File (lines, origin)</td><td><code>connectors/gpu/p2p.py</code> (1125); AFD-owned</td></tr>
+    <tr><td>Main classes</td><td><code>P2pNcclAFDConnector</code> ({{cite afd_plugin/connectors/gpu/p2p.py:124}}), <code>P2pNcclAFDControlPlane</code> ({{cite afd_plugin/connectors/gpu/p2p.py:724}})</td></tr>
+    <tr><td>Runs in</td><td>every CUDA attention and FFN worker; transfers on the current CUDA stream</td></tr>
+    <tr><td>Called by</td><td>the role runners, through the factory ({{cite afd_plugin/v1/worker/ffn_model_runner.py:80-85}})</td></tr>
+    <tr><td>Calls</td><td>vLLM's <code>PyNcclCommunicator</code> ({{cite vllm:vllm/distributed/device_communicators/pynccl.py:91}}), <code>StatelessProcessGroup</code>, and the AFD topology helpers</td></tr>
+    <tr><td>Not in this file</td><td>the ABC ({{cite afd_plugin/connectors/base.py:37}}), the metadata objects ({{cite afd_plugin/connectors/metadata.py:171}}), the NPU connectors</td></tr>
+  </tbody>
+</table>
+
+<h2>Where it sits</h2>
+<h3>Who calls it</h3>
+<p>The factory loads this module by name and builds the connector for a runner
+({{cite afd_plugin/connectors/factory.py:88-92}}). The runner then calls <code>init_afd_connector</code> once,
+the four data calls per layer and stage, and <code>close</code> at shutdown
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:108-109}}).</p>
+<h3>What it calls</h3>
+<p>The data transfers go through vLLM's <code>PyNcclCommunicator.send</code> and <code>recv</code>
+({{cite vllm:vllm/distributed/device_communicators/pynccl.py:91}}). The process groups come from the plugin's
+own helper ({{cite afd_plugin/distributed/afd_process_group.py:62-120}}) and the rank mapping from the
+topology module ({{cite afd_plugin/distributed/topology.py:118}}).</p>
+
+<h2>Key classes and functions</h2>
+<table>
+  <thead><tr><th>Name</th><th>Line</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td><code>P2pNcclAFDConnector</code></td><td>{{cite afd_plugin/connectors/gpu/p2p.py:124}}</td><td>the CUDA connector</td></tr>
+    <tr><td><code>parse_extra_config</code></td><td>{{cite afd_plugin/connectors/gpu/p2p.py:145-158}}</td><td>accepts no options; rejects a non-empty config</td></tr>
+    <tr><td><code>init_afd_connector</code></td><td>{{cite afd_plugin/connectors/gpu/p2p.py:245}}</td><td>the collective setup (three steps)</td></tr>
+    <tr><td><code>send_attn_output</code></td><td>{{cite afd_plugin/connectors/gpu/p2p.py:323}}</td><td>attention sends hidden states (+ optional extras)</td></tr>
+    <tr><td><code>recv_ffn_output</code></td><td>{{cite afd_plugin/connectors/gpu/p2p.py:392}}</td><td>attention receives its FFN slice</td></tr>
+    <tr><td><code>recv_attn_output</code></td><td>{{cite afd_plugin/connectors/gpu/p2p.py:428}}</td><td>FFN receives and concatenates its peers</td></tr>
+    <tr><td><code>send_ffn_output</code></td><td>{{cite afd_plugin/connectors/gpu/p2p.py:554}}</td><td>FFN splits and sends each slice back</td></tr>
+    <tr><td><code>P2pNcclAFDControlPlane</code></td><td>{{cite afd_plugin/connectors/gpu/p2p.py:724}}</td><td>the DP-metadata control plane</td></tr>
+    <tr><td><code>_register_p2p_custom_ops</code></td><td>{{cite afd_plugin/connectors/gpu/p2p.py:979}}</td><td>registers the four <code>afd_p2p_*</code> ops</td></tr>
+  </tbody>
+</table>
+
+<h2>Walk through the main methods</h2>
+
+<h3>init_afd_connector: the collective setup</h3>
+<p>This is a collective call: every attention and FFN rank must run it with matching host, port and rank counts
+({{cite afd_plugin/connectors/gpu/p2p.py:245-262}}). It does three things. First, it registers the custom ops
+and joins the AFD world group, rendezvoused at <code>tcp://host:port</code>
+({{cite afd_plugin/connectors/gpu/p2p.py:267-276}}).</p>
+<x-code file="afd_plugin/connectors/gpu/p2p.py" lines="269-276" caption="Step 1: the AFD world group, world size = ffn_size + attn_size." />
+<p>Second, it builds this rank's subgroup communicators over a prefix of the world's rendezvous store
+({{cite afd_plugin/connectors/gpu/p2p.py:278-304}}). It creates two
+<code>PyNcclCommunicator</code> instances, attention-to-FFN and FFN-to-attention, and registers each for the
+custom ops.</p>
+<x-code file="afd_plugin/connectors/gpu/p2p.py" lines="289-304" highlight="295,300" caption="Step 2: the subgroup StatelessProcessGroup and the two communicators." />
+<p>Third, on ranks that join the control plane, it creates the <code>"p2p"</code> group
+({{cite afd_plugin/connectors/gpu/p2p.py:306-314}}). The {{link concepts/topology}} page reads the world order
+and the group sizes.</p>
+
+<h3>The four data calls</h3>
+<p>The data path is four methods. The attention side calls two, the FFN side calls two.</p>
+<ul>
+  <li><code>send_attn_output</code> sends hidden states, then optional router logits and token IDs, to subgroup
+      rank 0 ({{cite afd_plugin/connectors/gpu/p2p.py:371-390}}).</li>
+  <li><code>recv_ffn_output</code> receives this rank's output slice into a preallocated
+      <code>ref_tensor</code> ({{cite afd_plugin/connectors/gpu/p2p.py:415-421}}).</li>
+  <li><code>recv_attn_output</code> receives every peer's tensor in one NCCL group, concatenates them, and
+      records each peer's length ({{cite afd_plugin/connectors/gpu/p2p.py:514-544}}).</li>
+  <li><code>send_ffn_output</code> splits the output by those lengths and sends each slice back
+      ({{cite afd_plugin/connectors/gpu/p2p.py:590-613}}).</li>
+</ul>
+<p>The {{link concepts/wire-data}} page reads the shapes, the fan-in and the split in full.</p>
+
+<h3>P2pNcclAFDControlPlane: the DP-metadata path</h3>
+<p>The connector owns one control-plane instance and exposes it as <code>control_plane</code>
+({{cite afd_plugin/connectors/gpu/p2p.py:222}}, {{cite afd_plugin/connectors/gpu/p2p.py:724-733}}). It has
+three methods: apply a payload locally, send one, receive one.</p>
+<x-code file="afd_plugin/connectors/gpu/p2p.py" lines="885-902" highlight="902" caption="recv_dp_metadata_list: an FFN rank reads from its mapped attention sender." />
+<p><code>update_state_from_dp_metadata</code> derives the wire-tensor shapes and preallocates the graph-mode
+buffers ({{cite afd_plugin/connectors/gpu/p2p.py:744-851}}); <code>send_dp_metadata_list</code> transmits only
+on the designated sender ranks ({{cite afd_plugin/connectors/gpu/p2p.py:870-883}}). The
+{{link concepts/control-plane}} page reads these.</p>
+
+<h3>_register_p2p_custom_ops: four ops, once per process</h3>
+<p>The module registers four custom ops: <code>afd_p2p_send</code>, <code>afd_p2p_recv</code>, and the
+<code>_group</code> variants ({{cite afd_plugin/connectors/gpu/p2p.py:979-1122}}). Each op wraps the NCCL
+send or receive on the current stream and has a fake implementation for tracing.</p>
+<x-code file="afd_plugin/connectors/gpu/p2p.py" lines="1089-1096" caption="An op already registered by another instance is reused, not re-defined." />
+<ol>
+  <li>Line 1089-1090. If the op is already on <code>torch.ops.vllm</code>, return; torch rejects a
+      re-definition.</li>
+  <li>Line 1091-1096. Otherwise register the op, its mutated args and its fake implementation.</li>
+  <li>Line 1122. Set the module flag so the registration runs once per process.</li>
+</ol>
+
+<h2>Deep dive</h2>
+<x-deepdive title="The process groups and communicators">
+<p>The connector owns three communication objects with different scopes.</p>
+<table>
+  <thead><tr><th>Object</th><th>Scope</th><th>Built at</th></tr></thead>
+  <tbody>
+    <tr><td>AFD world group (<code>"afd"</code>)</td><td>all ranks; the rendezvous store</td><td>{{cite afd_plugin/connectors/gpu/p2p.py:269-276}}</td></tr>
+    <tr><td>subgroup communicators (a2e, e2a)</td><td>one FFN rank + its attention peers</td><td>{{cite afd_plugin/connectors/gpu/p2p.py:289-304}}</td></tr>
+    <tr><td>control-plane group (<code>"p2p"</code>)</td><td>FFN ranks + first <code>min_size</code> attention ranks</td><td>{{cite afd_plugin/connectors/gpu/p2p.py:306-314}}</td></tr>
+  </tbody>
+</table>
+<p>The subgroup communicators are built while the AFD world is the default process group, so the stateless
+group reuses the world's store instead of opening a second one
+({{cite afd_plugin/connectors/gpu/p2p.py:278-288}}). The custom ops look the communicators up by integer id,
+because an op cannot capture a Python object ({{cite afd_plugin/connectors/gpu/p2p.py:965-976}}).</p>
+</x-deepdive>
+
+<x-deepdive title="Error paths">
+<table>
+  <thead><tr><th>Condition</th><th>Result</th><th>Line</th></tr></thead>
+  <tbody>
+    <tr><td>a non-empty <code>connector_extra_config</code></td><td><code>ValueError</code></td><td>{{cite afd_plugin/connectors/gpu/p2p.py:154-157}}</td></tr>
+    <tr><td>hidden-state shape != <code>total_tokens</code> (not compiling)</td><td><code>ValueError</code></td><td>{{cite afd_plugin/connectors/gpu/p2p.py:347-353}}</td></tr>
+    <tr><td>a CPU hidden-state tensor</td><td><code>ValueError</code></td><td>{{cite afd_plugin/connectors/gpu/p2p.py:634-635}}</td></tr>
+    <tr><td>the connector not initialized</td><td><code>RuntimeError</code></td><td>{{cite afd_plugin/connectors/gpu/p2p.py:628-629}}</td></tr>
+    <tr><td>a control-plane receive without the <code>"p2p"</code> group</td><td><code>RuntimeError</code></td><td>{{cite afd_plugin/connectors/gpu/p2p.py:899-900}}</td></tr>
+  </tbody>
+</table>
+</x-deepdive>
+
+<h2>Related concepts</h2>
+<ul>
+  <li>{{link concepts/connector-contract}} — the contract this file implements.</li>
+  <li>{{link concepts/topology}} — the world order and the group sizes.</li>
+  <li>{{link concepts/control-plane}} — the DP-metadata path.</li>
+  <li>{{link concepts/wire-data}} — the data-plane shapes and the fan-in.</li>
+</ul>
+
+<x-quiz>
+  <x-q level="easy">Which vLLM class moves the tensors?
+    <x-a><p><code>PyNcclCommunicator</code>, vLLM's NCCL wrapper
+      ({{cite vllm:vllm/distributed/device_communicators/pynccl.py:91}}). The connector wraps its
+      <code>send</code> and <code>recv</code> in custom ops.</p></x-a>
+  </x-q>
+  <x-q level="medium">What three groups does <code>init_afd_connector</code> set up?
+    <x-a><p>The AFD world group ({{cite afd_plugin/connectors/gpu/p2p.py:269-276}}), the per-subgroup
+      communicators ({{cite afd_plugin/connectors/gpu/p2p.py:289-304}}), and the control-plane
+      <code>"p2p"</code> group on ranks that join it
+      ({{cite afd_plugin/connectors/gpu/p2p.py:306-314}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">Why does the op registration check <code>hasattr(torch.ops.vllm, op_name)</code> first?
+    <x-a><p>Because torch keeps the op in a process-global registry. After a module reload, the module flag can
+      be <code>False</code> while the op is still defined, so re-defining it would fail; the code reuses the
+      existing op instead ({{cite afd_plugin/connectors/gpu/p2p.py:1089-1096}}).</p></x-a>
+  </x-q>
+</x-quiz>

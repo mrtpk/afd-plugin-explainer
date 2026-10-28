@@ -1,0 +1,194 @@
+---
+title: Attention and FFN roles: what each server owns
+nav_title: Attention and FFN roles
+level: Intermediate
+prerequisites: learn/what-is-afd
+related: concepts/topology, concepts/connector-contract, concepts/ffn-runtime
+summary: AFD runs the attention part and the FFN part as two server processes. This page shows what each role owns, and why the FFN side has no scheduler, no KV cache and no sampler.
+---
+<x-sentence>{{term afd}} runs one model as two servers. The {{term attention-role | attention role}} keeps vLLM's front end; the {{term ffn-role | FFN role}} is a connector-driven loop.</x-sentence>
+
+<h2>The idea</h2>
+<p>A normal vLLM server owns the whole request path: the API server, the scheduler, the KV cache, the model
+and the sampler. AFD keeps all of that on the {{term attention-server | attention server}}. The
+{{term ffn-server | FFN server}} is different. It has no API server, no scheduler and no KV cache. A
+{{term connector}} loop drives it: it waits for work, runs the feed-forward and MoE experts, and sends the
+result back.</p>
+<p>Each side also owns a different part of every decoder layer. The attention server builds the real attention
+module and sends its output to the FFN side. The FFN server builds the real experts and drops the attention
+module.</p>
+<p><strong>An everyday comparison.</strong> Think of a kitchen with a front counter. The counter takes the
+order, tracks the bill and hands finished plates to the customer. The cooks only cook what the counter passes
+through. The comparison stops here: the FFN server is not a separate service. It runs part of the same model's
+forward pass, once per layer, for every step.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b2_roles" alt="Two panels. Panel 1: two boxes side by side. The attention server box (blue) lists API server, scheduler, KV cache, sampler, native self_attn, and mlp replaced by RemoteFFNProxy or remote experts. The FFN server box (emerald) lists no API server, no scheduler, no KV cache (get_kv_cache_spec returns empty), no sampler (sample_tokens raises), self_attn replaced by PPMissingLayer, and native MoE/MLP experts plus a loop. Panel 2: a native decoder layer box in the centre splits by role; the attention role keeps native self_attn and a remote mlp, the FFN role drops attention and keeps the native experts." caption="Figure: the attention server keeps vLLM's front end; the FFN server drops the scheduler, KV cache and sampler and runs a connector loop." />
+<p>Read panel 1 as a comparison of what each server owns. Read panel 2 as the split of one decoder layer: the
+same layer is built with different modules on each side.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: Two workers, two runners</h3>
+<p>AFD does not register its role workers through a vLLM API. A patch rewrites
+<code>parallel_config.worker_cls</code> when it is <code>"auto"</code>; see {{link concepts/worker-selection}}.
+Each role worker then swaps in its own model runner inside <code>init_device</code>
+({{cite afd_plugin/v1/worker/attention_worker.py:82-87}},
+{{cite afd_plugin/v1/worker/ffn_worker.py:93-98}}).</p>
+<table>
+  <thead>
+    <tr><th>Role</th><th>Worker class</th><th>Runner class</th><th>Owns</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>attention</td>
+      <td><code>AFDAttentionWorker</code> ({{cite afd_plugin/v1/worker/attention_worker.py:22}})</td>
+      <td><code>AFDAttentionModelRunnerV2</code> ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:358}})</td>
+      <td>API server, scheduler, KV cache, sampler, native <code>self_attn</code>, remote FFN proxy</td>
+    </tr>
+    <tr>
+      <td>FFN</td>
+      <td><code>AFDFFNWorker</code> ({{cite afd_plugin/v1/worker/ffn_worker.py:32}})</td>
+      <td><code>GPUFFNModelRunner</code> ({{cite afd_plugin/v1/worker/ffn_model_runner.py:52}})</td>
+      <td>native MoE / MLP experts, the connector server loop</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Step 2: The FFN EngineCore returns early</h3>
+<p>A patch on <code>EngineCore.__init__</code> checks the role. For an FFN config, it builds the model
+executor and then returns, before the KV cache and the scheduler are set up
+({{cite afd_plugin/compat/patches/engine_core.py:59-68}}).</p>
+<x-code file="afd_plugin/compat/patches/engine_core.py" lines="56-69" highlight="59,68" caption="The FFN EngineCore stops after the executor is built." />
+<p>The FFN EngineCore sets the KV block counts to zero and installs a no-op scheduler. The no-op scheduler is
+not <code>None</code>, because a native readiness handshake calls a method on it
+({{cite afd_plugin/compat/patches/engine_core.py:605}},
+{{cite afd_plugin/compat/patches/engine_core.py:608-614}}).</p>
+
+<h3>Step 3: The FFN worker has no KV cache and does not sample</h3>
+<p>The FFN worker reports an empty KV cache spec, so vLLM allocates no KV blocks for it
+({{cite afd_plugin/v1/worker/ffn_worker.py:102-105}}). The FFN runner repeats this
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:147-148}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_worker.py" lines="102-105" caption="The FFN worker allocates no KV cache." />
+<p>Two methods guard against the native scheduler path. The scheduler-driven
+<code>execute_model</code> raises, and the FFN runner's <code>sample_tokens</code> raises
+({{cite afd_plugin/v1/worker/ffn_worker.py:122-131}},
+{{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_worker.py" lines="122-131" highlight="128" caption="Scheduler-driven FFN execution fails fast." />
+
+<h3>Step 4: Each role builds half of a decoder layer</h3>
+<p>The model wrapper is role-aware. <code>AFDDeepseekV2DecoderLayer</code> reads the role, then builds only
+the modules that role owns ({{cite afd_plugin/model_executor/models/deepseek_v2.py:383-396}}). On the
+attention role it builds the native attention module
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:474-491}}) and replaces the feed-forward:</p>
+<ul>
+  <li>a dense layer becomes a {{term remote-ffn-proxy | RemoteFFNProxy}}
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:516-517}});</li>
+  <li>an MoE layer becomes an <code>AFDDeepseekV2RemoteExpertsMoE</code> shell
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:493-500}}).</li>
+</ul>
+<p>On the FFN role it drops attention (a <code>PPMissingLayer</code>) and keeps the native experts
+({{cite afd_plugin/model_executor/models/deepseek_v2.py:520}},
+{{cite afd_plugin/model_executor/models/deepseek_v2.py:538-559}}). The {{link concepts/model-wrappers}} page
+reads this split in full.</p>
+
+<h3>Step 5: Where requests go, and the start order</h3>
+<p>Requests go only to the attention API server. The two servers may start in either order
+({{cite README.md:258-260}}).</p>
+<x-code file="README.md" lines="258-260" lang="none" caption="From the README." />
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="What each side owns, line by line">
+<p>The table maps each responsibility to the line that proves it.</p>
+<table>
+  <thead>
+    <tr><th>Part</th><th>Attention server</th><th>FFN server</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>API server</td><td>yes (native vLLM front end)</td><td>no: requests never arrive ({{cite README.md:258-260}})</td></tr>
+    <tr><td>scheduler</td><td>yes (native)</td><td>no-op stand-in ({{cite afd_plugin/compat/patches/engine_core.py:614}})</td></tr>
+    <tr><td>KV cache</td><td>yes (native, per layer)</td><td>none ({{cite afd_plugin/v1/worker/ffn_worker.py:102-105}})</td></tr>
+    <tr><td>sampler / logits</td><td>native, every step ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:582-594}})</td><td>raises ({{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}})</td></tr>
+    <tr><td>attention module</td><td>native <code>self_attn</code> ({{cite afd_plugin/model_executor/models/deepseek_v2.py:474-491}})</td><td><code>PPMissingLayer</code> ({{cite afd_plugin/model_executor/models/deepseek_v2.py:520}})</td></tr>
+    <tr><td>feed-forward / experts</td><td>remote proxy ({{cite afd_plugin/model_executor/models/deepseek_v2.py:516-517}})</td><td>native MoE / MLP ({{cite afd_plugin/model_executor/models/deepseek_v2.py:538-559}})</td></tr>
+    <tr><td>what drives a step</td><td>the vLLM scheduler</td><td>the connector loop ({{cite afd_plugin/v1/worker/ffn_worker.py:160-196}})</td></tr>
+  </tbody>
+</table>
+<p>The attention side keeps logits and sampling because only it holds the whole token state and the KV cache.
+The sampling runs once per step, after the last layer, on every step
+({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:582-594}}).</p>
+</x-deepdive>
+
+<x-deepdive title="The FFN server loop">
+<p>The FFN worker does not wait for the scheduler. After the connector is initialized, it starts a daemon
+thread that runs the {{term ffn-server-loop | FFN server loop}}
+({{cite afd_plugin/v1/worker/ffn_worker.py:107-113}},
+{{cite afd_plugin/v1/worker/ffn_worker.py:133-158}}). The loop body runs one step at a time:</p>
+<ol>
+  <li>If the connector has no control plane, raise. GPU FFN needs a control-plane-driven connector
+      ({{cite afd_plugin/v1/worker/ffn_worker.py:169-174}}).</li>
+  <li>Receive one DP metadata payload for the step
+      ({{cite afd_plugin/v1/worker/ffn_worker.py:176}}).</li>
+  <li>Run <code>capture_model</code> for a warm-up or capture step, else <code>execute_model</code>
+      ({{cite afd_plugin/v1/worker/ffn_worker.py:182-196}}).</li>
+</ol>
+<p>The {{link concepts/ffn-runtime}} page reads the loop and the per-layer forward in full. The
+{{link concepts/control-plane}} page reads the DP metadata payload.</p>
+</x-deepdive>
+
+<x-deepdive title="Start order and collective init">
+<p>The README says the two servers may start in either order ({{cite README.md:258-260}}). The order does not
+matter because the connector setup is a collective rendezvous. Every attention and FFN rank must call
+<code>init_afd_connector</code> ({{cite afd_plugin/connectors/base.py:124}}); the first ranks wait at the
+rendezvous until the rest arrive ({{cite afd_plugin/connectors/gpu/p2p.py:245-262}}). The FFN worker builds
+and initializes its connector inside <code>initialize_from_config</code>, then starts the loop
+({{cite afd_plugin/v1/worker/ffn_worker.py:107-113}}).</p>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<x-simplified><p>This page shows the GPU (CUDA) role split. The NPU variant uses the same role idea with a
+different transport; see {{link concepts/npu-overview}}. The page also folds the metadata provider and the
+DBO stages; the {{link concepts/attention-runtime}} and {{link concepts/ffn-runtime}} pages give those.</p></x-simplified>
+<ul>
+  <li><strong>A request sent to the FFN server.</strong> The FFN server has no API server, so there is
+      nothing to answer it. Send requests only to the attention API server
+      ({{cite README.md:258-260}}).</li>
+  <li><strong>The scheduler reaches the FFN worker.</strong> A scheduler-driven
+      <code>execute_model</code> on the FFN worker raises at once
+      ({{cite afd_plugin/v1/worker/ffn_worker.py:122-131}}).</li>
+  <li><strong>A connector with no control plane on GPU.</strong> The GPU FFN loop needs a control-plane-driven
+      connector and raises for one that sets <code>control_plane = None</code>
+      ({{cite afd_plugin/v1/worker/ffn_worker.py:169-174}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The two servers do very different work. If you treat the FFN server like a
+normal vLLM server, nothing schedules its work and no token comes back.</p>
+
+<x-quiz>
+  <x-q level="easy">Which three parts does the FFN server not have?
+    <x-a><p>No API server, no scheduler and no KV cache. Its EngineCore returns after the executor is built
+      ({{cite afd_plugin/compat/patches/engine_core.py:59-68}}), and the worker reports an empty KV cache spec
+      ({{cite afd_plugin/v1/worker/ffn_worker.py:102-105}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">Which server samples the next token?
+    <x-a><p>The attention server. Its runner wraps native sampling, which runs every step
+      ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:582-594}}). The FFN runner's
+      <code>sample_tokens</code> raises ({{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">On the FFN role, what replaces the attention module of a decoder layer?
+    <x-a><p>A <code>PPMissingLayer</code>: the FFN role builds no attention
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:520}}). It keeps the native experts instead
+      ({{cite afd_plugin/model_executor/models/deepseek_v2.py:538-559}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">The two servers can start in either order. Why is that safe?
+    <x-a><p>Connector setup is a collective rendezvous. Every rank calls <code>init_afd_connector</code>
+      ({{cite afd_plugin/connectors/base.py:124}}) and the early ranks wait at
+      <code>tcp://host:port</code> for the rest ({{cite afd_plugin/connectors/gpu/p2p.py:245-262}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">What drives one FFN step, if not the scheduler?
+    <x-a><p>The connector loop. It receives one DP metadata payload per step
+      ({{cite afd_plugin/v1/worker/ffn_worker.py:176}}), then calls <code>execute_model</code> or
+      <code>capture_model</code> ({{cite afd_plugin/v1/worker/ffn_worker.py:182-196}}). The loop is a daemon
+      thread started after connector init ({{cite afd_plugin/v1/worker/ffn_worker.py:133-158}}).</p></x-a>
+  </x-q>
+</x-quiz>

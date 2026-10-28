@@ -1,0 +1,11 @@
+{
+  "_about": "Batch B2 terms (concepts/roles, topology, control-plane, wire-data, code/connectors-core, code/p2p-py). Owner: writer B2. Reuse ids from core.json, s1.json, s2.json and b1.json; do not redefine them.",
+
+  "afd-world": {
+    "term": "AFD world",
+    "short": "The connector's process group across both roles. The P2P connector orders it [F0..A0..]: FFN ranks first, then attention ranks.",
+    "long": "The GPU connector creates it as the <code>\"afd\"</code> NCCL group with world size <code>ffn_size + attention_size</code> ({{cite afd_plugin/connectors/gpu/p2p.py:269-276}}).",
+    "aliases": ["AFD NCCL world", "afd world", "AFD world group"],
+    "page": "concepts/topology"
+  }
+}

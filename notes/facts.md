@@ -88,3 +88,13 @@ Paths without a prefix are in afd-plugin; `vllm:` paths are in vLLM.
 - All four patch modules have an install gate (is_target_vllm_compatible): config_validation.py:235, engine_core.py tail, async_dp_forward_context.py:207, async_dp_engine.py :424 returns False without patching. On a non-matching non-dev vLLM, no patch installs, worker_cls is never rewritten, and AFD does not take effect; register_afd still registers models, routing strategy and the DBO op. [FC]
 - config_validation.py:236, :243 hasattr guards save each original once; the assignment :259-260 runs once per process because module import is cached. [FC]
 - Module line counts (wc -l): config.py 370, config_utils.py 75, envs.py 27, validation.py 388. [FC]
+
+## Added after B2 (2026-10-28)
+- Data plane vs control plane routes DIFFER. Data-plane subgroup of attention rank a = a*F//A, a contiguous block (topology.py:136, :108-115); roster (ffn_rank, attn_peers...) with the FFN rank at subgroup rank 0 (:153-161). DP-metadata senders = first min_size attention ranks; each sends to FFN ranks role_rank, role_rank+min_size, ... < F (:164-170); min_size = min(F, A) = F under A >= F. 4A2F: data F0 {A0,A1}, F1 {A2,A3}; DP metadata only A0→F0, A1→F1. 3A2F: F0 {A0,A1}, F1 {A2} (supervisor checked in the mapper). [W]
+- World order: FFN world_rank = role_rank; attention world_rank = ffn_size + role_rank (topology.py:135, :143). role_rank = (dp_rank*pcp + pcp_rank)*tp + tp_rank (:92); out of range raises (:99-104). [W]
+- p2p.py init_afd_connector :245-316: world group "afd", size ffn+attn, timeout afd_process_group_timeout_s (default 120) (:269-276); control group "p2p", size ffn+min_size, fixed 30-min timeout (:306-314); subgroup StatelessProcessGroup via PrefixStore, 300 s (:278-304, :288). FFN recv src = p2p_rank % min_size + ffn_size (:902). [W]
+- send_attn_output wire order: hidden_states, router_logits (if any), input_ids (if any) (p2p.py:336-338, :371-390); input_ids int32 1-D (:363-370), DeepSeek-V4 hash MoE only (:210). recv_attn_output concat on dim 0 + per-peer seq_lens (:520-544), one NCCL group (:514-519). send_ffn_output split by seq_lens; even-split fallback raises if not divisible (:590-613). [W]
+- Four custom ops afd_p2p_send/recv/send_group/recv_group, registered once per process, reused if present (p2p.py:979-1122, :1089-1096); current CUDA stream (:1002-1006). [W]
+- FFN EngineCore _initialize_ffn_engine_core: num_gpu_blocks = 0 (engine_core.py:605), installs _AFDFFNNoopScheduler (not None) for a native readiness handshake (:608-614). [W]
+- Line counts: base.py 310, factory.py 105, metadata.py 438, gpu/p2p.py 1125, topology.py 193, afd_process_group.py 127. [W]
+- Glossary: core.json "step" added by the supervisor (vllm:vllm/v1/engine/core.py:589-601). [S]

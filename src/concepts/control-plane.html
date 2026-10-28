@@ -1,0 +1,176 @@
+---
+title: The control plane: DP metadata once per step
+nav_title: The control plane
+level: Advanced
+prerequisites: concepts/connector-contract
+related: concepts/wire-data, concepts/topology, code/connectors-core
+summary: Before each layer loop, the attention side sends per-stage token counts to the FFN side. This page shows what the control plane carries, both publish paths, the wire format and the receive side.
+---
+<x-sentence>The {{term control-plane | control plane}} sends {{term dp-metadata | DP metadata}} from the attention side to the FFN side. It runs once per step, before the layer loop.</x-sentence>
+
+<h2>The idea</h2>
+<p>The FFN side must know the token count of each {{term stage}} before it receives any hidden states. The
+sizes set the shapes of the wire tensors and the receive buffers. The attention side sends these counts once
+per step, before the layer loop, over the control plane. This is separate from the
+{{term data-plane | data plane}}, which moves the hidden states once per layer and stage.</p>
+<p>The payload is small: the per-DP-rank token counts, plus a few flags for graph capture and warm-up. It
+travels as JSON over a dedicated process group.</p>
+<p><strong>An everyday comparison.</strong> Think of a manifest sent ahead of a convoy of trucks. The manifest
+lists how many boxes each truck carries, so the warehouse can set up the right number of bays before the
+trucks arrive. The comparison stops here: one connector, the async NPU one, carries no manifest at all; its
+receive loop sizes each transfer as it comes.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b2_control_plane" alt="Two panels. Panel 1: a timeline with three boxes — control plane (DP metadata, once per step, before the layer loop), the data plane layer loop (hidden states, once per layer and stage), and sampling (once per step). Panel 2: the attention publish, with two paths (DBO prepare seam and non-DBO forward context), feeds an AFDControlPayload JSON object with num_tokens_across_dp and flags, which goes over a separate NCCL control group named p2p to the FFN server loop, which calls recv_dp_metadata_list once per step and then update_state_from_dp_metadata to derive wire shapes." caption="Figure: the control plane runs once per step before the layer loop; the FFN loop receives one payload per step and derives the wire shapes." />
+<p>Read panel 1 as the per-step order: control plane first, then the data-plane layer loop, then sampling. Read
+panel 2 as the path of one payload from the attention side to the FFN side.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: Once per step, before the layers</h3>
+<p>The control plane runs once per step, before the layer loop. On the attention side the publish happens
+during input preparation, before the model forward
+({{cite afd_plugin/v1/worker/attention_metadata.py:115-116}}). On the FFN side the loop receives one payload
+per step, before it runs any layer ({{cite afd_plugin/v1/worker/ffn_worker.py:176}}). The data plane then
+runs once per layer and stage inside the forward.</p>
+
+<h3>Step 2: What the payload carries</h3>
+<p>The payload is an <code>AFDControlPayload</code>: a map from stage index to DP metadata, plus the graph and
+warm-up flags ({{cite afd_plugin/connectors/metadata.py:107-150}}).</p>
+<x-code file="afd_plugin/connectors/metadata.py" lines="135-139" caption="The payload fields: per-stage DP metadata and the flags." />
+<p>Each stage's DP metadata is an <code>AFDDPMetadata</code>. Its one required field is the per-DP-rank token
+count, stored as an <code>int32</code> CPU tensor
+({{cite afd_plugin/connectors/metadata.py:23-44}}). This plugin-owned type keeps the wire format decoupled
+from vLLM's own DP metadata object ({{cite afd_plugin/connectors/metadata.py:320-328}}).</p>
+
+<h3>Step 3: The two attention publish paths</h3>
+<p>The attention runner publishes the DP metadata on one of two paths, both once per step before the layer
+loop. For a {{term dbo | DBO}} step, a prepare seam publishes one complete payload before the microbatch
+threads start ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:153-157}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_model_runner_v2.py" lines="153-157" highlight="156,157" caption="The DBO prepare seam publishes before the threads start." />
+<p>For a non-DBO step, the metadata is attached to the forward context and sent there
+({{cite afd_plugin/v1/worker/attention_metadata.py:252-257}}). Both paths end in the same call, which updates
+the local state and then sends ({{cite afd_plugin/v1/worker/attention_metadata.py:115-116}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_metadata.py" lines="115-116" caption="Publish = apply locally, then send to the FFN side." />
+
+<h3>Step 4: The wire format and the separate group</h3>
+<p>The payload is encoded as compact JSON: only the per-stage token counts and the flags
+({{cite afd_plugin/connectors/metadata.py:320-346}}). The send is two messages: a <code>long</code> size
+tensor, then a <code>uint8</code> byte tensor ({{cite afd_plugin/connectors/metadata.py:376-401}}).</p>
+<p>The GPU connector carries this over a dedicated NCCL process group, the <code>"p2p"</code> group, not the
+per-subgroup data communicators. The connector owns the group; the control plane uses it
+({{cite afd_plugin/connectors/gpu/p2p.py:724-733}},
+{{cite afd_plugin/connectors/gpu/p2p.py:853-883}}). Only the designated sender ranks transmit; the rest
+no-op ({{cite afd_plugin/connectors/gpu/p2p.py:870-875}}).</p>
+
+<h3>Step 5: The FFN side receives and derives the shapes</h3>
+<p>The FFN loop blocks on <code>recv_dp_metadata_list</code> until its mapped attention sender transmits
+({{cite afd_plugin/connectors/gpu/p2p.py:885-908}}). The FFN runner then calls
+<code>update_state_from_dp_metadata</code> once per step, before the layer loop
+({{cite afd_plugin/v1/worker/ffn_model_runner.py:194-203}}).</p>
+<x-code file="afd_plugin/v1/worker/ffn_model_runner.py" lines="194-203" caption="The FFN runner applies the payload before the layer loop." />
+<p><code>update_state_from_dp_metadata</code> derives the expected wire-tensor shape for each stage and, in
+graph mode, preallocates the receive buffers so capture and replay reuse stable addresses
+({{cite afd_plugin/connectors/gpu/p2p.py:744-851}}).</p>
+
+<h3>Step 6: The async NPU connector has no control plane</h3>
+<p>One connector sets <code>control_plane = None</code>: the async NPU connector
+({{cite afd_plugin/connectors/npu/async_cam.py:283}}). It has no control plane; its receive loop drives the
+FFN side instead. See {{link concepts/npu-overview}}.</p>
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="The wire format, field by field">
+<p><code>encode_control_payload</code> writes compact JSON with sorted keys
+({{cite afd_plugin/connectors/metadata.py:320-346}}). For one stage the fields are:</p>
+<table>
+  <thead>
+    <tr><th>Field</th><th>Type on the wire</th><th>Meaning</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>num_tokens_across_dp_cpu</code></td><td>list of int</td><td>tokens per DP rank for this stage</td></tr>
+    <tr><td><code>max_tokens_across_dp_cpu</code></td><td>int</td><td>the max over the list</td></tr>
+    <tr><td><code>is_graph_capturing</code></td><td>bool</td><td>the attention side is capturing a graph</td></tr>
+    <tr><td><code>is_warmup</code></td><td>bool</td><td>a warm-up step, not a real serving step</td></tr>
+    <tr><td><code>is_graph_replaying</code></td><td>bool</td><td>the attention side is replaying a captured graph</td></tr>
+    <tr><td><code>is_profile</code></td><td>bool</td><td>an initial memory-profile forward</td></tr>
+  </tbody>
+</table>
+<p>The transfer is two <code>torch.distributed</code> sends: a one-element <code>long</code> size tensor, then
+the <code>uint8</code> object tensor, both staged on the device the caller chooses
+({{cite afd_plugin/connectors/metadata.py:389-401}}). The receive reads the size first, then the bytes, and
+raises when the two messages come from different ranks
+({{cite afd_plugin/connectors/metadata.py:403-420}}).</p>
+</x-deepdive>
+
+<x-deepdive title="How update_state derives the shapes">
+<p>On the FFN side, <code>update_state_from_dp_metadata</code> stores the payload, then builds one
+<code>_TensorMetadata</code> per stage ({{cite afd_plugin/connectors/gpu/p2p.py:766-818}}). It reads each
+attention peer's token count from the DP metadata, then multiplies by the hidden size:</p>
+<ul>
+  <li>For an FFN rank, one entry per attention peer in the subgroup, plus the concatenated total
+      ({{cite afd_plugin/connectors/gpu/p2p.py:776-807}}).</li>
+  <li>When CUDA graphs are on and the model is not eager, it preallocates the receive buffers, but only while
+      capturing ({{cite afd_plugin/connectors/gpu/p2p.py:820-840}}).</li>
+</ul>
+<p>A per-DP count is expanded across its TP peers when the DP metadata covers fewer ranks than the role size
+({{cite afd_plugin/connectors/gpu/p2p.py:939-962}}). The {{link concepts/wire-data}} page reads the shapes in
+full.</p>
+</x-deepdive>
+
+<x-deepdive title="Why one sender per FFN rank is enough">
+<p>The control-plane group is the FFN ranks plus the first <code>min_size</code> attention ranks
+({{cite afd_plugin/distributed/topology.py:42-43}}). Each FFN rank <code>f</code> receives from the attention
+rank at <code>p2p_rank % min_size + ffn_size</code>, which resolves to attention role rank <code>f</code>
+({{cite afd_plugin/connectors/gpu/p2p.py:902}}). The DP metadata is the same per-DP-rank token list for every
+rank, so one sender per FFN rank carries all the FFN rank needs. The {{link concepts/topology}} page shows
+which ranks are senders.</p>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<x-simplified><p>This page shows the GPU control plane. The sync NPU connector has a control plane too; the
+async NPU connector has none ({{cite afd_plugin/connectors/npu/async_cam.py:283}}). See
+{{link concepts/npu-overview}}. The page leaves out the graph lifecycle details, which the
+{{link concepts/cuda-graphs}} page covers.</p></x-simplified>
+<ul>
+  <li><strong>A GPU connector with no control plane.</strong> The GPU FFN loop needs a control-plane-driven
+      connector and raises for one that sets <code>control_plane = None</code>
+      ({{cite afd_plugin/v1/worker/ffn_worker.py:169-174}}).</li>
+  <li><strong>Fragments from different ranks.</strong> The receive raises if the size message and the byte
+      message come from different ranks ({{cite afd_plugin/connectors/metadata.py:418-419}}).</li>
+  <li><strong>A stall before the first transfer.</strong> The FFN loop blocks on the control plane each step
+      ({{cite afd_plugin/connectors/gpu/p2p.py:885-908}}). If the attention side never publishes, the FFN
+      loop waits.</li>
+</ul>
+<p><strong>Why it matters.</strong> The DP metadata sets the wire shapes. Without it, the FFN side cannot size
+its receive buffers, and the per-layer transfers cannot start.</p>
+
+<x-quiz>
+  <x-q level="easy">How often does the control plane run, compared with the data plane?
+    <x-a><p>The control plane runs once per step, before the layer loop
+      ({{cite afd_plugin/v1/worker/attention_metadata.py:115-116}},
+      {{cite afd_plugin/v1/worker/ffn_worker.py:176}}). The data plane runs once per layer and stage.</p></x-a>
+  </x-q>
+  <x-q level="easy">What is the main content of the payload?
+    <x-a><p>The per-DP-rank token counts for each stage, as an <code>int32</code> tensor, plus graph and
+      warm-up flags ({{cite afd_plugin/connectors/metadata.py:23-44}},
+      {{cite afd_plugin/connectors/metadata.py:135-139}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">The attention side has two publish paths. What are they?
+    <x-a><p>The DBO prepare seam, which publishes before the microbatch threads start
+      ({{cite afd_plugin/v1/worker/attention_model_runner_v2.py:153-157}}), and the non-DBO forward-context
+      path ({{cite afd_plugin/v1/worker/attention_metadata.py:252-257}}). Both end in the same
+      apply-then-send call ({{cite afd_plugin/v1/worker/attention_metadata.py:115-116}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Which connector has no control plane, and what drives its FFN side then?
+    <x-a><p>The async NPU connector, <code>CAMAsyncAFDConnector</code>
+      ({{cite afd_plugin/connectors/npu/async_cam.py:283}}). With no control plane, its receive loop drives
+      the FFN side ({{cite afd_plugin/connectors/base.py:56-60}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">On the FFN side, what does <code>update_state_from_dp_metadata</code> do with the payload?
+    <x-a><p>It derives the expected wire-tensor shape for each stage from the token counts and the hidden
+      size, and, in graph mode, preallocates the receive buffers while capturing
+      ({{cite afd_plugin/connectors/gpu/p2p.py:744-851}}). It runs once per step before the layer loop
+      ({{cite afd_plugin/v1/worker/ffn_model_runner.py:194-203}}).</p></x-a>
+  </x-q>
+</x-quiz>

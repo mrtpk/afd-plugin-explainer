@@ -24,7 +24,7 @@ Update it after every subagent finishes and after every user decision.
 | S1 Samples (home, learn/vllm-plugins, code/index, code/init-py) | done (239k tokens) | done (6 defects, 208k tokens) | yes |
 | S2 Samples (tour life-of-a-request, reference/afd-config) | done (260k tokens) | done (6 defects) | yes |
 | B1 Basics + boundary | done (280k) | done (6 defects, 215k) | yes |
-| B2 Roles, topology, connectors | – | – | – |
+| B2 Roles, topology, connectors | done (277k) | running | yes (pending) |
 | B3 Model split + execution | – | – | – |
 | B4 Graphs, DBO, patches | – | – | – |
 | B5 Deploy, NPU, reference | – | – | – |
@@ -51,6 +51,7 @@ Update it after every subagent finishes and after every user decision.
 
 ## Done
 
+- 2026-10-28: B2 writer done: concepts roles, topology (+ topology-mapper visual, CSS in viz.css), control-plane, wire-data; code/connectors-core, code/p2p-py; 4 diagrams; b2.json (afd-world). Build 0 errors; site check 22 pages 0 problems; mapper tested (click, 40 px, aria-live, 390 px). Supervisor added core.json term `step`. No suspected bugs.
 - 2026-10-28: FC-B1 done: ~120 claims; 6 defects (4 line counts; "VLLM_USE_V2_MODEL_RUNNER set/not set" → "V2 runner on/off" in 6 places; patch-guard wording). Sampled: code/config-py, code/validation-py (sections listed in the FC report: first screen, key tables, every default/number/order, ~1 in 3 prose). Supervisor verified the V2 default in vLLM (config/vllm.py:675-722), fixed core.json model-runner-v2 term and a weak citation on plugin-entry-point (line 89: cite two call sites instead of the func() loop). Lessons 15-17 added. No suspected bugs.
 - FINAL-PASS TODO: FAQ "docs vs code": README.md:204 says both roles require VLLM_USE_V2_MODEL_RUNNER=1; vLLM picks V2 by default when unset (vllm:vllm/config/vllm.py:692-694 + :695-722). Also any later page that says "set/not set" for V2 on/off.
 - BUDGET NOTE: sample-checked (not full): code/config-py, code/validation-py (B1). List in README.
@@ -79,7 +80,7 @@ Update it after every subagent finishes and after every user decision.
 
 ## Next step
 
-B2 WRITER RUNNING (no pause, user instruction). If cut off: resume it, do not restart. B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → FC-B1 (no pause, user instruction) (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → B2 → B3 with no pauses → PAUSE after B3 fact-checked. Then B4, B5 with pauses, then F.
+FC-B2 RUNNING (no pause, user instruction). If cut off: resume it, do not restart. B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → FC-B1 (no pause, user instruction) (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → B2 → B3 with no pauses → PAUSE after B3 fact-checked. Then B4, B5 with pauses, then F.
 
 ## Questions for the user
 
@@ -92,6 +93,7 @@ B2 WRITER RUNNING (no pause, user instruction). If cut off: resume it, do not re
 - DONE (supervisor, tooling): two-repo support in build.py (2026-10-28).
 - FACT-CHECK FOCUS: worker selection only when `worker_cls == "auto"`; explicit wrong worker is rejected later (`validation.py:357-367`).
 - FACT-CHECK FOCUS: "every connector has a control plane" is false (async CAM has none).
+- FACT-CHECK FOCUS (FC-B2): 4A2F/3A2F derivations (pages + topology-mapper.js) from topology.py:136, :164-170; min_size == F under A >= F and control group = FFN ranks + first F attention ranks (topology.py:42-43, p2p.py:310); recv src → attention role rank f (p2p.py:902); INFERRED 32,768-byte figure.
 - FACT-CHECK FOCUS (FC-B1): vllm-v1-map first box "API server process (AsyncLLM)" wording; "patches do not install on a non-matching vLLM, so AFD does not activate" (check all 4 patch gates); config_validation.py:235-248 "guard against re-patching" wording; async_dp cannot be active on GPU (validation.py:93-97 + config.py:331-334).
 - FACT-CHECK FOCUS (FC-S2): tour stop 7 wording (wrapper subclasses native model; where the proxy replaces the MLP: deepseek_v2.py ~:375, ~:725); stop 2 cites a whole vLLM file with no line; async_dp "where read" (config.py:303-308 vs compat/npu/runtime.py:51-55); compute_gate_on_attention → FFN runs expert layers only (ffn_model_runner.py ~:211-215).
 - FACT-CHECK FOCUS (FC-S1, learn/vllm-plugins): process of arg_utils.py:839 (EngineArgs.__post_init__) — is EngineArgs also built in EngineCore?; the "plugin cannot change already-imported references" claim (general Python, no citation); diagram s1_plugin_processes "spawns" simplification; home fact table "Qwen3.6" (README only).
@@ -112,3 +114,5 @@ B2 WRITER RUNNING (no pause, user instruction). If cut off: resume it, do not re
 | 2026-10-28 | explainer-worker: FC-S2 fact check (full) | done; ~110 claims, 6 defects |
 | 2026-10-28 | explainer-worker: B1 writer | done; 8 pages, 6 diagrams, 0 errors |
 | 2026-10-28 | explainer-worker: FC-B1 (full + sample for 2 module pages) | done; ~120 claims, 6 defects, 215k tokens |
+| 2026-10-28 | explainer-worker: B2 writer | done; 6 pages, 4 diagrams, topology-mapper, 277k |
+| 2026-10-28 | explainer-worker: FC-B2 | running |

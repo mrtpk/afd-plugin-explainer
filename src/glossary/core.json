@@ -7,6 +7,12 @@
     "aliases": ["Attention-FFN Disaggregation", "attention-ffn disaggregation"],
     "page": "learn/what-is-afd"
   },
+  "step": {
+    "term": "step",
+    "short": "One engine iteration on the attention server: the scheduler picks a batch, the model runs all layers once, and vLLM samples. The FFN server follows each step.",
+    "long": "The attention-side EngineCore runs one step in EngineCore.step ({{cite vllm:vllm/v1/engine/core.py:589-601}}). The control plane runs once per step; the data plane runs once per layer and stage.",
+    "page": "tours/one-decode-step"
+  },
   "plugin": {
     "term": "afd-plugin",
     "short": "The vLLM external plugin that adds AFD. vLLM loads it; it changes no vLLM source file.",

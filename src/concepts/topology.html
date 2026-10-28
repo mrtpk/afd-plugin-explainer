@@ -1,0 +1,196 @@
+---
+title: Topology and role ranks: the AFD world
+nav_title: Topology and role ranks
+level: Advanced
+prerequisites: concepts/roles
+related: concepts/connector-contract, concepts/control-plane, code/p2p-py
+summary: The P2P connector builds one world, [F0..A0..], from the role ranks. This page shows how the role rank, the subgroups and the DP-metadata routes come from the topology sizes.
+scripts: viz/topology-mapper.js
+---
+<x-sentence>The P2P {{term connector}} builds one {{term afd-world | AFD world}}, ordered <code>[F0..A0..]</code>. The topology sizes decide the subgroups and the {{term dp-metadata | DP metadata}} routes.</x-sentence>
+
+<h2>The idea</h2>
+<p>Every AFD rank has a {{term role-rank | role rank}}: its position inside its own role group. The role rank
+comes from the data-parallel, context-parallel and tensor-parallel placement. The P2P connector lays all
+ranks out in one world: the FFN ranks first, then the attention ranks.</p>
+<p>Inside that world, each FFN rank owns a {{term p2p-subgroup | subgroup}}: itself plus the attention ranks
+mapped to it. The subgroups carry hidden states (the {{term data-plane | data plane}}). The control plane is
+narrower: only some attention ranks send {{term dp-metadata | DP metadata}}. The connector needs at least as
+many attention ranks as FFN ranks.</p>
+<p><strong>An everyday comparison.</strong> Think of delivery routes. Each van (FFN rank) serves a block of
+addresses (attention ranks). The addresses are split into blocks that differ in size by at most one. The
+comparison stops here: the "addresses" also report back to the depot on a second, smaller list of routes (the
+control plane), which does not match the delivery blocks one-to-one.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b2_topology" alt="Three panels. Panel 1: a row of rank chips for 4A2F — F0, F1 (emerald) then A0, A1, A2, A3 (blue) — with world ranks w0..w5, and the role-rank formula. Panel 2: 2A2F, two FFN subgroups F0 with A0 and F1 with A1; the control plane A0 to F0 and A1 to F1 matches. Panel 3: 4A2F, F0 subgroup has A0 and A1, F1 subgroup has A2 and A3 (data plane, contiguous blocks), but the control plane uses only A0 to F0 and A1 to F1." caption="Figure: FFN ranks come first in the world. The data-plane subgroups use contiguous blocks; the control plane uses only the first F attention ranks." />
+<p>Read panel 1 as the world order and the numbering rule. Read panels 2 and 3 as two examples: the planes
+agree for 2A2F, but differ for 4A2F.</p>
+
+<x-viz id="topology-mapper" title="Map a topology" caption="Set <code>A</code>, <code>F</code> and the attention TP. The visual shows the world order, the subgroups and the DP-metadata routes. It uses the rules from <code>topology.py</code> and <code>p2p.py</code>; it folds DP and TP into the role rank.">
+  <p>This interactive visual needs JavaScript. The rules it shows are in the steps below:
+  the world order ({{cite afd_plugin/distributed/topology.py:135}}), the subgroups
+  ({{cite afd_plugin/distributed/topology.py:136}}) and the DP-metadata routes
+  ({{cite afd_plugin/distributed/topology.py:164-170}}).</p>
+</x-viz>
+
+<h2>In the code</h2>
+
+<h3>Step 1: The role rank</h3>
+<p><code>resolve_role_rank</code> linearizes the global data-parallel rank and the local context-parallel and
+tensor-parallel ranks ({{cite afd_plugin/distributed/topology.py:61-105}}). The formula is one line
+({{cite afd_plugin/distributed/topology.py:92}}).</p>
+<x-code file="afd_plugin/distributed/topology.py" lines="92-104" highlight="92" caption="The role rank, then a range check against the role size." />
+<p>The role rank must be inside the role size (<code>num_attention_ranks</code> for the attention role, or
+<code>num_ffn_ranks</code> for the FFN role). An out-of-range rank raises
+({{cite afd_plugin/distributed/topology.py:99-104}}).</p>
+
+<h3>Step 2: The world order</h3>
+<p><code>build_rank_mapping</code> turns the role rank into a world rank
+({{cite afd_plugin/distributed/topology.py:118-184}}). FFN ranks keep their role rank; attention ranks come
+after all FFN ranks ({{cite afd_plugin/distributed/topology.py:135}},
+{{cite afd_plugin/distributed/topology.py:143}}).</p>
+<x-code file="afd_plugin/distributed/topology.py" lines="129-144" highlight="135,143" caption="Attention world rank = ffn_size + role_rank; FFN world rank = role_rank." />
+
+<h3>Step 3: The subgroups</h3>
+<p>Each attention rank <code>a</code> joins the subgroup of FFN rank <code>a * F // A</code>
+({{cite afd_plugin/distributed/topology.py:136}}). The reverse lookup lists a subgroup's attention ranks as a
+contiguous block ({{cite afd_plugin/distributed/topology.py:108-115}}). The FFN rank is always subgroup rank
+0 ({{cite afd_plugin/distributed/topology.py:153-161}}).</p>
+<x-code file="afd_plugin/distributed/topology.py" lines="153-161" highlight="160" caption="The subgroup roster: the FFN rank first, then its attention peers." />
+
+<h3>Step 4: The A &ge; F rule</h3>
+<p>The P2P connector needs at least as many attention ranks as FFN ranks, so each FFN rank owns at least one
+attention peer. <code>validate_p2p_topology</code> raises otherwise
+({{cite afd_plugin/distributed/topology.py:52-58}}).</p>
+<x-code file="afd_plugin/distributed/topology.py" lines="52-58" highlight="54" caption="num_attention_ranks must be &ge; num_ffn_ranks." />
+
+<h3>Step 5: The DP-metadata routes</h3>
+<p>The control plane uses fewer ranks than the data plane. Only the first <code>min_size</code> attention ranks
+send DP metadata, where <code>min_size = min(F, A)</code>. Under the A&nbsp;&ge;&nbsp;F rule,
+<code>min_size</code> equals <code>F</code>, so the first <code>F</code> attention ranks are the senders, one
+per FFN rank ({{cite afd_plugin/distributed/topology.py:164-170}}).</p>
+<x-code file="afd_plugin/distributed/topology.py" lines="164-170" caption="The DP-metadata destinations for one rank." />
+<p>The group that joins the control plane is the FFN ranks plus those first attention ranks
+({{cite afd_plugin/distributed/topology.py:42-43}}).</p>
+
+<h3>Step 6: The plugin-owned process groups</h3>
+<p>The connector builds its process groups without patching vLLM. A helper creates each one from a rendezvous
+at <code>tcp://host:port</code> ({{cite afd_plugin/distributed/afd_process_group.py:62-120}}). The GPU
+connector calls it twice: once for the AFD world, and once for the control plane
+({{cite afd_plugin/connectors/gpu/p2p.py:269-314}}).</p>
+<x-code file="afd_plugin/connectors/gpu/p2p.py" lines="269-314" highlight="269,275,307,313" caption="The AFD world group and the control-plane group." />
+<p>The AFD world rendezvous uses the <code>afd_process_group_timeout_s</code> config value (default 120)
+({{cite afd_plugin/connectors/gpu/p2p.py:275}}, {{cite afd_plugin/config.py:67-70}}). The control-plane group
+uses a fixed 30-minute timeout ({{cite afd_plugin/connectors/gpu/p2p.py:313}}).</p>
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="Worked example: 2A2F (DP1, TP2)">
+<p>Take the DeepSeek-V2-Lite GPU recipe: two attention ranks and two FFN ranks, each role with
+<code>--data-parallel-size 1</code> and <code>--tensor-parallel-size 2</code>
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh:8-18}}).
+The two attention ranks are TP peers, so their role ranks are 0 and 1.</p>
+<table>
+  <thead>
+    <tr><th>Rank</th><th>role rank</th><th>world rank</th><th>subgroup</th><th>data plane</th><th>DP metadata</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>F0</td><td>0</td><td>0</td><td>{F0, A0}</td><td>receives from A0</td><td>from A0</td></tr>
+    <tr><td>F1</td><td>1</td><td>1</td><td>{F1, A1}</td><td>receives from A1</td><td>from A1</td></tr>
+    <tr><td>A0</td><td>0</td><td>2</td><td>{F0, A0}</td><td>sends to F0</td><td>sends to F0</td></tr>
+    <tr><td>A1</td><td>1</td><td>3</td><td>{F1, A1}</td><td>sends to F1</td><td>sends to F1</td></tr>
+  </tbody>
+</table>
+<p>Here <code>min_size = min(2, 2) = 2</code>, so both attention ranks send DP metadata. The data plane and the
+control plane agree: A0 pairs with F0, A1 pairs with F1
+({{cite afd_plugin/distributed/topology.py:135-136}}).</p>
+</x-deepdive>
+
+<x-deepdive title="Worked example: 4A2F (the planes differ)">
+<p>Take four attention ranks and two FFN ranks. The data-plane subgroups use contiguous blocks; the control
+plane uses only the first two attention ranks.</p>
+<table>
+  <thead>
+    <tr><th>Rank</th><th>role rank</th><th>world rank</th><th>subgroup (data plane)</th><th>DP metadata</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>F0</td><td>0</td><td>0</td><td>{F0, A0, A1}</td><td>from A0</td></tr>
+    <tr><td>F1</td><td>1</td><td>1</td><td>{F1, A2, A3}</td><td>from A1</td></tr>
+    <tr><td>A0</td><td>0</td><td>2</td><td>in F0 (<code>0*2//4 = 0</code>)</td><td>sends to F0</td></tr>
+    <tr><td>A1</td><td>1</td><td>3</td><td>in F0 (<code>1*2//4 = 0</code>)</td><td>sends to F1</td></tr>
+    <tr><td>A2</td><td>2</td><td>4</td><td>in F1 (<code>2*2//4 = 1</code>)</td><td>none</td></tr>
+    <tr><td>A3</td><td>3</td><td>5</td><td>in F1 (<code>3*2//4 = 1</code>)</td><td>none</td></tr>
+  </tbody>
+</table>
+<p>So F0 fans in A0 and A1 for the data plane, but reads its DP metadata from A0 only. A2 and A3 send hidden
+states to F1, but send no DP metadata: <code>min_size = 2</code>, so only A0 and A1 are senders
+({{cite afd_plugin/distributed/topology.py:136}},
+{{cite afd_plugin/distributed/topology.py:164-170}}). The {{link concepts/control-plane}} page reads why one
+sender per FFN rank is enough.</p>
+</x-deepdive>
+
+<x-deepdive title="The process groups and their timeouts">
+<p>The connector owns two NCCL process groups, both rendezvoused at the same <code>host:port</code>.</p>
+<table>
+  <thead>
+    <tr><th>Group</th><th>name</th><th>world size</th><th>timeout</th><th>who joins</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>AFD world</td><td><code>"afd"</code></td><td><code>F + A</code></td><td><code>afd_process_group_timeout_s</code> (120 s) ({{cite afd_plugin/connectors/gpu/p2p.py:275}})</td><td>every rank</td></tr>
+    <tr><td>control plane</td><td><code>"p2p"</code></td><td><code>F + min_size</code></td><td>30 min ({{cite afd_plugin/connectors/gpu/p2p.py:313}})</td><td>FFN ranks + first <code>min_size</code> attention ranks</td></tr>
+  </tbody>
+</table>
+<p>The per-subgroup data communicators are not full process groups. They are
+<code>StatelessProcessGroup</code> instances built over a prefix of the AFD world's rendezvous store, so each
+subgroup does not need a port of its own ({{cite afd_plugin/connectors/gpu/p2p.py:278-304}}). The
+{{link code/p2p-py}} page reads this setup.</p>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<x-simplified><p>This page folds DP and TP into one role rank and leaves out the context-parallel case. The
+interactive visual does the same. The real resolver reads the data-parallel, context-parallel and
+tensor-parallel ranks ({{cite afd_plugin/distributed/topology.py:61-92}}). The NPU connectors build their own
+topology; see {{link concepts/npu-overview}}.</p></x-simplified>
+<ul>
+  <li><strong>Fewer attention ranks than FFN ranks.</strong> The P2P connector raises:
+      <code>num_attention_ranks</code> must be &ge; <code>num_ffn_ranks</code>
+      ({{cite afd_plugin/distributed/topology.py:52-58}}).</li>
+  <li><strong>A role rank out of range.</strong> A role rank that is not inside the role size raises; the
+      topology sizes must match the parallel placement
+      ({{cite afd_plugin/distributed/topology.py:99-104}}).</li>
+  <li><strong>Mismatched host, port or rank counts.</strong> The two roles must agree on
+      <code>host</code>, <code>port</code> and the rank counts, or the rendezvous fails or times out
+      ({{cite afd_plugin/connectors/gpu/p2p.py:50-54}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The subgroups and the DP-metadata routes come only from the topology
+sizes. If the two roles do not agree on them, the collective setup cannot complete.</p>
+
+<x-quiz>
+  <x-q level="easy">In what order does the P2P world place the ranks?
+    <x-a><p>FFN ranks first, then attention ranks: <code>[F0, F1, ..., A0, A1, ...]</code>
+      ({{cite afd_plugin/distributed/topology.py:16-23}}). An attention rank's world rank is
+      <code>ffn_size + role_rank</code> ({{cite afd_plugin/distributed/topology.py:135}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">Why must there be at least as many attention ranks as FFN ranks?
+    <x-a><p>So every FFN rank owns at least one attention peer. <code>validate_p2p_topology</code> raises when
+      <code>num_attention_ranks &lt; num_ffn_ranks</code>
+      ({{cite afd_plugin/distributed/topology.py:52-58}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">In 4A2F, which attention ranks does FFN rank 0 own for the data plane?
+    <x-a><p>A0 and A1. The subgroup index is <code>a * F // A</code>, so <code>0*2//4 = 0</code> and
+      <code>1*2//4 = 0</code> both map to F0; A2 and A3 map to F1
+      ({{cite afd_plugin/distributed/topology.py:136}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">In 4A2F, which attention ranks send DP metadata, and to whom?
+    <x-a><p>Only A0 and A1. <code>min_size = min(2, 4) = 2</code>, so only the first two attention ranks are
+      senders; A0 sends to F0 and A1 sends to F1
+      ({{cite afd_plugin/distributed/topology.py:164-170}}). A2 and A3 send hidden states but no DP
+      metadata.</p></x-a>
+  </x-q>
+  <x-q level="hard">Which timeout controls the AFD world rendezvous, and which controls the control plane?
+    <x-a><p>The AFD world uses <code>afd_process_group_timeout_s</code> (default 120 s)
+      ({{cite afd_plugin/connectors/gpu/p2p.py:275}}, {{cite afd_plugin/config.py:67-70}}). The control-plane
+      group uses a fixed 30-minute timeout ({{cite afd_plugin/connectors/gpu/p2p.py:313}}).</p></x-a>
+  </x-q>
+</x-quiz>
