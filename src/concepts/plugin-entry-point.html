@@ -1,0 +1,160 @@
+---
+title: The plugin entry point: register_afd
+nav_title: Plugin entry point
+level: Intermediate
+prerequisites: learn/vllm-plugins
+related: concepts/compat-patches, concepts/worker-selection, concepts/model-registration, code/init-py
+summary: register_afd is the one function vLLM calls to install AFD. This page explains why it is safe to call many times, how it stays importable without vLLM, its version gate, and the order and error behaviour of its registration steps.
+---
+<x-sentence>{{term register-afd}} is the one function vLLM calls to install {{term afd}}. It is safe to call many times, and safe to import without vLLM.</x-sentence>
+
+<h2>The idea</h2>
+<p>afd-plugin is one {{term general-plugin | general plugin}}. vLLM calls its entry function,
+<code>register_afd</code>, once in each process that loads plugins. The function installs the
+{{term patch | compat patches}}, the routing strategy, the {{term dbo | DBO}} custom op and the
+{{term model-wrapper | model wrappers}}. Then it stops; it runs no model.</p>
+<p>Two facts shape the function. First, vLLM calls it in many processes, and the vLLM guard
+resets in each new process. So the function must be idempotent: safe to run again with no
+change. Second, the package must import on a machine with no vLLM, so local tests work. The
+function handles both with guards and early returns.</p>
+<p><strong>An everyday comparison.</strong> Think of a self-check at the start of a shift. You
+run it once; if someone runs it again, it sees the ticks and stops. The comparison stops here:
+each new process starts with an empty checklist, so the plugin runs the whole check again.</p>
+<x-note><p>This page explains <em>why and when</em> <code>register_afd</code> does each thing.
+The line-by-line read of the module is on the {{link code/init-py}} page.</p></x-note>
+
+<h2>The picture</h2>
+<x-diagram name="b1_plugin_entry_point" alt="Two panels. Panel 1: two boxes. The vLLM load_general_plugins box (neutral) lists guard plugins_loaded, one run per process. An arrow labelled calls the entry point points to the register_afd box (teal), which lists guard _registered, returns on a second call. Panel 2: three amber check cards in order: is it already registered, then return; is vLLM importable, if not set _registered and return; does the vLLM version match 0.30.0, if not warn only with strict=False and go on." caption="Figure: two guards make register_afd safe to repeat (panel 1); three checks can return before any registration (panel 2)." />
+<p>Read panel 1 as the two guards: one in vLLM, one in the plugin. Read panel 2 as the three
+checks at the top of the function. The version check warns and continues; the other two return.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: Two guards make it idempotent</h3>
+<p>vLLM keeps a module flag, <code>plugins_loaded</code>, so {{term load-general-plugins}} runs
+the plugins at most once per process ({{cite vllm:vllm/plugins/__init__.py:82-85}}). The plugin
+adds its own flag, <code>_registered</code>. A second call to <code>register_afd</code> in the
+same process returns at once ({{cite afd_plugin/__init__.py:150-153}}).</p>
+<x-code file="afd_plugin/__init__.py" lines="150-153" caption="The plugin's own guard: return if already registered." />
+
+<h3>Step 2: Import safety without vLLM</h3>
+<p>The function returns early when vLLM is not importable. It sets <code>_registered</code> first,
+so a later call does not retry ({{cite afd_plugin/__init__.py:157-160}}). So importing
+<code>afd_plugin</code> stays safe on a machine with no vLLM.</p>
+<x-code file="afd_plugin/__init__.py" lines="157-160" caption="No vLLM: mark done and return before any registration." />
+
+<h3>Step 3: The version gate warns, it does not stop</h3>
+<p>The function checks the vLLM version with <code>strict=False</code>. A mismatch gives a
+warning, not an error ({{cite afd_plugin/__init__.py:162-165}}). The helper raises only when
+<code>strict</code> is true; otherwise it calls <code>warnings.warn</code>
+({{cite afd_plugin/compat/vllm.py:38-50}}).</p>
+<x-code file="afd_plugin/compat/vllm.py" lines="38-50" highlight="48-50" caption="strict=False: warn instead of raise." />
+
+<h3>Step 4: What it registers, and in which order</h3>
+<p>After the checks, the function runs these steps in order. Each is one or a few lines; the
+{{link code/init-py}} page reads them line by line.</p>
+<ol>
+  <li>Import the four patch modules. Importing a patch module applies it
+      ({{cite afd_plugin/__init__.py:172-176}}).</li>
+  <li>Register the AFD routing strategy ({{cite afd_plugin/__init__.py:183-187}}).</li>
+  <li>Register the DBO yield custom op ({{cite afd_plugin/__init__.py:189-192}}).</li>
+  <li><strong>NPU only:</strong> apply the Ascend config patch, when the device type is
+      <code>"npu"</code> ({{cite afd_plugin/__init__.py:202-209}}).</li>
+  <li>Register each model under its <code>AFD&lt;arch&gt;</code> name
+      ({{cite afd_plugin/__init__.py:211-214}}).</li>
+  <li>Set <code>_registered = True</code> ({{cite afd_plugin/__init__.py:216}}).</li>
+</ol>
+
+<h3>Step 5: Which steps are wrapped in try/except</h3>
+<p>Three steps swallow their own errors; three do not. A wrapped step logs at debug and lets the
+rest go on. An unwrapped step lets its error propagate and stop the process.</p>
+<table>
+  <thead><tr><th>Step</th><th>Lines</th><th>On failure</th></tr></thead>
+  <tbody>
+    <tr><td>Version check</td><td>{{cite afd_plugin/__init__.py:162-170}}</td><td>Caught: logged at debug.</td></tr>
+    <tr><td>Import the 4 patches</td><td>{{cite afd_plugin/__init__.py:172-181}}</td><td>Caught: logged at debug.</td></tr>
+    <tr><td>DBO custom op</td><td>{{cite afd_plugin/__init__.py:189-197}}</td><td>Caught: logged at debug.</td></tr>
+    <tr><td>Routing strategy</td><td>{{cite afd_plugin/__init__.py:183-187}}</td><td>Not caught: propagates.</td></tr>
+    <tr><td>NPU Ascend patch</td><td>{{cite afd_plugin/__init__.py:199-209}}</td><td>Not caught: propagates.</td></tr>
+    <tr><td>Model registration</td><td>{{cite afd_plugin/__init__.py:211-214}}</td><td>Not caught: propagates.</td></tr>
+  </tbody>
+</table>
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="Idempotence across processes, and the order of the guards">
+<p>The two guards work at different levels, and the order matters.</p>
+<ol>
+  <li>vLLM calls <code>load_general_plugins</code> from five call sites, in four kinds of process
+      ({{cite vllm:vllm/plugins/__init__.py:87-90}}). The {{link learn/vllm-plugins}} page lists
+      them.</li>
+  <li>The vLLM guard <code>plugins_loaded</code> stops a second call in the same process
+      ({{cite vllm:vllm/plugins/__init__.py:82-85}}). It is module state, so a new process starts
+      it at <code>False</code> again.</li>
+  <li>Inside one call, the plugin guard <code>_registered</code> stops repeated work if
+      <code>register_afd</code> is reached twice in one process
+      ({{cite afd_plugin/__init__.py:150-153}}).</li>
+</ol>
+<p>Because the vLLM guard resets per process, the registration steps run again in each process.
+So each step must be safe to run more than once. <code>ModelRegistry.register_model</code> and
+the module-attribute patches both satisfy this: the patch modules guard against re-patching
+their own target ({{cite afd_plugin/compat/patches/config_validation.py:235-248}}).</p>
+</x-deepdive>
+
+<x-deepdive title="Two different version checks">
+<p>There are two version checks, and they are not the same.</p>
+<ul>
+  <li><strong>The explicit check in <code>register_afd</code></strong> calls
+      <code>assert_vllm_version_supported(strict=False)</code>. It compares the installed vLLM
+      version with <code>0.30.0</code> exactly, and only warns on a mismatch
+      ({{cite afd_plugin/compat/vllm.py:29-50}}).</li>
+  <li><strong>The patch-install gate</strong> is <code>is_target_vllm_compatible()</code>. Each
+      patch module installs its replacement only when this returns true. It tolerates a
+      <code>dev</code> build and matches the version by prefix
+      ({{cite afd_plugin/compat/vllm.py:53-68}}, {{cite afd_plugin/compat/patches/config_validation.py:235-261}}).</li>
+</ul>
+<p>So on a non-matching, non-dev vLLM, the explicit check warns, the function continues, but the
+patches do not install. AFD then does not take effect. The two checks let the import stay safe
+while the patches stay strict.</p>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<ul>
+  <li><strong>Wrong vLLM version.</strong> The explicit check only warns
+      ({{cite afd_plugin/compat/vllm.py:48-50}}). The patches then skip install, so AFD does not
+      activate even though the process keeps running
+      ({{cite afd_plugin/compat/patches/config_validation.py:235-261}}).</li>
+  <li><strong>A failing patch import.</strong> The four patch imports are wrapped, so a failure is
+      logged and the rest continue ({{cite afd_plugin/__init__.py:172-181}}). A missing patch can
+      leave the stack half-installed.</li>
+  <li><strong>A failing routing or model step.</strong> These are not wrapped, so their error
+      stops the process ({{cite afd_plugin/__init__.py:183-187}}, {{cite afd_plugin/__init__.py:211-214}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> AFD is installed only by this function. A warning that the
+version does not match is the one sign that the patches did not install and AFD is off.</p>
+
+<x-quiz>
+  <x-q level="easy">What are the two guards that make <code>register_afd</code> idempotent?
+    <x-a><p>vLLM's <code>plugins_loaded</code> ({{cite vllm:vllm/plugins/__init__.py:82-85}}) and
+      the plugin's own <code>_registered</code> ({{cite afd_plugin/__init__.py:150-153}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">Which registration step runs only on NPU?
+    <x-a><p>The Ascend config patch, applied only when the device type is <code>"npu"</code>
+      ({{cite afd_plugin/__init__.py:202-209}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">The vLLM version does not match. Does the process stop?
+    <x-a><p>No. The explicit check uses <code>strict=False</code> and only warns
+      ({{cite afd_plugin/compat/vllm.py:48-50}}). But the patches skip install, so AFD does not
+      activate ({{cite afd_plugin/compat/patches/config_validation.py:235-261}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Why must each registration step be safe to run more than once?
+    <x-a><p>vLLM calls the function in several processes, and the <code>plugins_loaded</code> guard
+      resets in each new process ({{cite vllm:vllm/plugins/__init__.py:82-85}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">The routing strategy step is not wrapped in try/except, but the DBO op step is.
+    What is the effect of that difference?
+    <x-a><p>A failure in the routing strategy propagates and stops the process
+      ({{cite afd_plugin/__init__.py:183-187}}). A failure in the DBO op is caught and logged at
+      debug, so registration continues ({{cite afd_plugin/__init__.py:189-197}}).</p></x-a>
+  </x-q>
+</x-quiz>

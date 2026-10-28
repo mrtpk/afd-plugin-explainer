@@ -23,7 +23,7 @@ Update it after every subagent finishes and after every user decision.
 | F1 Foundation | done (186k tokens) | done in FC-S1 | yes |
 | S1 Samples (home, learn/vllm-plugins, code/index, code/init-py) | done (239k tokens) | done (6 defects, 208k tokens) | yes |
 | S2 Samples (tour life-of-a-request, reference/afd-config) | done (260k tokens) | done (6 defects) | yes |
-| B1 Basics + boundary | – | – | – |
+| B1 Basics + boundary | done | running | yes (pending) |
 | B2 Roles, topology, connectors | – | – | – |
 | B3 Model split + execution | – | – | – |
 | B4 Graphs, DBO, patches | – | – | – |
@@ -41,12 +41,17 @@ Update it after every subagent finishes and after every user decision.
 - USER INSTRUCTION (2026-10-28): "Git: commit per stage (writer commit 'fact check pending', then 'fact-checked'), author Thomas Paul <contact@thomaspaul.dev> set repo-local. Push or publish only when I ask."
 - USER INSTRUCTION (2026-10-28): "Do not build before I approve the plan. After the approval you may run unattended to the end, except for the usage pauses above."
 
+- USER INFO (2026-10-28): "for now we have used about 10% of my weekly quota. The quota will be reset on 3rd nov" (measured after Phase 1, B1 writer running). Supervisor projection: Phase 1 ≈ 10 %; remaining B1-B5 + F ≈ 2.5-3 × Phase 1 → ≈ 35-40 % total, under the 50 % ceiling. Ceiling still applies; pauses unchanged unless the user says otherwise.
+
+- USER INSTRUCTION (2026-10-28): "so, I think we can run B2, and B3 without my usage checking right?" → supervisor: no usage pauses from now through B3 fact-checked (incl. FC-B1); still one subagent at a time and a commit per writer and per fact check; pause after B3 fact-checked (before B4). Stop early if a batch costs much more than expected or a user decision is needed.
+
 ## RESUME NOTES
 
 (none)
 
 ## Done
 
+- 2026-10-28: B1 writer done: 8 pages, 6 diagrams b1_*, b1.json (2 terms). Build 0 errors; site check 0 problems. Facts merged [W]. No suspected bugs.
 - 2026-10-28: Phase 1d: supervisor site check `node tools/site_check.js` (all pages × 1280/390, deep dives open, links + anchors, JS errors, images): 8 pages, 417 internal links, 0 problems.
 - 2026-10-28: FC-S2 done (full): ~110 claims, 6 defects (stop 7 subclass/replace citations + dense vs MoE wording; stop 2 narrow vLLM cites; sampling "once per step" in loop table and diagram; async_dp where-read row). Generator output fully correct. No suspected bugs. Lessons 11-14 added to brief-writer; model-page line filled in.
 - FINAL-PASS TODO: "sampling once per step after the last layer" on concepts/attention-runtime, concepts/ffn-runtime, tours/one-decode-step; dense-proxy vs MoE-shell wording on concepts/model-wrappers, concepts/moe-handoff; async_dp NPU-only, run-time gated on concepts/afd-config, concepts/compat-patches (source: facts.md "Added after the S2 fact check").
@@ -71,7 +76,7 @@ Update it after every subagent finishes and after every user decision.
 
 ## Next step
 
-Usage pause after Phase 1 (user may comment on the sample pages). Then B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → pause → FC-B1 (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → pause. Then B2..B5 the same way, then F.
+FC-B1 RUNNING. If cut off: resume it, do not restart. B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → FC-B1 (no pause, user instruction) (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → B2 → B3 with no pauses → PAUSE after B3 fact-checked. Then B4, B5 with pauses, then F.
 
 ## Questions for the user
 
@@ -84,6 +89,7 @@ Usage pause after Phase 1 (user may comment on the sample pages). Then B1 writer
 - DONE (supervisor, tooling): two-repo support in build.py (2026-10-28).
 - FACT-CHECK FOCUS: worker selection only when `worker_cls == "auto"`; explicit wrong worker is rejected later (`validation.py:357-367`).
 - FACT-CHECK FOCUS: "every connector has a control plane" is false (async CAM has none).
+- FACT-CHECK FOCUS (FC-B1): vllm-v1-map first box "API server process (AsyncLLM)" wording; "patches do not install on a non-matching vLLM, so AFD does not activate" (check all 4 patch gates); config_validation.py:235-248 "guard against re-patching" wording; async_dp cannot be active on GPU (validation.py:93-97 + config.py:331-334).
 - FACT-CHECK FOCUS (FC-S2): tour stop 7 wording (wrapper subclasses native model; where the proxy replaces the MLP: deepseek_v2.py ~:375, ~:725); stop 2 cites a whole vLLM file with no line; async_dp "where read" (config.py:303-308 vs compat/npu/runtime.py:51-55); compute_gate_on_attention → FFN runs expert layers only (ffn_model_runner.py ~:211-215).
 - FACT-CHECK FOCUS (FC-S1, learn/vllm-plugins): process of arg_utils.py:839 (EngineArgs.__post_init__) — is EngineArgs also built in EngineCore?; the "plugin cannot change already-imported references" claim (general Python, no citation); diagram s1_plugin_processes "spawns" simplification; home fact table "Qwen3.6" (README only).
 - FACT-CHECK FOCUS (FC-S1, connector-contract): INFERRED DeepSeek-V2-Lite hidden_size 2048/bf16 and the 32,768-byte figure; "each FFN rank owns one attention peer" for 2A2F (check build_rank_mapping, topology.py:118); the call order in the "full call order" deep dive (writer did not read the runner loops).
@@ -101,3 +107,5 @@ Usage pause after Phase 1 (user may comment on the sample pages). Then B1 writer
 | 2026-10-28 | explainer-worker: FC-S1 fact check (full) | done, 208k tokens, 73 tool calls; ~120 claims, 6 defects |
 | 2026-10-28 | explainer-worker: W-S2 writer | done, 260k tokens, 76 tool calls; 0 errors |
 | 2026-10-28 | explainer-worker: FC-S2 fact check (full) | done; ~110 claims, 6 defects |
+| 2026-10-28 | explainer-worker: B1 writer | done; 8 pages, 6 diagrams, 0 errors |
+| 2026-10-28 | explainer-worker: FC-B1 | running |

@@ -1,0 +1,16 @@
+{
+  "_about": "Batch B1 terms (learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py). Owner: writer B1. Reuse ids from core.json, s1.json and s2.json; do not redefine them.",
+
+  "pd-disaggregation": {
+    "term": "prefill/decode disaggregation",
+    "short": "A serving layout that runs prefill and decode in separate processes. Each process still runs the whole model. It splits by phase, not by model part.",
+    "aliases": ["PD disaggregation", "prefill-decode disaggregation"],
+    "page": "learn/what-is-afd"
+  },
+  "async-dp": {
+    "term": "async_dp",
+    "short": "An AFD config flag. It is NPU-only: it turns on the async data-parallel patches, is gated at run time, and must be false on GPU.",
+    "long": "Read by <code>is_afd_async_dp</code> ({{cite afd_plugin/config.py:295-308}}); it needs the async CAM connector.",
+    "page": "concepts/afd-config"
+  }
+}

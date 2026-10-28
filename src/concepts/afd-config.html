@@ -1,0 +1,175 @@
+---
+title: AFD configuration: additional_config["afd"]
+nav_title: AFD configuration
+level: Intermediate
+prerequisites: learn/vllm-plugins
+related: concepts/worker-selection, concepts/roles, concepts/connector-contract, reference/afd-config, code/config-py
+summary: AFD reads one key, additional_config["afd"]. This page shows its schema, the compatibility aliases, how values are normalized and coerced, the validation rules, and the rule that AFD is active only when the key is present.
+---
+<x-sentence>AFD reads one key, {{term additional-config | additional_config["afd"]}}. The plugin renames aliases, coerces types, builds {{term afd-config | AFDConfig}}, then validates it.</x-sentence>
+
+<h2>The idea</h2>
+<p>vLLM has one open config field for out-of-tree code, <code>additional_config</code>
+({{cite vllm:vllm/config/vllm.py:434}}). afd-plugin reads one key inside it,
+<code>"afd"</code> ({{cite afd_plugin/config.py:20}}). The value is a mapping of AFD
+settings: the role, the connector, the topology sizes and the rendezvous host and port.</p>
+<p>The plugin does not use the raw mapping directly. It renames old <code>afd_*</code>
+aliases to short names, coerces the types, builds a frozen dataclass, and validates the
+result. One flag decides whether AFD runs at all: AFD is active only when the
+<code>"afd"</code> key is present.</p>
+<p><strong>An everyday comparison.</strong> Think of a form with a few fields and some old
+field names kept for compatibility. A clerk renames the old names, checks each value, and
+files one clean record. The comparison stops here: a missing form here does not mean an
+error, it means AFD stays off.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b1_afd_config" alt="Two panels. Panel 1 is a five-step pipeline: read the 'afd' key; normalize by applying aliases and pulling out the extra config; coerce types and reject bool or float as int; build the frozen AFDConfig dataclass; validate the values. Panel 2 shows two branches: with the 'afd' key present, parse and validate give an AFDConfig; with the key absent, parse returns None and AFD stays off." caption="Figure: one function runs the parse pipeline (panel 1); the presence of the 'afd' key decides whether AFD is active (panel 2)." />
+<p>Read panel 1 left to top-down as the pipeline inside <code>afd_config_from_mapping</code>.
+Read panel 2 as the on/off rule. The full key tables are on the {{link reference/afd-config}}
+page; this page explains the rules behind them.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: The schema</h3>
+<p><code>AFDConfig</code> is a frozen dataclass. Its fields and defaults are the schema
+({{cite afd_plugin/config.py:42-73}}). The table lists them; the full reference is on the
+{{link reference/afd-config}} page.</p>
+<x-code file="afd_plugin/config.py" lines="51-73" caption="The AFDConfig fields and their defaults." />
+<table>
+  <thead><tr><th>Field</th><th>Default</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>connector</code></td><td><code>"P2pNcclAFDConnector"</code></td><td>Connector name ({{cite afd_plugin/config.py:52}}).</td></tr>
+    <tr><td><code>async_dp</code></td><td><code>False</code></td><td>NPU-only async DP ({{cite afd_plugin/config.py:54}}).</td></tr>
+    <tr><td><code>role</code></td><td><code>"attention"</code></td><td>Role of this process ({{cite afd_plugin/config.py:56}}).</td></tr>
+    <tr><td><code>port</code>, <code>host</code></td><td><code>1239</code>, <code>"127.0.0.1"</code></td><td>Rendezvous ({{cite afd_plugin/config.py:58-60}}).</td></tr>
+    <tr><td><code>num_attention_ranks</code>, <code>num_ffn_ranks</code></td><td><code>1</code>, <code>1</code></td><td>Topology sizes ({{cite afd_plugin/config.py:62-64}}).</td></tr>
+    <tr><td><code>compute_gate_on_attention</code></td><td><code>False</code></td><td>MoE gate placement ({{cite afd_plugin/config.py:66}}).</td></tr>
+    <tr><td><code>afd_process_group_timeout_s</code></td><td><code>120</code></td><td>Rendezvous timeout ({{cite afd_plugin/config.py:70}}).</td></tr>
+    <tr><td><code>connector_extra_config</code></td><td><code>{}</code></td><td>Per-connector options ({{cite afd_plugin/config.py:71-73}}).</td></tr>
+  </tbody>
+</table>
+
+<h3>Step 2: Aliases</h3>
+<p>Five old <code>afd_*</code> names stay valid as read-only aliases. Normalization renames
+each to its short name ({{cite afd_plugin/config.py:32-38}}).</p>
+<x-code file="afd_plugin/config.py" lines="32-38" caption="The alias map: afd_connector, afd_role, afd_port, afd_host, async." />
+<p>So the recipe may write <code>"afd_role"</code> or <code>"role"</code>; both reach the
+<code>role</code> field ({{cite afd_plugin/config.py:128}}).</p>
+
+<h3>Step 3: Normalization and coercion</h3>
+<p><code>_normalize_mapping</code> renames the aliases, splits out
+<code>connector_extra_config</code>, rejects an unknown field, and coerces the typed fields
+({{cite afd_plugin/config.py:120-176}}). The integer fields use <code>coerce_extra_int</code>,
+which rejects a bool or a float instead of truncating it
+({{cite afd_plugin/config_utils.py:35-45}}).</p>
+<x-code file="afd_plugin/config.py" lines="147-174" highlight="159,165,171" caption="Coerce async_dp, the integer fields and the positive-int timeout." />
+
+<h3>Step 4: The validation rules</h3>
+<p><code>validate_afd_config</code> checks the built config without importing vLLM or CUDA
+({{cite afd_plugin/config.py:311-350}}). The rules:</p>
+<ul>
+  <li>the role is <code>"attention"</code> or <code>"ffn"</code> ({{cite afd_plugin/config.py:318-321}});</li>
+  <li>the connector name is one of the three supported names ({{cite afd_plugin/config.py:326-330}});</li>
+  <li><code>async_dp</code> needs the async connector ({{cite afd_plugin/config.py:331-334}});</li>
+  <li>the host is non-empty and the port is in <code>1..65535</code> ({{cite afd_plugin/config.py:339-342}});</li>
+  <li>both rank counts are positive ({{cite afd_plugin/config.py:343-350}}).</li>
+</ul>
+
+<h3>Step 5: AFD is active only when the key is present</h3>
+<p><code>is_afd_active</code> parses the optional config and returns true only when a present
+<code>"afd"</code> key passes validation ({{cite afd_plugin/config.py:289-292}}). When the key
+is absent, <code>parse_optional_afd_config</code> returns <code>None</code> and AFD stays off
+({{cite afd_plugin/config.py:244-259}}).</p>
+
+<h3>Step 6: Per-connector options</h3>
+<p>Options that belong to one connector go under <code>connector_extra_config</code>, not next
+to the AFD fields. Normalization keeps this sub-mapping aside
+({{cite afd_plugin/config.py:129-133}}). Each connector parses its own keys later, through
+<code>parse_extra_config</code> ({{cite afd_plugin/connectors/base.py:64-72}}). The
+{{link reference/afd-config}} page lists each connector's keys.</p>
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="Trace one recipe value end to end: num_attention_ranks = 2">
+<p>The <code>2a2f</code> recipe sets <code>num_attention_ranks</code> to 2 in the attention
+server's config ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh:17}}).
+Follow that value:</p>
+<ol>
+  <li><strong>Read.</strong> The plugin reads <code>additional_config["afd"]</code>, which holds
+      the mapping ({{cite afd_plugin/config.py:227-234}}).</li>
+  <li><strong>Normalize.</strong> <code>num_attention_ranks</code> is not an alias and is a valid
+      field, so it is kept ({{cite afd_plugin/config.py:127-145}}).</li>
+  <li><strong>Coerce.</strong> It is in the integer list, so <code>coerce_extra_int(2)</code>
+      returns <code>2</code>; a float or a bool would raise
+      ({{cite afd_plugin/config.py:153-162}}, {{cite afd_plugin/config_utils.py:35-45}}).</li>
+  <li><strong>Build.</strong> The value becomes <code>AFDConfig.num_attention_ranks</code>
+      ({{cite afd_plugin/config.py:190}}).</li>
+  <li><strong>Validate.</strong> The rank count must be positive
+      ({{cite afd_plugin/config.py:343-346}}).</li>
+  <li><strong>Use.</strong> At device init, the runtime check needs the attention rank count to
+      equal data-parallel size times tensor-parallel size. This recipe runs DP1 TP2, so the value
+      must be 2 ({{cite afd_plugin/validation.py:107-117}}).</li>
+</ol>
+<p>So a field default of <code>1</code> ({{cite afd_plugin/config.py:62}}) is only the start; the
+final value comes from the recipe, and a runtime rule ties it to the parallel sizes.</p>
+</x-deepdive>
+
+<x-deepdive title="async_dp is NPU-only, and false on GPU">
+<p>{{term async-dp}} turns on AFD's async data-parallel patches. It is read by
+<code>is_afd_async_dp</code>, which returns true only when the flag is set <em>and</em> the
+connector is the async CAM connector ({{cite afd_plugin/config.py:295-308}}). That connector is
+NPU-only, so the flag has no effect on GPU.</p>
+<ul>
+  <li><strong>Validation.</strong> <code>async_dp</code> without the async connector raises
+      ({{cite afd_plugin/config.py:331-334}}).</li>
+  <li><strong>GPU runtime.</strong> The GPU runner check needs the synchronous
+      <code>P2pNcclAFDConnector</code> ({{cite afd_plugin/validation.py:94-97}}). So the async
+      connector, and therefore <code>async_dp</code>, cannot be active on GPU.</li>
+  <li><strong>Where it takes effect.</strong> On NPU, <code>is_afd_async_dp</code> selects the
+      async-DP patches from the flag and the connector ({{cite afd_plugin/config.py:303-308}}).
+      Those patches are NPU code; see {{link concepts/npu-overview}}.</li>
+</ul>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<ul>
+  <li><strong>Unknown field.</strong> A key that is not a field and not an alias raises
+      <code>ValueError</code>; the message points to <code>connector_extra_config</code>
+      ({{cite afd_plugin/config.py:134-139}}).</li>
+  <li><strong>Alias and canonical together.</strong> Passing both <code>afd_role</code> and
+      <code>role</code> raises a duplicate-field error ({{cite afd_plugin/config.py:140-144}}).</li>
+  <li><strong>Wrong type for an integer.</strong> A float or a bool for <code>port</code> or a
+      rank count raises <code>TypeError</code>, not a silent truncation
+      ({{cite afd_plugin/config_utils.py:38-39}}).</li>
+  <li><strong>async_dp on GPU.</strong> It fails validation unless the connector is the async CAM
+      connector, which GPU does not use ({{cite afd_plugin/config.py:331-334}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> Both roles parse the same schema. A typo or a wrong type
+stops start-up with a clear error, instead of a silent mismatch between the two servers.</p>
+
+<x-quiz>
+  <x-q level="easy">What makes AFD active?
+    <x-a><p>The presence of the <code>"afd"</code> key in <code>additional_config</code>. Without
+      it, parse returns <code>None</code> and AFD stays off
+      ({{cite afd_plugin/config.py:244-259}}, {{cite afd_plugin/config.py:289-292}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">Where do connector-specific options go?
+    <x-a><p>Under <code>connector_extra_config</code>, not next to the AFD fields. Each connector
+      parses its own keys ({{cite afd_plugin/config.py:71-73}}, {{cite afd_plugin/connectors/base.py:64-72}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">A recipe passes <code>"port": 6269.0</code>. What happens?
+    <x-a><p>It raises <code>TypeError</code>. <code>coerce_extra_int</code> rejects a float instead
+      of truncating it ({{cite afd_plugin/config_utils.py:38-39}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">On what platform does <code>async_dp</code> have an effect?
+    <x-a><p>NPU only. It needs the async CAM connector ({{cite afd_plugin/config.py:295-308}}),
+      which GPU does not use ({{cite afd_plugin/validation.py:94-97}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">The field default for <code>num_attention_ranks</code> is 1, but the 2a2f recipe
+    runs with 2. What final rule ties the value to the deployment?
+    <x-a><p>At device init, the attention rank count must equal data-parallel size times
+      tensor-parallel size. With DP1 TP2 the value must be 2
+      ({{cite afd_plugin/validation.py:107-117}}). The default is only the start; the recipe sets
+      the real value ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh:17}}).</p></x-a>
+  </x-q>
+</x-quiz>

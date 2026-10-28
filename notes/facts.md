@@ -71,3 +71,14 @@ Paths without a prefix are in afd-plugin; `vllm:` paths are in vLLM.
 - vLLM EngineCore.step vllm:vllm/v1/engine/core.py:589; scheduler.schedule + model_executor.execute_model :600-601. [FC]
 - async_dp: read by is_afd_async_dp (config.py:303-308); gates the NPU async-DP patches at run time (compat/npu/runtime.py:44-53); must be false on GPU. [FC]
 - compute_gate_on_attention: FFN runs expert layers only (ffn_model_runner.py:211-215); the attention side builds the gate and computes router_logits. [FC]
+
+## Added after B1 (2026-10-28)
+- afd_worker_qualname_for_platform_default (validation.py:280-309): CUDA gpu_worker.Worker → AFDAttentionWorker / AFDFFNWorker (:290-291); Ascend NPUWorker → AFDNPUAttentionWorker / AFDNPUFFNWorker (:292-296); Ascend 310P / Xlite rejected (:297-305); unknown platform raises (:306-309). FQCN constants :26-41. [W]
+- validate_gpu_model_runner_v2_config (validation.py:76-143): V2 runner :90-91; CUDA + P2pNcclAFDConnector :93-97; no PP/CP :99-105; role ranks == DP*TP :107-117; static EP :118-125; DBO ubatch == 2 :126-131; registered AFD model :136-141; graph mode :143. [W]
+- assert_compatible_afd_stack (validation.py:312-369): leftover "auto" rejected :343-348; mismatched worker :357-367; async CAM expects NPU worker :331-335. [W]
+- CAM_MAX_RECEIVE_TOKENS 262144 × env BATCH_SIZE_FACTOR (default "1"), float32 rounding; CAM_MAX_SOURCE_ROWS 65535 (validation.py:45-54). [W]
+- model_utils.py: has_afd_model_registration :16-22; get_afd_model_config deepcopy :43, architectures = ["AFD"+arch] :44; Qwen3.5 non-CUDA raises :34-38. [W]
+- Runner swap: worker patches module attribute vllm.v1.worker.gpu.model_runner.GPUModelRunner around native init, restored in finally (attention_worker.py:82-87; ffn_worker.py:93-98); works because native Worker.init_device does a local import under use_v2_model_runner (vllm:vllm/v1/worker/gpu_worker.py:469-482). use_v2_model_runner reads VLLM_USE_V2_MODEL_RUNNER (vllm:vllm/config/vllm.py:692-694). [W]
+- Two version checks: register_afd assert_vllm_version_supported(strict=False) warns, exact 0.30.0 (compat/vllm.py:29-50); patch-install gate is_target_vllm_compatible() tolerates "dev", prefix match (compat/vllm.py:53-68). config_validation patch install gated + hasattr guards (config_validation.py:235-261). [W]
+- engine_core patch: FFN EngineCore.__init__ returns after executor build when role == "ffn" (engine_core.py:56-68); run_busy_loop → _run_ffn_busy_loop → collective_rpc("start_ffn_server_loop") (:411-419, :650-674); install gate :722-727. [W]
+- vLLM EngineCore: model_executor built at vllm:vllm/v1/engine/core.py:134, scheduler at :162, class at :105. [W]

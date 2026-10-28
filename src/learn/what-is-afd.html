@@ -1,0 +1,124 @@
+---
+title: What is AFD?
+nav_title: What is AFD?
+level: Beginner
+prerequisites: none
+related: concepts/roles, concepts/topology, learn/vllm-v1-map
+summary: AFD runs the attention part and the FFN/MoE part of one model in separate server processes. This page explains why that helps, what xAyF means, and how AFD differs from prefill/decode disaggregation and from plain expert parallelism.
+---
+<x-sentence>{{term afd}} runs the attention part and the feed-forward part of one model in separate server processes, joined by a {{term connector}}.</x-sentence>
+
+<h2>The idea</h2>
+<p>A transformer decoder layer has two heavy parts. Attention reads the KV cache
+and mixes tokens. The feed-forward part (dense FFN, or MoE experts) applies big
+weight matrices. The two parts are slow for different reasons.</p>
+<p>Attention is memory-bound. Each request owns its KV cache, and the step reads a
+lot of memory for little compute. The FFN and the MoE experts are weight-bound.
+They reuse the same weights for every token, so a large batch makes them
+efficient. One batch size and one rank count cannot suit both parts at once.</p>
+<p>{{term afd | Attention-FFN Disaggregation}} splits the two parts into two groups of
+processes. The {{term attention-role | attention role}} keeps the KV cache and the
+API server. The {{term ffn-role | FFN role}} holds the experts. A connector moves
+hidden states from the attention side to the FFN side and back. Each role can then
+use its own rank count and its own batch shape.</p>
+<p><strong>An everyday comparison.</strong> Think of a kitchen with a prep station
+and an oven. Prep works per order; the oven works best full. You staff them apart so
+each runs at its own pace. The comparison stops here: the two AFD roles must still
+finish every layer together, once per step, before the next layer starts.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b1_afd_split" alt="Two panels. Panel 1: two boxes side by side. The attention box (blue) lists: state per request is the KV cache, memory-bound, little compute per byte. The FFN/MoE box (emerald) lists: shared weights and experts, weight-bound, faster with a large batch. Panel 2: an attention-role box (blue, x ranks, KV cache and scheduler) on the left and an FFN-role box (emerald, y ranks, experts, no KV cache) on the right. An amber arrow carries hidden states to the FFN role; an emerald arrow carries the FFN output back. The label between them reads connector." caption="Figure: the two parts have different bottlenecks (panel 1), so AFD gives each its own server group and joins them with a connector (panel 2)." />
+<p>Read panel 1 as the problem: two parts, two bottlenecks. Read panel 2 as the
+answer: two server groups, joined by a connector. The attention side sends hidden
+states and gets the FFN output back, once per layer.</p>
+
+<h2>Deep dive</h2>
+<p>These blocks compare AFD with two layouts the reader may know, and explain the
+<code>xAyF</code> topology name.</p>
+
+<x-deepdive title="AFD vs. prefill/decode disaggregation">
+<p>{{term pd-disaggregation | Prefill/decode disaggregation}} and AFD both spread
+one model over more processes, but they cut it in different directions.</p>
+<ul>
+  <li><strong>Prefill/decode disaggregation</strong> cuts by <em>phase</em>. A prefill
+      server runs the whole model for the prompt; a decode server runs the whole model
+      for the new tokens. Each process still holds attention and FFN together.</li>
+  <li><strong>AFD</strong> cuts by <em>model part</em>. Inside one phase, attention
+      runs on one group of processes and the FFN runs on another.</li>
+</ul>
+<p>The two layouts stack. The plugin ships a recipe that combines them: a
+<code>2p1a1f</code> topology with two prefill workers, one attention decode worker
+and one FFN decode worker ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:27}},
+{{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50}}). A proxy
+server joins the prefill and decode stages ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:50}}).</p>
+</x-deepdive>
+
+<x-deepdive title="AFD vs. expert parallelism (EP)">
+<p>Expert parallelism spreads the MoE experts of one layer over several ranks. It is a
+way to place the experts; it does not move attention to another process. Attention and
+the experts still run inside the same worker and the same step.</p>
+<p>AFD is a process split, not an expert placement. It puts attention and the FFN in
+separate processes. Expert parallelism can still run <em>inside</em> the FFN role to
+spread its experts. The GPU runtime in fact needs static expert parallelism on the
+AFD stack, and rejects elastic EP or EPLB ({{cite afd_plugin/validation.py:118-125}}).
+So AFD and EP are not alternatives: AFD places the two parts, and EP places the experts
+within the FFN part.</p>
+</x-deepdive>
+
+<x-deepdive title="The xAyF topology name and the rank-count rule">
+<p>A topology is named <code>xAyF</code>: <code>x</code> {{term attention-role | attention}}
+ranks and <code>y</code> {{term ffn-role | FFN}} ranks. For example <code>2A2F</code> is two
+of each. The counts are two AFD config fields, <code>num_attention_ranks</code> and
+<code>num_ffn_ranks</code> ({{cite afd_plugin/config.py:61-64}}).</p>
+<p>The GPU P2P {{term connector}} sets a rule: the number of attention ranks must be
+greater than or equal to the number of FFN ranks. The world places the FFN ranks first,
+then the attention ranks, and spreads the attention ranks over the FFN ranks in blocks
+that differ in size by at most one ({{cite afd_plugin/connectors/gpu/p2p.py:11-20}},
+{{cite README.md:59}}). So one FFN rank can serve more than one attention peer, but not
+the other way around. The {{link concepts/topology}} page gives the full mapping.</p>
+</x-deepdive>
+
+<h2>In afd-plugin</h2>
+<p>afd-plugin adds AFD to vLLM v0.30.0 without changing the vLLM source. Three pointers
+connect this page to the code:</p>
+<ul>
+  <li>The README states the goal and the entry points AFD uses: the
+      <code>vllm.general_plugins</code> hook, <code>--additional-config</code>, role
+      workers and model wrappers ({{cite README.md:11-26}}). See {{link learn/vllm-v1-map}}.</li>
+  <li>The two roles and the connector are the core concepts. Start at
+      {{link concepts/roles}} and {{link concepts/connector-contract}}.</li>
+  <li>A ready recipe runs DeepSeek-V2-Lite on four GPUs in a <code>2A2F</code> layout
+      ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:52-59}}). See
+      {{link concepts/deployment-topologies}}.</li>
+</ul>
+
+<x-quiz>
+  <x-q level="easy">Why does AFD put attention and the FFN in separate processes?
+    <x-a><p>The two parts are slow for different reasons. Attention is memory-bound per
+      request; the FFN and the experts are weight-bound and want a large batch. Separate
+      processes let each part use its own rank count and batch shape.</p></x-a>
+  </x-q>
+  <x-q level="easy">What does the name <code>2A2F</code> mean?
+    <x-a><p>Two attention ranks and two FFN ranks. The counts are
+      <code>num_attention_ranks</code> and <code>num_ffn_ranks</code>
+      ({{cite afd_plugin/config.py:61-64}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">How does AFD differ from prefill/decode disaggregation?
+    <x-a><p>Prefill/decode disaggregation cuts by phase; each process still runs the whole
+      model. AFD cuts by model part: attention and the FFN run in separate processes. The
+      <code>2p1a1f</code> recipe combines both
+      ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Is AFD an alternative to expert parallelism?
+    <x-a><p>No. AFD places the two model parts in separate processes. Expert parallelism
+      places the experts inside the FFN part. The GPU stack needs static expert parallelism
+      ({{cite afd_plugin/validation.py:118-125}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">On the GPU P2P connector, why must <code>num_attention_ranks</code> be at
+    least <code>num_ffn_ranks</code>?
+    <x-a><p>The connector maps each attention rank to one FFN peer, and lets one FFN rank
+      serve several attention ranks in near-equal blocks. That only works when there are at
+      least as many attention ranks as FFN ranks
+      ({{cite afd_plugin/connectors/gpu/p2p.py:11-20}}).</p></x-a>
+  </x-q>
+</x-quiz>

@@ -1,0 +1,141 @@
+---
+title: The vLLM v1 map
+nav_title: The vLLM v1 map
+level: Beginner
+prerequisites: learn/vllm-plugins
+related: concepts/plugin-entry-point, concepts/worker-selection, concepts/roles, code/init-py
+summary: AFD hooks into a short chain of vLLM v1 processes and classes: the API server, the EngineCore, the executor, the worker, the Model Runner V2 and the model. This page names each box, with its vLLM line and the AFD hook on it.
+---
+<x-sentence>AFD hooks into one chain of vLLM v1 parts: API server, {{term enginecore | EngineCore}}, executor, worker, {{term model-runner-v2 | Model Runner V2}} and the model.</x-sentence>
+
+<h2>The idea</h2>
+<p>vLLM v1 runs a request through a fixed chain of parts. The API server process
+builds the config and owns HTTP. The EngineCore process holds the scheduler and the
+executor. The executor starts the workers. Each worker owns one device and builds a
+model runner, which runs the model.</p>
+<p>afd-plugin does not replace this chain. It changes six small points along it: the
+config, the EngineCore start, the worker class, the model runner class and the model
+class. This page names each box once, gives its vLLM line, and points to the AFD hook.</p>
+<p><strong>An everyday comparison.</strong> Think of a factory line with six stations. AFD
+does not rebuild the line; it changes the tool at a few stations. The comparison stops
+here: one station (the FFN EngineCore) stops the line early and runs its own loop.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b1_vllm_v1_map" alt="One panel with six stacked cards, top to bottom: API server process (AsyncLLM), EngineCore process, Executor, Worker per device, Model Runner V2, and The model. Each card shows a vLLM line and, in a violet row, the AFD hook: plugin load in add_cli_args and __post_init__; FFN EngineCore returns early; the executor has no AFD change; worker_cls is rewritten to the AFD role worker; the runner class is swapped in Worker.init_device; and the AFD<arch> model wrapper makes the model role-aware." caption="Figure: the six vLLM v1 boxes from top to bottom, each with its vLLM line and the violet AFD hook on it." />
+<p>Read the boxes top to bottom. Each box runs in a process or is built inside one. The
+violet row on each box is the one place AFD changes it. The {{term plugin}} loads once in
+each process, so the hooks take effect everywhere they are needed.</p>
+
+<h2>In the code</h2>
+<p>The table names each box, its vLLM line at commit {{project vllm_short_sha}}, and the
+AFD hook. The vLLM lines are in the pinned vLLM checkout; the hook lines are in afd-plugin.</p>
+<table>
+  <thead><tr><th>Box</th><th>What it does (vLLM)</th><th>AFD hook</th></tr></thead>
+  <tbody>
+    <tr><td><strong>API server process</strong><br><code>AsyncLLM</code></td>
+      <td>The engine client in the API server process; it drives the EngineCore
+        ({{cite vllm:vllm/v1/engine/async_llm.py:78}}).</td>
+      <td>The plugin loads here, while the CLI parser is built, and installs the config patch
+        ({{cite vllm:vllm/engine/arg_utils.py:3009}}). See {{link concepts/plugin-entry-point}}.</td></tr>
+    <tr><td><strong>EngineCore process</strong></td>
+      <td>Builds the <code>model_executor</code> and the scheduler
+        ({{cite vllm:vllm/v1/engine/core.py:134}}, {{cite vllm:vllm/v1/engine/core.py:162}}).</td>
+      <td>The FFN EngineCore returns after the executor, with no scheduler or KV cache
+        ({{cite afd_plugin/compat/patches/engine_core.py:59-68}}). See {{link concepts/roles}}.</td></tr>
+    <tr><td><strong>Executor</strong></td>
+      <td><code>mp</code> starts worker processes; <code>uni</code> runs one worker
+        in-process ({{cite vllm:vllm/v1/executor/abstract.py:70-77}}).</td>
+      <td>No AFD change. AFD works through the worker the executor builds.</td></tr>
+    <tr><td><strong>Worker</strong> (per device)</td>
+      <td>Imports <code>parallel_config.worker_cls</code> by its qualified name
+        ({{cite vllm:vllm/v1/worker/worker_base.py:273-277}}).</td>
+      <td><code>worker_cls</code> was rewritten to the AFD role worker by the config patch
+        ({{cite afd_plugin/compat/patches/config_validation.py:92-93}}). See
+        {{link concepts/worker-selection}}.</td></tr>
+    <tr><td><strong>Model Runner V2</strong></td>
+      <td>Built when <code>VLLM_USE_V2_MODEL_RUNNER</code> is set
+        ({{cite vllm:vllm/config/vllm.py:692-694}}, {{cite vllm:vllm/v1/worker/gpu_worker.py:469-482}}).</td>
+      <td>The AFD worker swaps the runner class in <code>init_device</code>
+        ({{cite afd_plugin/v1/worker/attention_worker.py:82-87}}). See {{link concepts/attention-runtime}}.</td></tr>
+    <tr><td><strong>The model</strong></td>
+      <td><code>ModelRegistry</code> resolves the architecture name to a class
+        ({{cite vllm:vllm/model_executor/models/registry.py:1126-1141}}).</td>
+      <td>AFD registers an <code>AFD&lt;arch&gt;</code> {{term model-wrapper | model wrapper}}
+        and swaps the model identity ({{cite afd_plugin/__init__.py:211-214}}). See
+        {{link concepts/model-registration}}.</td></tr>
+  </tbody>
+</table>
+<p>The executor chooses between separate worker processes and one in-process worker.</p>
+<x-code repo="vllm" file="vllm/v1/executor/abstract.py" lines="70-77" caption="mp builds worker processes; uni runs one worker inside the EngineCore process." />
+<p>The worker then imports the class named in <code>worker_cls</code>. AFD has already set
+this field to its role worker, so vLLM builds the AFD worker here.</p>
+<x-code repo="vllm" file="vllm/v1/worker/worker_base.py" lines="273-277" caption="The worker resolves worker_cls to a class by its qualified name." />
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="How many processes, and where each hook runs">
+<p>The number of processes depends on the executor
+({{cite vllm:vllm/v1/executor/abstract.py:70-77}}).</p>
+<ul>
+  <li><strong>Multi-process executor (<code>mp</code>).</strong> Each worker is a separate
+      process. The plugin loads again in each one, so the worker and runner hooks run in the
+      worker process ({{cite vllm:vllm/v1/worker/worker_base.py:271}}).</li>
+  <li><strong>Single-device executor (<code>uni</code>).</strong> The worker runs inside the
+      EngineCore process ({{cite vllm:vllm/v1/executor/abstract.py:74-77}}). The worker's
+      plugin load hits the guard, so it does not reload the plugins.</li>
+</ul>
+<p>The config hook is different from the others. It runs in the API server process, while
+<code>create_engine_config</code> builds the config
+({{cite afd_plugin/compat/patches/config_validation.py:51-113}}). vLLM then pickles the
+config and sends it to the EngineCore and worker processes, so those processes do not rebuild
+it. The worker rewrite must therefore happen in the API server process, before the config is
+sent.</p>
+</x-deepdive>
+
+<x-deepdive title="The FFN EngineCore is the one box that breaks the chain">
+<p>Five of the six boxes keep their normal vLLM job and only change a class or a field. The
+FFN EngineCore is different. After it builds the executor, the AFD patch returns before the
+scheduler and the KV cache are set up ({{cite afd_plugin/compat/patches/engine_core.py:56-68}}).
+The FFN side then runs a connector loop instead of vLLM's request loop
+({{cite afd_plugin/compat/patches/engine_core.py:411-419}}). The attention EngineCore keeps the
+normal chain. The {{link concepts/roles}} page covers this split.</p>
+</x-deepdive>
+
+<h2>In afd-plugin</h2>
+<p>Each hook has its own page. Start here:</p>
+<ul>
+  <li>The config and the worker rewrite: {{link concepts/afd-config}} and
+      {{link concepts/worker-selection}}.</li>
+  <li>The model wrappers: {{link concepts/model-registration}}.</li>
+  <li>The two roles and the FFN EngineCore: {{link concepts/roles}}.</li>
+  <li>The module that applies the hooks at load time: {{link code/init-py}}.</li>
+</ul>
+
+<x-quiz>
+  <x-q level="easy">Which vLLM box holds the scheduler and the executor?
+    <x-a><p>The EngineCore process. It builds both
+      ({{cite vllm:vllm/v1/engine/core.py:134}}, {{cite vllm:vllm/v1/engine/core.py:162}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">When is the Model Runner V2 used?
+    <x-a><p>When <code>VLLM_USE_V2_MODEL_RUNNER</code> is set
+      ({{cite vllm:vllm/config/vllm.py:692-694}}, {{cite vllm:vllm/v1/worker/gpu_worker.py:469-482}}).
+      AFD needs it on both roles.</p></x-a>
+  </x-q>
+  <x-q level="medium">Why must the worker-class rewrite happen in the API server process?
+    <x-a><p>vLLM builds the config there, then pickles it to the other processes. The rewrite
+      runs inside <code>create_engine_config</code> before the config is sent
+      ({{cite afd_plugin/compat/patches/config_validation.py:51-113}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Which box does AFD not change?
+    <x-a><p>The executor. AFD works through the worker the executor builds; it adds no executor
+      patch ({{cite vllm:vllm/v1/executor/abstract.py:70-77}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">The FFN EngineCore and the attention EngineCore are the same vLLM class. What
+    makes them behave differently?
+    <x-a><p>The AFD EngineCore patch checks the role. For the FFN role it returns after building
+      the executor and skips the scheduler and KV cache
+      ({{cite afd_plugin/compat/patches/engine_core.py:56-68}}); the FFN side then runs a connector
+      loop ({{cite afd_plugin/compat/patches/engine_core.py:411-419}}). The attention role keeps the
+      normal chain.</p></x-a>
+  </x-q>
+</x-quiz>

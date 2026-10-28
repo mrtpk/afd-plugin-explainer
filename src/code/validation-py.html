@@ -1,0 +1,164 @@
+---
+title: afd_plugin/validation.py: runtime wiring checks
+nav_title: validation.py
+level: Intermediate
+prerequisites: concepts/worker-selection
+related: concepts/worker-selection, concepts/afd-config, code/config-py, code/init-py
+summary: validation.py holds the CPU-safe checks for the AFD runtime stack: the worker FQCN constants, the GPU and NPU model-runner validators, the worker-selection mapper, and assert_compatible_afd_stack. This page reads the GPU parts in full and names the NPU parts.
+---
+<x-sentence>This module holds the CPU-safe checks that wire the AFD runtime: the worker names, the model-runner validators, the worker mapper and the stack check.</x-sentence>
+
+<h2>Purpose</h2>
+<p>The module validates that an AFD deployment is wired correctly, before the model runs. It uses
+duck typing, so unit tests and CPU runs do not need a real vLLM config.</p>
+<table>
+  <tbody>
+    <tr><th>File</th><td><code>afd_plugin/validation.py</code> (389 lines, shared).</td></tr>
+    <tr><th>Main functions</th><td><code>validate_gpu_model_runner_v2_config</code>
+      ({{cite afd_plugin/validation.py:76}}), <code>assert_compatible_afd_stack</code>
+      ({{cite afd_plugin/validation.py:312}}),
+      <code>afd_worker_qualname_for_platform_default</code> ({{cite afd_plugin/validation.py:280}}).</td></tr>
+    <tr><th>Runs in</th><td>The API server process (worker mapping) and each worker process (the
+      stack and runner checks, in <code>init_device</code>).</td></tr>
+    <tr><th>Called by</th><td>The config patch ({{cite afd_plugin/compat/patches/config_validation.py:24-26}})
+      and the AFD workers ({{cite afd_plugin/v1/worker/attention_worker.py:16-19}}).</td></tr>
+    <tr><th>Calls</th><td>The config parser ({{cite afd_plugin/validation.py:12-17}}), the CUDA-graph
+      helpers ({{cite afd_plugin/validation.py:18-21}}), and <code>has_afd_model_registration</code>.</td></tr>
+    <tr><th>Not in this file</th><td>The NPU validator internals beyond naming them, the worker bodies,
+      and the config schema (in <code>config.py</code>).</td></tr>
+  </tbody>
+</table>
+
+<h2>Where it sits</h2>
+<h3>Who calls it</h3>
+<p>The config patch calls <code>afd_worker_qualname_for_platform_default</code> to rewrite the
+worker ({{cite afd_plugin/compat/patches/config_validation.py:192-197}}). Each AFD worker calls
+<code>assert_compatible_afd_stack</code> and the runner validator in <code>init_device</code>
+({{cite afd_plugin/v1/worker/attention_worker.py:64-73}}).</p>
+<h3>What it calls</h3>
+<p>It parses the AFD config with an expected role ({{cite afd_plugin/validation.py:93}}), and imports
+<code>has_afd_model_registration</code> lazily so the module stays independent of the model package
+({{cite afd_plugin/validation.py:136-138}}).</p>
+
+<h2>Key classes and functions</h2>
+<table>
+  <thead><tr><th>Name</th><th>Line</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td>Worker FQCN constants</td><td>{{cite afd_plugin/validation.py:26-41}}</td><td>The qualified names of the AFD and native workers.</td></tr>
+    <tr><td><code>BATCH_SIZE_FACTOR</code> / <code>cam_receive_capacity</code></td><td>{{cite afd_plugin/validation.py:45-54}}</td><td>Compute the CAM receive capacity from an env factor.</td></tr>
+    <tr><td><code>validate_gpu_model_runner_v2_config</code></td><td>{{cite afd_plugin/validation.py:76}}</td><td>The GPU deployment rules.</td></tr>
+    <tr><td><code>validate_npu_model_runner_v2_config</code></td><td>{{cite afd_plugin/validation.py:146}}</td><td>The Ascend NPU deployment rules.</td></tr>
+    <tr><td><code>afd_worker_qualname_for_platform_default</code></td><td>{{cite afd_plugin/validation.py:280}}</td><td>Map the platform default worker to the AFD worker.</td></tr>
+    <tr><td><code>assert_compatible_afd_stack</code></td><td>{{cite afd_plugin/validation.py:312}}</td><td>Check the config and the worker class match the role.</td></tr>
+  </tbody>
+</table>
+
+<h2>Walk through the main methods</h2>
+
+<h3>The FQCN constants</h3>
+<p>The module names each worker and runner as a string constant. The GPU workers, the NPU workers
+and the native platform workers all have their own names
+({{cite afd_plugin/validation.py:26-41}}).</p>
+<x-code file="afd_plugin/validation.py" lines="26-42" caption="The worker and runner qualified names, plus the GPU ubatch count." />
+
+<h3>validate_gpu_model_runner_v2_config, rule by rule</h3>
+<p>This function raises a <code>RuntimeError</code> for each broken rule
+({{cite afd_plugin/validation.py:76-143}}).</p>
+<ol>
+  <li><strong>Line 90-91.</strong> It needs the V2 model runner
+      ({{cite afd_plugin/validation.py:90-91}}).</li>
+  <li><strong>Line 93-97.</strong> The device must be CUDA and the connector the synchronous
+      <code>P2pNcclAFDConnector</code> ({{cite afd_plugin/validation.py:93-97}}).</li>
+  <li><strong>Line 99-105.</strong> It rejects pipeline and context parallelism
+      ({{cite afd_plugin/validation.py:99-105}}).</li>
+  <li><strong>Line 107-117.</strong> The role rank count must equal data-parallel size times
+      tensor-parallel size ({{cite afd_plugin/validation.py:107-117}}).</li>
+  <li><strong>Line 118-125.</strong> It needs static expert parallelism, and rejects elastic EP,
+      EPLB and sequence-parallel MoE ({{cite afd_plugin/validation.py:118-125}}).</li>
+  <li><strong>Line 126-131.</strong> With DBO or ubatching, the number of microbatches must be exactly
+      two ({{cite afd_plugin/validation.py:126-131}}).</li>
+  <li><strong>Line 136-141.</strong> The model must resolve to a registered AFD model
+      ({{cite afd_plugin/validation.py:136-141}}).</li>
+  <li><strong>Line 143.</strong> It checks the CUDA-graph mode for the role
+      ({{cite afd_plugin/validation.py:143}}).</li>
+</ol>
+
+<h3>assert_compatible_afd_stack</h3>
+<p>This check compares the resolved worker with the expected AFD worker for the role. It raises
+when the field is still <code>"auto"</code>, or when the worker does not match
+({{cite afd_plugin/validation.py:337-367}}).</p>
+<x-code file="afd_plugin/validation.py" lines="343-367" highlight="343,357,363" caption="Reject a leftover 'auto', then reject a mismatched worker with both names." />
+
+<h3>afd_worker_qualname_for_platform_default</h3>
+<p>This function maps the normalized platform default worker to the AFD worker for the role. CUDA
+maps to the GPU workers; the standard Ascend worker maps to the NPU workers; the 310P and Xlite
+Ascend workers are rejected ({{cite afd_plugin/validation.py:280-309}}). The
+{{link concepts/worker-selection}} page gives the table.</p>
+
+<h3>The NPU validator (NPU scope)</h3>
+<p><code>validate_npu_model_runner_v2_config</code> holds the Ascend rules
+({{cite afd_plugin/validation.py:146-239}}). It accepts the sync and async CAM connectors, and
+checks eager execution, the DP rule and the ACL graph modes. This is NPU code; the
+{{link concepts/npu-overview}} page covers it. Other pages cite it only to name a rule.</p>
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="The GPU rules as an error-path table">
+<p>Every rule in <code>validate_gpu_model_runner_v2_config</code> raises a
+<code>RuntimeError</code> with a clear message.</p>
+<table>
+  <thead><tr><th>Rule</th><th>Lines</th><th>Message hint</th></tr></thead>
+  <tbody>
+    <tr><td>No V2 runner</td><td>{{cite afd_plugin/validation.py:90-91}}</td><td>"AFD GPU requires ModelRunnerV2".</td></tr>
+    <tr><td>Wrong device or connector</td><td>{{cite afd_plugin/validation.py:93-97}}</td><td>"requires CUDA and synchronous P2pNcclAFDConnector".</td></tr>
+    <tr><td>PP or CP set</td><td>{{cite afd_plugin/validation.py:99-105}}</td><td>"does not support PP or CP".</td></tr>
+    <tr><td>Rank mismatch</td><td>{{cite afd_plugin/validation.py:107-117}}</td><td>"ranks must match DP * TP".</td></tr>
+    <tr><td>Not static EP</td><td>{{cite afd_plugin/validation.py:118-125}}</td><td>"requires static expert parallelism".</td></tr>
+    <tr><td>Wrong ubatch count</td><td>{{cite afd_plugin/validation.py:126-131}}</td><td>"requires exactly two microbatches".</td></tr>
+    <tr><td>Not an AFD model</td><td>{{cite afd_plugin/validation.py:136-141}}</td><td>"requires a registered AFD model".</td></tr>
+  </tbody>
+</table>
+</x-deepdive>
+
+<x-deepdive title="BATCH_SIZE_FACTOR and the CAM receive capacity">
+<p><code>cam_receive_capacity</code> scales a fixed token cap by an environment factor. It reads
+<code>BATCH_SIZE_FACTOR</code> (default <code>"1"</code>), packs it as a 32-bit float to match the
+native code, and multiplies <code>CAM_MAX_RECEIVE_TOKENS</code> (262144)
+({{cite afd_plugin/validation.py:45-54}}).</p>
+<x-code file="afd_plugin/validation.py" lines="45-54" highlight="49-54" caption="cam_receive_capacity: match the native float math exactly." />
+<p>This value bounds the async CAM connector on NPU. The 32-bit pack and unpack reproduce the
+rounding of the native <code>std::stof</code> and float multiply, so Python and the kernel agree on
+the capacity.</p>
+</x-deepdive>
+
+<h2>Related concepts</h2>
+<ul>
+  <li>{{link concepts/worker-selection}}</li>
+  <li>{{link concepts/afd-config}}</li>
+  <li>{{link code/config-py}}</li>
+  <li>{{link code/init-py}}</li>
+</ul>
+
+<x-quiz>
+  <x-q level="easy">What does <code>validate_gpu_model_runner_v2_config</code> check first?
+    <x-a><p>That the V2 model runner is on. It raises "AFD GPU requires ModelRunnerV2" otherwise
+      ({{cite afd_plugin/validation.py:90-91}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Why does the module import <code>has_afd_model_registration</code> inside the
+    function, not at the top?
+    <x-a><p>To keep the CPU-safe validation module independent of the model-wrapper package; the
+      validator runs only after the vLLM config is built
+      ({{cite afd_plugin/validation.py:133-138}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Which two connectors does the NPU validator accept?
+    <x-a><p>The synchronous <code>CAMP2pAFDConnector</code> and the async
+      <code>CAMAsyncAFDConnector</code> ({{cite afd_plugin/validation.py:159-178}}). It is NPU code;
+      see {{link concepts/npu-overview}}.</p></x-a>
+  </x-q>
+  <x-q level="hard">Why does <code>cam_receive_capacity</code> pack the factor as a 32-bit float
+    before multiplying?
+    <x-a><p>To reproduce the native <code>std::stof</code> and float multiply exactly, including the
+      rounding, so Python and the kernel compute the same capacity
+      ({{cite afd_plugin/validation.py:49-54}}).</p></x-a>
+  </x-q>
+</x-quiz>

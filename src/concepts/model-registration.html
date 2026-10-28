@@ -1,0 +1,145 @@
+---
+title: Model registration: the AFD<arch> wrappers
+nav_title: Model registration
+level: Intermediate
+prerequisites: concepts/plugin-entry-point
+related: concepts/model-wrappers, concepts/worker-selection, code/init-py, code/deepseek-v2-py
+summary: AFD registers each supported architecture under an AFD<arch> name, as a lazy string. At build time it swaps the model to its AFD identity with a deepcopy. This page shows the registration, the identity swap, and which architectures map to which wrapper.
+---
+<x-sentence>AFD registers each supported model under an <code>AFD&lt;arch&gt;</code> name. At build time it swaps the model config to that {{term model-wrapper | AFD identity}}.</x-sentence>
+
+<h2>The idea</h2>
+<p>{{term afd}} needs a role-aware version of each model, so the attention side can replace the FFN
+stage with a remote proxy. It supplies one <code>AFD&lt;arch&gt;</code> class per architecture. It
+registers these classes with vLLM's {{term model-registry | ModelRegistry}}, as lazy
+<code>"module:Class"</code> strings, so vLLM imports a class only when it is needed.</p>
+<p>The model config names a plain architecture, for example <code>DeepseekV2ForCausalLM</code>. At
+build time, the AFD worker swaps that name to <code>AFDDeepseekV2ForCausalLM</code>, so vLLM builds
+the AFD class instead of the native one. The swap copies the config, so the native config is left
+unchanged.</p>
+<p><strong>An everyday comparison.</strong> Think of a catalogue with an "AFD" edition of each item.
+You order by the plain name; the clerk swaps in the AFD edition. The comparison stops here: the
+swap keeps one hidden link intact, so vLLM Ascend can still tell a text model from a multimodal one.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b1_model_registration" alt="Three panels. Panel 1: a _MODEL_REGISTRATIONS box mapping arch to a module:Class string, an arrow labelled AFD+arch, and a ModelRegistry.register_model box with a lazy string. Panel 2: a has_afd_model_registration box that checks arch minus the AFD prefix is in the map, and a get_afd_model_config box that deepcopies and sets architectures to AFD+arch while keeping hf_text_config is hf_config. Panel 3: three mappings, DeepseekV32 reuses the V3 class, DeepseekV4 picks NPU or GPU by torch_npu, and Qwen3_5 is CUDA only." caption="Figure: registration by name (panel 1), the build-time identity swap (panel 2), and three mappings to remember (panel 3)." />
+<p>Read panel 1 as load time: register the names. Read panel 2 as build time: detect and swap the
+identity. Read panel 3 as the exact mappings. The {{link concepts/model-wrappers}} page shows what
+the wrappers do inside.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: Register each AFD<arch> name</h3>
+<p>At the end of <code>register_afd</code>, a loop registers each architecture under the name
+<code>"AFD" + arch</code> ({{cite afd_plugin/__init__.py:211-214}}). The source map holds eight
+architectures ({{cite afd_plugin/__init__.py:96-139}}).</p>
+<x-code file="afd_plugin/__init__.py" lines="211-214" caption="Register each model under its AFD-prefixed name." />
+
+<h3>Step 2: The lazy "module:Class" form</h3>
+<p>The registered value is a string, not a class. vLLM stores it and imports the class only when the
+model is built ({{cite vllm:vllm/model_executor/models/registry.py:1126-1141}}). So loading the
+plugin does not import every model file.</p>
+
+<h3>Step 3: Detect an AFD model</h3>
+<p><code>has_afd_model_registration</code> returns true when the model's architecture, with any
+<code>AFD</code> prefix removed, is in the map ({{cite afd_plugin/model_executor/models/model_utils.py:16-22}}).
+The runtime validator uses it to require a registered AFD model
+({{cite afd_plugin/validation.py:136-141}}).</p>
+<x-code file="afd_plugin/model_executor/models/model_utils.py" lines="16-22" caption="has_afd_model_registration: is the base arch in the map?" />
+
+<h3>Step 4: Swap the model identity</h3>
+<p><code>get_afd_model_config</code> finds the architecture in the map, deep-copies the model config,
+and sets its architecture to <code>AFD&lt;arch&gt;</code>
+({{cite afd_plugin/model_executor/models/model_utils.py:25-46}}). The worker then uses the returned
+config ({{cite afd_plugin/v1/worker/attention_worker.py:75-80}}).</p>
+<x-code file="afd_plugin/model_executor/models/model_utils.py" lines="32-46" highlight="39-44" caption="deepcopy the config, then rewrite the architecture name." />
+
+<h3>Step 5: Which architectures map to which wrapper</h3>
+<p>The map registers these exact strings ({{cite afd_plugin/__init__.py:96-131}}).</p>
+<table>
+  <thead><tr><th>Architecture</th><th>AFD wrapper class</th><th>Note</th></tr></thead>
+  <tbody>
+    <tr><td><code>DeepseekV2ForCausalLM</code></td><td><code>AFDDeepseekV2ForCausalLM</code></td><td>&nbsp;</td></tr>
+    <tr><td><code>DeepseekV3ForCausalLM</code></td><td><code>AFDDeepseekV3ForCausalLM</code></td><td>&nbsp;</td></tr>
+    <tr><td><code>DeepseekV32ForCausalLM</code></td><td><code>AFDDeepseekV3ForCausalLM</code></td><td>V3.2 reuses the V3 class ({{cite afd_plugin/__init__.py:106-108}}).</td></tr>
+    <tr><td><code>DeepseekV4ForCausalLM</code></td><td>NPU or GPU V4 class</td><td>NPU class when <code>torch_npu</code> is importable, else the GPU class ({{cite afd_plugin/__init__.py:109-113}}).</td></tr>
+    <tr><td><code>Qwen3MoeForCausalLM</code></td><td><code>AFDQwen3MoeForCausalLM</code></td><td>&nbsp;</td></tr>
+    <tr><td><code>Qwen3_5MoeForConditionalGeneration</code></td><td><code>AFDQwen3_5MoeForConditionalGeneration</code></td><td>CUDA execution only ({{cite afd_plugin/model_executor/models/model_utils.py:34-38}}).</td></tr>
+  </tbody>
+</table>
+<p>The map also registers <code>DeepseekForCausalLM</code> and <code>GlmMoeDsaForCausalLM</code>
+({{cite afd_plugin/__init__.py:96-116}}).</p>
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="Why deepcopy, and the hf_text_config identity">
+<p><code>get_afd_model_config</code> does not change the original config. It deep-copies it, then sets
+the architecture on the copy ({{cite afd_plugin/model_executor/models/model_utils.py:43-45}}).</p>
+<ul>
+  <li><strong>deepcopy keeps the inner aliasing.</strong> A code comment states the reason: the
+      pure-text identity <code>hf_text_config is hf_config</code> is kept automatically, because
+      deepcopy preserves aliasing within the copied object graph
+      ({{cite afd_plugin/model_executor/models/model_utils.py:39-43}}).</li>
+  <li><strong>vLLM Ascend reads that identity.</strong> It uses the same-object check to tell a
+      text model from a multimodal model. So the swap must not break it.</li>
+  <li><strong>Only the architecture name changes.</strong> The rest of the config is the copy of the
+      original ({{cite afd_plugin/model_executor/models/model_utils.py:44}}).</li>
+</ul>
+</x-deepdive>
+
+<x-deepdive title="README names a family; the code registers one string">
+<p>The README names model families loosely. The code registers exact architecture strings.</p>
+<ul>
+  <li>The README lists "Qwen3.5 / Qwen3.6 MoE" ({{cite README.md:51}}), but the code registers one
+      architecture, <code>Qwen3_5MoeForConditionalGeneration</code>
+      ({{cite afd_plugin/__init__.py:125-131}}).</li>
+  <li><code>get_afd_model_config</code> raises for that architecture when the device type is not
+      <code>cuda</code> ({{cite afd_plugin/model_executor/models/model_utils.py:34-38}}). So Qwen3.5
+      and Qwen3.6 run on CUDA only.</li>
+  <li><code>DeepseekV4ForCausalLM</code> resolves to the NPU class or the GPU class, chosen at import
+      by <code>torch_npu</code> ({{cite afd_plugin/__init__.py:109-113}}).</li>
+</ul>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<ul>
+  <li><strong>Model not registered.</strong> A model whose architecture is not in the map fails the
+      runtime check: "AFD ModelRunnerV2 requires a registered AFD model"
+      ({{cite afd_plugin/validation.py:136-141}}).</li>
+  <li><strong>Qwen3.5 on NPU.</strong> <code>get_afd_model_config</code> raises for a non-CUDA device
+      ({{cite afd_plugin/model_executor/models/model_utils.py:34-38}}).</li>
+  <li><strong>Model file import error.</strong> Because the registration is a lazy string, an import
+      error in the model file surfaces when vLLM builds the model, not when the plugin loads
+      ({{cite vllm:vllm/model_executor/models/registry.py:1126-1141}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The worker runs an AFD model only after the identity swap. If the
+architecture is not registered, the swap does nothing and the runtime check stops start-up.</p>
+
+<x-quiz>
+  <x-q level="easy">Under what name is <code>Qwen3MoeForCausalLM</code> registered?
+    <x-a><p><code>AFDQwen3MoeForCausalLM</code>. The loop registers each key under
+      <code>"AFD" + key</code> ({{cite afd_plugin/__init__.py:211-214}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">Why is the registered value a string, not a class?
+    <x-a><p>So vLLM imports the model class only when it is needed, not when the plugin loads
+      ({{cite vllm:vllm/model_executor/models/registry.py:1126-1141}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">What does <code>get_afd_model_config</code> change, and what does it keep?
+    <x-a><p>It deep-copies the config and changes only the architecture name to
+      <code>AFD&lt;arch&gt;</code> ({{cite afd_plugin/model_executor/models/model_utils.py:43-45}}).
+      It keeps the <code>hf_text_config is hf_config</code> identity
+      ({{cite afd_plugin/model_executor/models/model_utils.py:39-43}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">The README says "Qwen3.5 / Qwen3.6". Which architecture string does the code
+    register?
+    <x-a><p>One: <code>Qwen3_5MoeForConditionalGeneration</code>
+      ({{cite afd_plugin/__init__.py:125-131}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">Why does <code>get_afd_model_config</code> use <code>deepcopy</code> instead of
+    editing the architecture in place?
+    <x-a><p>To leave the original config unchanged, and because deepcopy preserves the inner aliasing
+      so <code>hf_text_config is hf_config</code> stays true. vLLM Ascend uses that identity to tell a
+      text model from a multimodal one
+      ({{cite afd_plugin/model_executor/models/model_utils.py:39-45}}).</p></x-a>
+  </x-q>
+</x-quiz>

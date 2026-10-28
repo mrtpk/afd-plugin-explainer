@@ -1,0 +1,158 @@
+---
+title: afd_plugin/config.py: the AFD config schema and parser
+nav_title: config.py
+level: Intermediate
+prerequisites: concepts/afd-config
+related: concepts/afd-config, concepts/worker-selection, reference/afd-config, code/validation-py
+summary: config.py defines AFDConfig and the functions that parse and validate additional_config["afd"]. config_utils.py holds the type coercers; envs.py holds two diagnostic environment flags. This page reads the three files.
+---
+<x-sentence>This module defines {{term afd-config | AFDConfig}} and the functions that parse and validate {{term additional-config | additional_config["afd"]}}, with no vLLM or CUDA import.</x-sentence>
+
+<h2>Purpose</h2>
+<p>The module turns a raw mapping into a validated <code>AFDConfig</code>. It is CPU-safe, so local
+tests parse a config without vLLM.</p>
+<table>
+  <tbody>
+    <tr><th>Files</th><td><code>afd_plugin/config.py</code> (371 lines), <code>config_utils.py</code>
+      (76 lines), <code>afd_plugin/envs.py</code> (28 lines).</td></tr>
+    <tr><th>Main class</th><td><code>AFDConfig</code>, a frozen dataclass
+      ({{cite afd_plugin/config.py:41-73}}).</td></tr>
+    <tr><th>Runs in</th><td>Any process (CPU), during config build and worker init. No vLLM import at
+      module load.</td></tr>
+    <tr><th>Called by</th><td>The config patch ({{cite afd_plugin/compat/patches/config_validation.py:23}}),
+      the validation module ({{cite afd_plugin/validation.py:12-17}}), and the connector factory.</td></tr>
+    <tr><th>Calls</th><td>The coercers in <code>config_utils.py</code>
+      ({{cite afd_plugin/config.py:13-15}}).</td></tr>
+    <tr><th>Not in this file</th><td>Per-connector option parsing (in each connector), worker
+      selection (in <code>validation.py</code>), and the vLLM config field itself.</td></tr>
+  </tbody>
+</table>
+
+<h2>Where it sits</h2>
+<h3>Who calls it</h3>
+<p>Every part that needs the AFD config parses it here. The config patch parses it to decide the
+worker and the NPU path ({{cite afd_plugin/compat/patches/config_validation.py:160-172}}). The
+runtime validators parse it with an expected role ({{cite afd_plugin/validation.py:93}}).</p>
+<h3>What it calls</h3>
+<p>It calls the three coercers in <code>config_utils.py</code> for the typed fields
+({{cite afd_plugin/config.py:147-174}}). It imports <code>validate_p2p_topology</code> lazily, only
+for the P2P connector ({{cite afd_plugin/config.py:335-338}}).</p>
+
+<h2>Key classes and functions</h2>
+<table>
+  <thead><tr><th>Name</th><th>Line</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td><code>AFDConfig</code></td><td>{{cite afd_plugin/config.py:41}}</td><td>The frozen config dataclass with the aliases as properties.</td></tr>
+    <tr><td><code>_ALIASES</code></td><td>{{cite afd_plugin/config.py:32-38}}</td><td>Old <code>afd_*</code> names mapped to the short field names.</td></tr>
+    <tr><td><code>_normalize_mapping</code></td><td>{{cite afd_plugin/config.py:120}}</td><td>Rename aliases, split extra config, coerce types.</td></tr>
+    <tr><td><code>afd_config_from_mapping</code></td><td>{{cite afd_plugin/config.py:179}}</td><td>Build and optionally validate an <code>AFDConfig</code>.</td></tr>
+    <tr><td><code>parse_optional_afd_config</code></td><td>{{cite afd_plugin/config.py:244}}</td><td>Parse when the key is present, else <code>None</code>.</td></tr>
+    <tr><td><code>is_afd_active</code></td><td>{{cite afd_plugin/config.py:289}}</td><td>True only when a present config validates.</td></tr>
+    <tr><td><code>is_afd_async_dp</code></td><td>{{cite afd_plugin/config.py:295}}</td><td>Select the async-DP mode from the flag and the connector.</td></tr>
+    <tr><td><code>validate_afd_config</code></td><td>{{cite afd_plugin/config.py:311}}</td><td>Check roles, connector, host, port and rank counts.</td></tr>
+    <tr><td><code>coerce_extra_int</code></td><td>{{cite afd_plugin/config_utils.py:35}}</td><td>Parse an int; reject a bool or a float.</td></tr>
+    <tr><td><code>force_balanced_topk_ids_enabled</code></td><td>{{cite afd_plugin/envs.py:14}}</td><td>Read a diagnostic env flag for routing.</td></tr>
+  </tbody>
+</table>
+
+<h2>Walk through the main methods</h2>
+
+<h3>AFDConfig and its aliases</h3>
+<p>The dataclass is frozen, so a config cannot change after it is built. Each old
+<code>afd_*</code> name is a read-only property that returns the short field
+({{cite afd_plugin/config.py:75-89}}).</p>
+<x-code file="afd_plugin/config.py" lines="75-89" caption="The alias properties: afd_connector, afd_role, afd_port, afd_host." />
+
+<h3>_normalize_mapping</h3>
+<p>This function does the rename, the split and the coercion in one pass.</p>
+<x-code file="afd_plugin/config.py" lines="127-145" highlight="128,134,140" caption="Rename the alias, pull out connector_extra_config, reject an unknown field, reject a duplicate." />
+<ol>
+  <li><strong>Line 128.</strong> It maps the key through <code>_ALIASES</code>, so an alias becomes
+      its short name.</li>
+  <li><strong>Lines 129-133.</strong> It pulls <code>connector_extra_config</code> aside and checks
+      it is a mapping.</li>
+  <li><strong>Lines 134-139.</strong> An unknown field raises, with a message that points to
+      <code>connector_extra_config</code>.</li>
+  <li><strong>Lines 140-144.</strong> An alias and its canonical key together raise a duplicate
+      error.</li>
+</ol>
+<p>After the loop, it coerces the boolean and integer fields
+({{cite afd_plugin/config.py:147-174}}).</p>
+
+<h3>validate_afd_config</h3>
+<p>The validator runs on the built config. It raises a clear error for each broken rule
+({{cite afd_plugin/config.py:311-350}}). For the P2P connector it also checks the topology
+({{cite afd_plugin/config.py:335-338}}).</p>
+
+<h3>config_utils.coerce_extra_int</h3>
+<p>The integer coercer rejects a bool or a float before it calls <code>int()</code>, so a wrong
+type cannot be truncated silently ({{cite afd_plugin/config_utils.py:35-45}}).</p>
+<x-code file="afd_plugin/config_utils.py" lines="35-45" highlight="38-39" caption="coerce_extra_int: reject bool and float, then parse." />
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="The parser entry points, and when each is used">
+<p>Several functions wrap <code>_normalize_mapping</code> for different needs.</p>
+<table>
+  <thead><tr><th>Function</th><th>Returns</th><th>Used for</th></tr></thead>
+  <tbody>
+    <tr><td><code>parse_afd_config</code></td><td>An <code>AFDConfig</code>; raises if the key is
+      missing ({{cite afd_plugin/config.py:262-279}}).</td><td>Code that needs AFD to be on.</td></tr>
+    <tr><td><code>parse_optional_afd_config</code></td><td><code>AFDConfig</code> or <code>None</code>
+      ({{cite afd_plugin/config.py:244-259}}).</td><td>Code that checks whether AFD is on.</td></tr>
+    <tr><td><code>is_afd_active</code></td><td><code>bool</code>
+      ({{cite afd_plugin/config.py:289-292}}).</td><td>A quick on/off test with validation.</td></tr>
+    <tr><td><code>is_afd_async_dp</code></td><td><code>bool</code>
+      ({{cite afd_plugin/config.py:295-308}}).</td><td>Import-time async-DP patch selection
+      (parses without validation).</td></tr>
+    <tr><td><code>connector_extra_config_from_source</code></td><td><code>dict</code>
+      ({{cite afd_plugin/config.py:282-286}}).</td><td>Get only the connector options.</td></tr>
+  </tbody>
+</table>
+<p><code>compute_hash</code> builds a stable hash of the graph-affecting settings, for cache keys
+({{cite afd_plugin/config.py:99-114}}).</p>
+</x-deepdive>
+
+<x-deepdive title="Environment flags in envs.py">
+<p><code>envs.py</code> holds two diagnostic flags. Each reads one variable and returns a bool.</p>
+<table>
+  <thead><tr><th>Variable</th><th>Read at</th><th>Effect</th></tr></thead>
+  <tbody>
+    <tr><td><code>AFD_FORCE_BALANCED_TOPK_IDS</code></td><td>{{cite afd_plugin/envs.py:14-15}}</td>
+      <td>Force balanced top-k ids for the routing simulator.</td></tr>
+    <tr><td><code>AFD_ASYNC_CAM_LAYERED_GMM</code></td><td>{{cite afd_plugin/envs.py:18-19}}</td>
+      <td>Select a layered GMM path in the async CAM connector (NPU).</td></tr>
+  </tbody>
+</table>
+<p>A value is true when it is <code>1</code>, <code>true</code>, <code>yes</code> or <code>on</code>,
+in any case ({{cite afd_plugin/envs.py:11}}).</p>
+</x-deepdive>
+
+<h2>Related concepts</h2>
+<ul>
+  <li>{{link concepts/afd-config}}</li>
+  <li>{{link concepts/worker-selection}}</li>
+  <li>{{link reference/afd-config}}</li>
+  <li>{{link code/validation-py}}</li>
+</ul>
+
+<x-quiz>
+  <x-q level="easy">Why is <code>AFDConfig</code> a frozen dataclass?
+    <x-a><p>So a config cannot change after it is built ({{cite afd_plugin/config.py:41}}). The old
+      names are read-only properties ({{cite afd_plugin/config.py:75-89}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Which function parses the config without validating it, and why?
+    <x-a><p><code>is_afd_async_dp</code>. It is a lightweight selector for import-time async-DP
+      patches, so it parses with <code>validate=False</code>
+      ({{cite afd_plugin/config.py:295-308}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">What does <code>_normalize_mapping</code> do with a key it does not know?
+    <x-a><p>It raises <code>ValueError</code> and points to <code>connector_extra_config</code> for
+      connector-specific values ({{cite afd_plugin/config.py:134-139}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">A caller passes <code>"num_ffn_ranks": True</code>. Where and why does this fail?
+    <x-a><p>In <code>coerce_extra_int</code>: it rejects a bool before calling <code>int()</code>, so
+      the value does not become 1 ({{cite afd_plugin/config_utils.py:38-39}}). The integer fields use
+      this coercer ({{cite afd_plugin/config.py:153-162}}).</p></x-a>
+  </x-q>
+</x-quiz>

@@ -1,0 +1,154 @@
+---
+title: Worker selection: choosing the role worker
+nav_title: Worker selection
+level: Intermediate
+prerequisites: concepts/afd-config
+related: concepts/plugin-entry-point, concepts/roles, concepts/attention-runtime, code/validation-py, code/init-py
+summary: AFD chooses a role-specific worker class by rewriting parallel_config.worker_cls, but only when the user left it as "auto". This page shows the rewrite, the platform-to-worker table, the native resolution, the runner swap and the compatibility check.
+---
+<x-sentence>AFD picks a role-specific worker by rewriting {{term worker-cls | worker_cls}}, but only when the user left it as <code>"auto"</code>.</x-sentence>
+
+<h2>The idea</h2>
+<p>vLLM has no register API for a worker. It reads the worker class name from
+<code>parallel_config.worker_cls</code> and imports it by name
+({{cite vllm:vllm/v1/worker/worker_base.py:273-277}}). A plugin changes the worker by setting
+this field. AFD does that in its config patch.</p>
+<p>AFD must not overwrite a worker the user chose on purpose. So the rewrite runs only when the
+field is still <code>"auto"</code>. When the user passed <code>--worker-cls</code>, AFD keeps it
+and checks it later instead. The right worker also depends on the role and the platform, so AFD
+maps the platform's default worker to the matching AFD worker.</p>
+<p><strong>An everyday comparison.</strong> Think of a form field set to "auto". A helper fills it
+only when it is still "auto"; a value you typed is left alone, but checked for fit. The comparison
+stops here: AFD also swaps the model runner later, inside the worker.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b1_worker_selection" alt="Two panels. Panel 1 is a five-step flow: the patched create_engine_config records whether worker_cls was 'auto'; vLLM builds the config with the platform default worker; if it was auto, rewrite worker_cls to the AFD role worker; vLLM imports worker_cls by its qualname; init_device asserts the stack and swaps the model runner. Panel 2 is a table: CUDA gpu_worker.Worker maps to AFDAttentionWorker or AFDFFNWorker; Ascend NPUWorker maps to AFDNPUAttentionWorker or AFDNPUFFNWorker." caption="Figure: the rewrite runs only for worker_cls == 'auto' (panel 1); the platform default maps to an AFD worker per role (panel 2)." />
+<p>Read panel 1 top to bottom as the start-up flow. Read panel 2 as the mapping used in step 3.
+The violet NPU row is named here only; the GPU worker is the one this site covers in depth.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: The config patch records whether worker_cls was "auto"</h3>
+<p>The patched <code>create_engine_config</code> first records whether the user left
+<code>worker_cls</code> as <code>"auto"</code> ({{cite afd_plugin/compat/patches/config_validation.py:60}}).
+It keeps that flag because vLLM fills the field with the platform default while it builds the
+config.</p>
+<x-code file="afd_plugin/compat/patches/config_validation.py" lines="59-65" highlight="60" caption="Record worker_cls_was_auto before vLLM builds the config." />
+
+<h3>Step 2: Rewrite only when it was "auto"</h3>
+<p>After the config is built, the patch rewrites the worker only when the flag is set
+({{cite afd_plugin/compat/patches/config_validation.py:91-93}}). The rewrite reads the role from
+the AFD config and the platform default from the field
+({{cite afd_plugin/compat/patches/config_validation.py:179-197}}).</p>
+<x-code file="afd_plugin/compat/patches/config_validation.py" lines="179-197" highlight="192-197" caption="_select_afd_worker_for_auto: map the platform default to the AFD worker." />
+
+<h3>Step 3: The platform default maps to an AFD worker</h3>
+<p><code>afd_worker_qualname_for_platform_default</code> normalizes the platform default and maps it
+to the AFD worker for the role ({{cite afd_plugin/validation.py:280-309}}). The table lists the
+mappings.</p>
+<table>
+  <thead><tr><th>Platform default worker</th><th>Role</th><th>AFD worker</th></tr></thead>
+  <tbody>
+    <tr><td rowspan="2"><code>vllm.v1.worker.gpu_worker.Worker</code> (CUDA)</td>
+      <td>attention</td><td><code>AFDAttentionWorker</code></td></tr>
+    <tr><td>ffn</td><td><code>AFDFFNWorker</code></td></tr>
+    <tr><td rowspan="2"><code>vllm_ascend.worker.worker.NPUWorker</code> (NPU)</td>
+      <td>attention</td><td><code>AFDNPUAttentionWorker</code></td></tr>
+    <tr><td>ffn</td><td><code>AFDNPUFFNWorker</code></td></tr>
+  </tbody>
+</table>
+<p>The names are the FQCN constants at the top of the module
+({{cite afd_plugin/validation.py:26-41}}). A CUDA default maps by role
+({{cite afd_plugin/validation.py:290-291}}); the standard Ascend default maps to the NPU workers
+({{cite afd_plugin/validation.py:292-296}}). The 310P and Xlite Ascend workers are rejected
+({{cite afd_plugin/validation.py:297-305}}).</p>
+
+<h3>Step 4: vLLM imports the chosen class</h3>
+<p>Later, in the worker process, vLLM imports <code>worker_cls</code> by its qualified name
+({{cite vllm:vllm/v1/worker/worker_base.py:273-277}}). By then the field holds the AFD worker, so
+vLLM builds the AFD worker.</p>
+
+<h3>Step 5: The worker swaps the model runner in init_device</h3>
+<p>The AFD worker's <code>init_device</code> first checks the stack, then swaps the native model
+runner class for the AFD one and delegates to the native init
+({{cite afd_plugin/v1/worker/attention_worker.py:60-88}}). The FFN worker does the same with its
+own runner ({{cite afd_plugin/v1/worker/ffn_worker.py:81-99}}).</p>
+<x-code file="afd_plugin/v1/worker/attention_worker.py" lines="82-88" caption="Swap GPUModelRunner for AFDAttentionModelRunnerV2 around the native init." />
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="An explicit wrong worker is rejected, not fixed">
+<p>When the user passes <code>--worker-cls</code>, the rewrite does not run. The stack check in
+<code>init_device</code> then verifies the field. <code>assert_compatible_afd_stack</code> compares
+the resolved worker with the expected AFD worker for the role
+({{cite afd_plugin/validation.py:312-369}}).</p>
+<ol>
+  <li>If the field is still <code>"auto"</code>, it raises. This means the general plugin did not
+      run before the config was built ({{cite afd_plugin/validation.py:343-348}}).</li>
+  <li>If the worker does not match the expected AFD worker, it raises and names both, and tells the
+      user to remove <code>--worker-cls</code> or pass the right one
+      ({{cite afd_plugin/validation.py:357-367}}).</li>
+  <li>For the async CAM connector, the expected worker is the NPU worker instead
+      ({{cite afd_plugin/validation.py:331-335}}).</li>
+</ol>
+<p>So AFD never silently replaces a worker the user set. It either accepts the right one or stops
+with a clear message.</p>
+</x-deepdive>
+
+<x-deepdive title="Why the runner swap is a scoped module-attribute patch">
+<p>vLLM 0.30.0 builds its model runner inside <code>Worker.init_device</code>, with no runner
+factory to inject. The AFD worker works around this with a scoped patch. It replaces the module
+attribute <code>GPUModelRunner</code>, calls the native <code>init_device</code>, then restores the
+attribute in a <code>finally</code> ({{cite afd_plugin/v1/worker/attention_worker.py:82-87}}).</p>
+<p>This works because the native code does a local import of <code>GPUModelRunner</code> from the
+same module inside <code>init_device</code>, after the patch is in place
+({{cite vllm:vllm/v1/worker/gpu_worker.py:475-482}}). A module-attribute patch changes only later
+attribute lookups, so the swap must be active during that import. The <code>finally</code> keeps
+the swap from leaking past the call.</p>
+<p>Both roles also need the V2 model runner. The GPU runner check raises when
+<code>VLLM_USE_V2_MODEL_RUNNER</code> is not set ({{cite afd_plugin/validation.py:90-91}}).</p>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<ul>
+  <li><strong>Plugin loaded too late.</strong> If the config is built before the plugin runs,
+      <code>worker_cls</code> stays <code>"auto"</code> and the stack check raises
+      ({{cite afd_plugin/validation.py:343-348}}).</li>
+  <li><strong>Wrong explicit worker.</strong> A <code>--worker-cls</code> that is not the role's AFD
+      worker is rejected with both names ({{cite afd_plugin/validation.py:357-367}}).</li>
+  <li><strong>Unsupported platform.</strong> A platform whose default worker AFD does not know
+      raises in the mapping ({{cite afd_plugin/validation.py:306-309}}).</li>
+  <li><strong>No V2 model runner.</strong> Without <code>VLLM_USE_V2_MODEL_RUNNER</code> the GPU
+      check raises ({{cite afd_plugin/validation.py:90-91}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The two servers must run the matching role workers. AFD picks
+them when the field is <code>"auto"</code>, and refuses a wrong one, so a mismatch cannot reach the
+model.</p>
+
+<x-quiz>
+  <x-q level="easy">When does AFD rewrite <code>worker_cls</code>?
+    <x-a><p>Only when it is still <code>"auto"</code>. The patch records this before the config is
+      built ({{cite afd_plugin/compat/patches/config_validation.py:60}},
+      {{cite afd_plugin/compat/patches/config_validation.py:91-93}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">On CUDA, which worker does the attention role use?
+    <x-a><p><code>AFDAttentionWorker</code>. The CUDA default maps to it by role
+      ({{cite afd_plugin/validation.py:290-291}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">The user passes <code>--worker-cls some.other.Worker</code>. What happens?
+    <x-a><p>The rewrite is skipped, and <code>assert_compatible_afd_stack</code> rejects the worker
+      because it does not match the role's AFD worker ({{cite afd_plugin/validation.py:357-367}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Why does the runner swap use a <code>finally</code> block?
+    <x-a><p>The swap is a module-attribute patch active only during the native
+      <code>init_device</code>. The <code>finally</code> restores the native class so the swap does
+      not leak past the call ({{cite afd_plugin/v1/worker/attention_worker.py:82-87}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">The worker class resolves, but the model runner is never swapped to the AFD one.
+    Give one setup that produces this.
+    <x-a><p>If the plugin loaded after the config was built, <code>worker_cls</code> stays
+      <code>"auto"</code> and the stack check raises before the swap
+      ({{cite afd_plugin/validation.py:343-348}}). The swap runs only inside the AFD worker's
+      <code>init_device</code> ({{cite afd_plugin/v1/worker/attention_worker.py:82-87}}).</p></x-a>
+  </x-q>
+</x-quiz>
