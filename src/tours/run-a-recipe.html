@@ -20,7 +20,7 @@ The {{link reference/recipes}} page lists every recipe; the {{link tours/life-of
 request through this same recipe.</p>
 
 <h2>The picture</h2>
-<x-diagram name="b5_run_a_recipe" alt="Two panels. Panel 1, two vllm serve processes: an attention-server step card (role attention) with rows for the env VLLM_USE_V2_MODEL_RUNNER=1, GPUs 0 and 1, data-parallel-size 1 and tensor-parallel-size 2, the afd connector P2pNcclAFDConnector on port 6269, cudagraph_mode FULL_DECODE_ONLY, and HTTP port 18305 where clients connect; and an FFN-server step card (role ffn) with rows for GPUs 2 and 3, the same parallelism, the same host and port and ranks, enable-dbo 2 slash 12, the same graph mode, and a note that it has no scheduler, no KV and no client traffic. Panel 2, start order and traffic: a background-both box, an arrow to a wait-for-startup box (Application startup complete in each log), an arrow to a send-to-attention-18305 box (vllm bench serve, never to the FFN server). A legend marks attention role and client traffic, FFN role, wait condition, and shell step." caption="Figure: the recipe starts two servers with the same afd block, waits for both to come up, then sends traffic to the attention HTTP port only." />
+<x-diagram name="b5_run_a_recipe" alt="Two panels. Panel 1, two vllm serve processes: an attention-server step card (role attention) with rows for the env VLLM_USE_V2_MODEL_RUNNER=1, GPUs 0 and 1, data-parallel-size 1 and tensor-parallel-size 2, the afd connector P2pNcclAFDConnector on port 6269, cudagraph_mode FULL_DECODE_ONLY, and HTTP port 18305 where clients connect; and an FFN-server step card (role ffn) with rows for GPUs 2 and 3, the same parallelism, the same host and port and ranks, enable-dbo 2 slash 12, the same graph mode, and a note that it has no real scheduler, no KV and no client traffic. Panel 2, start order and traffic: a background-both box, an arrow to a wait-for-startup box (Application startup complete in each log), an arrow to a send-to-attention-18305 box (vllm bench serve, never to the FFN server). A legend marks attention role and client traffic, FFN role, wait condition, and shell step." caption="Figure: the recipe starts two servers with the same afd block, waits for both to come up, then sends traffic to the attention HTTP port only." />
 <p>Read panel 1 as the two serve commands, side by side. Read panel 2 as the order: background both, wait for
 startup, then send requests to the attention port.</p>
 
@@ -89,7 +89,7 @@ with <code>&amp;</code>, so it runs in the background.</p>
 ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:34-59}}).</p>
 <x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh" lines="34-47" highlight="34,40" caption="The FFN server: GPUs 2,3, role ffn, same host, port and ranks." />
 <p>The FFN server reads the same <code>host</code>, <code>port</code> and rank counts, so the two roles meet at
-the same rendezvous. It runs no request scheduler and no KV cache; the connector drives it
+the same rendezvous. It runs no KV cache and no real scheduler, only a no-op stand-in; the connector drives it
 ({{cite afd_plugin/compat/patches/engine_core.py:599-623}}). Send no client traffic here. See
 {{link concepts/roles}} and {{link concepts/ffn-runtime}}.</p>
 </x-stop>

@@ -2,10 +2,10 @@
 
 Used by: src/concepts/npu-overview.html
 Sources (at the pinned commit in explainer.json):
-  afd_plugin/connectors/npu/camp2p.py:6-8,385,395-397   CAMP2p: HCCL data + Gloo control plane
+  afd_plugin/connectors/npu/camp2p.py:6-8,385,418-431,460-468   CAMP2p: HCCL data + Gloo control plane
   afd_plugin/connectors/npu/async_cam.py:277-283          CAMAsync: no control plane
-  afd_plugin/v1/worker/npu/async_ffn_model_runner.py:441-443  receive loop drives FFN
-  afd_plugin/compat/npu/ops.py:72-94                       operator loader
+  afd_plugin/v1/worker/npu/async_ffn_model_runner.py:442-446  receive loop drives FFN
+  afd_plugin/compat/npu/ops.py:73-91                       operator loader
 """
 
 import os
@@ -17,7 +17,7 @@ from svglib import BLUE, EMERALD, VIOLET, TEAL, NEUTRAL, Diagram  # noqa: E402
 d = Diagram(width=1100)
 d.header(
     "Ascend NPU: same contract, two CAM transports",
-    "Same attention/FFN split as GPU  ·  different connectors  ·  prebuilt operators loaded by the plugin",
+    "Same attention/FFN split as GPU  ·  different connectors  ·  compiled Ascend extension loaded by the plugin",
     params="CAMP2pAFDConnector (sync)   ·   CAMAsyncAFDConnector (async)",
 )
 
@@ -45,7 +45,7 @@ d.panel(y, P2, 2, "CAMP2pAFDConnector: synchronous, with a control plane",
 by = y + 70
 d.box(46, by, 460, 70, "Data plane (HCCL)", [
     "CAMP2p custom ops over HCCL",
-    "camp2p.py:6  ·  one group per batch",
+    "camp2p.py:418  ·  one group per batch",
 ], col=EMERALD, align="left")
 d.box(560, by, 494, 70, "Control plane (Gloo)", [
     "CAMP2pAFDControlPlane  ·  camp2p.py:385",
@@ -65,7 +65,7 @@ d.box(46, by, 320, 74, "control_plane = None", [
 d.arrow(366, by + 37, 462, by + 37, TEAL)
 d.box(464, by, 300, 74, "recv_ffn_work_item", [
     "layer_idx from CAM",
-    "async_ffn_...:441",
+    "async_ffn_...:443",
 ], col=TEAL, align="left")
 d.arrow(764, by + 37, 860, by + 37, EMERALD)
 d.box(862, by, 192, 74, "compute + send", [
@@ -79,7 +79,7 @@ d.legend(30, y, [
 ])
 y += 40
 y = d.footnotes(30, y, [
-    "Out of scope: the CAM kernel internals. The plugin loads prebuilt operators (afd_plugin._C_ascend) and asserts the torch.ops.afd_ascend namespace (ops.py:72-94).",
+    "Out of scope: the CAM kernel internals. The plugin loads its compiled Ascend extension (afd_plugin._C_ascend, built by setup.py) and asserts the torch.ops.afd_ascend namespace (ops.py:73-91).",
     "The async receive loop reads each layer index from CAM metadata, so no separate control plane is needed.",
 ])
 d.save(height=y + 14)

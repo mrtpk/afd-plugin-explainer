@@ -27,7 +27,7 @@ It does not cover the CAM kernel internals or the vendored binaries, which are o
 ({{cite afd_plugin/connectors/npu/bin/}}).</p></x-simplified>
 
 <h2>The picture</h2>
-<x-diagram name="b5_npu_overview" alt="Three panels. Panel 1, the contract is unchanged: a blue attention-role box (send hidden states, receive FFN output) on the left, a neutral CAM arrow, and an emerald FFN-role box (receive, experts, send output) on the right. Panel 2, CAMP2pAFDConnector synchronous: an emerald data-plane box (CAMP2p custom ops over HCCL, one group per batch, camp2p.py line 6) and a violet control-plane box (CAMP2pAFDControlPlane at camp2p.py line 385, token counts once per step). Panel 3, CAMAsyncAFDConnector asynchronous: a neutral control_plane equals None box (async_cam.py line 283, no DP metadata path), a teal arrow to a recv_ffn_work_item box (layer index from CAM, async_ffn runner line 441), a teal arrow to an emerald compute-and-send box (per layer). A legend marks attention role, FFN role and data plane, control plane, and async receive loop." caption="Figure: the attention/FFN contract is the same as GPU. CAMP2p is synchronous with a Gloo control plane; CAMAsync is asynchronous, with no control plane, driven by its receive loop." />
+<x-diagram name="b5_npu_overview" alt="Three panels. Panel 1, the contract is unchanged: a blue attention-role box (send hidden states, receive FFN output) on the left, a neutral CAM arrow, and an emerald FFN-role box (receive, experts, send output) on the right. Panel 2, CAMP2pAFDConnector synchronous: an emerald data-plane box (CAMP2p custom ops over HCCL, one group per batch, camp2p.py line 418) and a violet control-plane box (CAMP2pAFDControlPlane at camp2p.py line 385, token counts once per step). Panel 3, CAMAsyncAFDConnector asynchronous: a neutral control_plane equals None box (async_cam.py line 283, no DP metadata path), a teal arrow to a recv_ffn_work_item box (layer index from CAM, async_ffn runner line 443), a teal arrow to an emerald compute-and-send box (per layer). A legend marks attention role, FFN role and data plane, control plane, and async receive loop." caption="Figure: the attention/FFN contract is the same as GPU. CAMP2p is synchronous with a Gloo control plane; CAMAsync is asynchronous, with no control plane, driven by its receive loop." />
 <p>Read the panels top to bottom. Panel 1 is the shared contract. Panel 2 is the synchronous connector, which
 keeps a control plane. Panel 3 is the asynchronous connector, where the receive loop itself drives each FFN
 layer.</p>
@@ -35,8 +35,9 @@ layer.</p>
 <h2>In the code</h2>
 
 <h3>Step 1: CAMP2p, the synchronous connector with a control plane</h3>
-<p>The synchronous connector builds its own HCCL groups for the hidden states and a smaller Gloo group for the
-DP metadata ({{cite afd_plugin/connectors/npu/camp2p.py:395-400}}). It sets a control plane,
+<p>The synchronous connector builds its own HCCL groups for the hidden states
+({{cite afd_plugin/connectors/npu/camp2p.py:418-431}}) and a smaller Gloo group for the
+DP metadata ({{cite afd_plugin/connectors/npu/camp2p.py:460-468}}). It sets a control plane,
 <code>CAMP2pAFDControlPlane</code> ({{cite afd_plugin/connectors/npu/camp2p.py:385}}), so the DP metadata
 travels once per step, the same timing as the GPU connector. See {{link concepts/control-plane}}.</p>
 
@@ -47,11 +48,11 @@ motion and its routing metadata, so there is no separate DP metadata path
 ({{cite afd_plugin/connectors/npu/async_cam.py:277-282}}).</p>
 <x-code file="afd_plugin/connectors/npu/async_cam.py" lines="277-283" highlight="283" caption="The async connector: no control plane; FFN work is triggered by the receive loop." />
 <p>So what drives the FFN side? The NPU async FFN runner loops over the layers and, for each one, calls
-<code>recv_ffn_work_item</code> ({{cite afd_plugin/v1/worker/npu/async_ffn_model_runner.py:441-443}}). Each
+<code>recv_ffn_work_item</code> ({{cite afd_plugin/v1/worker/npu/async_ffn_model_runner.py:442-446}}). Each
 work item carries its own layer index, read from the CAM metadata of the dispatch-receive, not from a
 control-plane payload ({{cite afd_plugin/connectors/npu/async_cam.py:497-541}}).</p>
 <x-code file="afd_plugin/v1/worker/npu/async_ffn_model_runner.py" lines="441-475" highlight="443,456,473" caption="The connector-driven FFN loop: recv_ffn_work_item gives the layer index; dp_metadata stays None." />
-<p>The forward context sets <code>dp_metadata = None</code> for each step
+<p>The forward context sets <code>dp_metadata = None</code> for each work item
 ({{cite afd_plugin/v1/worker/npu/async_ffn_model_runner.py:473}}). The connector receive is the clock: when a
 dispatch arrives, the runner computes that layer and sends the result back. This is the mechanism the
 {{link concepts/control-plane}} page names in one line.</p>
@@ -217,11 +218,11 @@ receive loop, not a metadata step.</p>
   </x-q>
   <x-q level="easy">What two collective libraries does CAMP2p use, and for what?
     <x-a><p>HCCL for the hidden states, and a smaller Gloo group for the DP metadata
-      ({{cite afd_plugin/connectors/npu/camp2p.py:3-8}}, {{cite afd_plugin/connectors/npu/camp2p.py:395-400}}).</p></x-a>
+      ({{cite afd_plugin/connectors/npu/camp2p.py:418-431}}, {{cite afd_plugin/connectors/npu/camp2p.py:460-468}}).</p></x-a>
   </x-q>
   <x-q level="medium">How does the async FFN side know which layer to compute without a control plane?
     <x-a><p>The runner calls <code>recv_ffn_work_item</code> in a loop; each item carries its layer index, read
-      from the CAM dispatch metadata ({{cite afd_plugin/v1/worker/npu/async_ffn_model_runner.py:441-443}},
+      from the CAM dispatch metadata ({{cite afd_plugin/v1/worker/npu/async_ffn_model_runner.py:442-446}},
       {{cite afd_plugin/connectors/npu/async_cam.py:497-541}}).</p></x-a>
   </x-q>
   <x-q level="medium">How does the plugin load the Ascend operators, and what does it not load?

@@ -38,12 +38,12 @@ d.arrow_label(549, by + 40, "connector", MUTE)
 d.box(614, by, 440, 80, "FFN server", [
     "role=ffn  ·  GPUs 2,3",
     "DP1 TP2 -> ranks F0, F1",
-    "HTTP 18305  ·  no scheduler, no KV",
+    "HTTP 18305  ·  no real scheduler, no KV",
 ], col=EMERALD, align="left")
 y += P1 + 20
 
 # --- Panel 2: disaggregation 2P1A1F --------------------------------------
-P2 = 196
+P2 = 212
 d.panel(y, P2, 2, "Disaggregation (2P1A1F): add prefillers and a proxy",
         "Five processes. The proxy prefills on a prefiller, then the decode pair (attention + FFN) decodes.")
 by = y + 70
@@ -58,11 +58,11 @@ d.box(718, by, 336, 56, "Decode attention", [
 ], col=BLUE, align="left")
 by2 = by + 76
 d.arrow(886, by + 56, 886, by2, NEUTRAL)
-d.box(718, by2, 336, 44, "Decode FFN", [
+d.box(718, by2, 336, 52, "Decode FFN", [
     "GPU3  ·  role=ffn  ·  18304",
 ], col=EMERALD, align="left")
 d.callout(46, by2, 656, "Not the A/F split:",
-          "the proxy and prefillers handle prefill/decode (NIXL KV), not attention/FFN.", VIOLET, h=44)
+          "the proxy and prefillers handle prefill/decode (NIXL KV), not attention/FFN.", VIOLET, h=52)
 y += P2 + 20
 
 # --- Panel 3: multipod ---------------------------------------------------

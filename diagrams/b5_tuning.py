@@ -36,7 +36,7 @@ d.step_card(X[0], cy, CW, 74, 1, "Rank ratio A:F", BLUE, tag="A >= F", rows=[
 ])
 d.step_card(X[1], cy, CW, 74, 2, "DBO thresholds", BLUE, tag="2 / 12", rows=[
     ("vLLM", "32 / 512 default"),
-    ("recipe", "dbo *_token_threshold"),
+    ("ex", "dbo *_token_threshold"),
 ])
 d.step_card(X[2], cy, CW, 74, 3, "CUDA graph size", BLUE, tag="64", rows=[
     ("flag", "max-cudagraph-capture-size"),

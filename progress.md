@@ -1,7 +1,7 @@
 # AFD Plugin Explainer — Progress
 
 Last update: 2026-10-29
-Current phase: **2 Full build** — B5 verified and committed (2026-10-29, new session). Next: FC-B5, then F.
+Current phase: **2 Full build** — B5 fact-checked and committed (2026-10-29). Next: F (final pass), then supervisor checks and the final commit.
 
 This file is the memory of the project. A new session must be able to continue from it alone.
 Update it after every subagent finishes and after every user decision.
@@ -27,7 +27,7 @@ Update it after every subagent finishes and after every user decision.
 | B2 Roles, topology, connectors | done (277k) | done (2 defects) | yes |
 | B3 Model split + execution | done (260k) | done (2 defects, 252k) | yes |
 | B4 Graphs, DBO, patches | done (306k) | done (7 defects) | yes |
-| B5 Deploy, NPU, reference | done (367k) | next | yes (writer) |
+| B5 Deploy, NPU, reference | done (367k) | done (~140 claims, 12 defects + supervisor diagram fixes, 227k) | yes |
 | F Final | – | – | – |
 
 ## USER INSTRUCTIONS
@@ -48,6 +48,46 @@ Update it after every subagent finishes and after every user decision.
 - USER INSTRUCTION (2026-10-28): "i checked usage and it is at 13%. so I think it is safe do B4 and B5. what do you think" (13 % measured while the B3 writer ran) → supervisor agreed: no usage pauses through B5 fact-checked (FC-B3, B4, B5); one subagent at a time; commit per writer and per fact check; pause after B5 fact-checked before F unless the user also approves F. Projection ≈ 18-20 % at the end.
 
 - USER INSTRUCTION (2026-10-28): "yes, I agree with yout recommendation" → run to the end with no usage pauses: FC-B3, B4, B5, F (consistency subagent), supervisor site check script, README, final commit. Stop early only for user decisions (suspected bug, safety stop, unfixable build) or a batch far over the expected cost. No push or publish.
+
+## RESUME NOTES 2 (2026-10-29, second session) — RESOLVED
+
+Resolved the same day: the user left auto mode and Bash worked again. Steps 1-3 below are DONE (see "Done"). Kept for the record.
+
+**The second session ALSO lost Bash** (same safety classifier, right after the FC-B5 report arrived with an
+"unreviewed" note). Read/Edit still work. START A NEW SESSION (or run outside auto mode).
+
+State:
+- Done and committed: B5 writer = `5552e37` "B5: ... (fact check pending)". Verified before commit: build
+  --strict 42 pages / 54 terms / 30 diagrams / 0 warnings / 0 errors; 4 generator --check up to date;
+  site_check 42 pages x 1280/390, 3956 links, 0 problems. README.md still uncommitted (final commit).
+- FC-B5 FINISHED, edits ON DISK, NOT COMMITTED, NOT verified by the supervisor (`git diff` not run).
+  Files it says it touched: src/concepts/npu-overview.html, deployment-topologies.html,
+  src/tours/run-a-recipe.html, diagrams/b5_npu_overview.py, b5_deployment_topologies.py, b5_run_a_recipe.py
+  (maybe tuning). It reports `build.py --preview` 0/0 and gen_env_vars / gen_recipes `--check` up to date.
+- Supervisor spot-check with Read: camp2p.py:395-400 IS the init_afd_connector docstring; HCCL groups
+  :418-431, FFN "afd_moe" group :443-454, Gloo "p2p" group :460-468, control_plane :385. Checker correct.
+
+FC-B5 report summary (~140 claims; 12 edits: 7 citation, 1 logic, 4 wording/label):
+1. npu-overview: CAMP2p HCCL/Gloo cite :395-400 → :418-431 / :460-468.
+2. npu-overview: async FFN loop cite :441-443 → :442-446.
+3. npu-overview: dp_metadata = None "each step" → "each work item" (async_ffn_model_runner.py:473 is inside the loop at :442).
+4. deployment-topologies: DP4 derivation cites the DP flags (multipod_2a_2a_2f_graph.sh:33-34, :27-28, :70, :6-8). DP4 = DP2 local x 2 pods CONFIRMED.
+5. deployment-topologies: "blocks differ by at most one" cite topology.py:118-146 → :107-115 (subgroup_attention_block).
+6. "no scheduler" → "no real scheduler (a no-op stand-in)": tour stop 6, two diagram labels, two alt texts. FAQ was already right.
+7. b5_npu_overview.py labels follow edits 1-2.
+- All 8 B5 [W] facts CONFIRMED. gen_env_vars 51 vars correct (all profiler + setup.py rows checked). All 5 FAQ docs-vs-code items CONFIRMED. No suspected bugs.
+- Sampled on env-vars / recipes: first screen, defaults, profiler + setup.py rows (README: list both as sample-checked).
+
+Next session, in order:
+1. `git diff` (only B5 files changed? ../afd-plugin and ../vllm clean at 7452d52 / ced6857a?), `python3 build.py --strict`, all four `--check`s, `node tools/site_check.js`.
+2. Fold into notes/facts.md: mark the "Added after B5" [W] lines [FC] with these corrections: camp2p groups :418-431 / :443-454 / :460-468 (not :395-400); async loop :442-443 (not 441); dp_metadata=None per work item at :473 (not per step); ensure_cam_async_ops_available :108-120; env prepends ops.py:48, :51, AFD_CUST_OPAPI_LIB_PATH :54.
+3. Commit "B5 fact-checked: 12 defects fixed" (author is repo-local; add the Co-Authored-By line).
+4. Final pass and supervisor checks as in "Next step" below. Totals for README (FC-S1..FC-B5): ~960 claims, ~41 defects (S1 6, S2 6, B1 6, B2 2, B3 2, B4 7, B5 12).
+
+FINAL-PASS TODO (from FC-B5):
+- deployment-topologies "Start order and ports": 18303 is the disaggregation attention server port, but clients send to the proxy at 18305 (recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50). Add "(in disaggregation, clients send to the proxy)".
+- npu-overview deep-dive tables cite NPU worker/wrapper files at :1-3 (SPDX header). Point at the class lines: AFDNPUAttentionWorker :30, AFDNPUAttentionModelRunnerV2 :208, AFDNPUFFNWorker :67, AFDNPUFFNModelRunner :56, AsyncNPUFFNModelRunner :73, AsyncFFNTwoStream :41, NPUUBatchRunner :67 (checker's lines; re-open each file).
+- "no real scheduler (a no-op stand-in)" also on concepts/ffn-runtime, concepts/roles and any engine-core code page (B1-B4; already a TODO).
 
 ## RESUME NOTES
 
@@ -74,6 +114,8 @@ First steps in the new session:
 
 ## Done
 
+- 2026-10-29: FC-B5 VERIFIED and committed ("B5 fact-checked: 12 defects fixed"). Supervisor read the full diff (only B5 files; ../afd-plugin 7452d52 and ../vllm ced6857a clean) and re-opened async_ffn_model_runner.py:442-446/:473, topology.py:107-115, camp2p.py:418-468, multipod script :27-34/:70: all correct. Supervisor fixes: restored "no client traffic" (checker had cut it to "no traffic") in b5_run_a_recipe; text touched box borders in b5_run_a_recipe (cards and boxes taller) and b5_deployment_topologies (Decode FFN box + panel 2); b5_tuning row label "recipe" overlapped its value (→ "ex"); b5_npu_overview said "prebuilt operators" for _C_ascend, which setup.py builds (→ "compiled Ascend extension"), and cited ops.py:72-94 (→ :73-91). facts.md B5 block → [FC] with line corrections. Build --strict 0/0, 4 generator --checks, site_check 42 pages 3956 links 0 problems.
+- FINAL-PASS TODO (supervisor): other diagrams may have the same text-on-border problem; screenshot all 30 SVGs in the final check (tools/shot.js on site/diagrams/*.svg).
 - 2026-10-29: NEW SESSION verified B5: `build.py --strict` 42 pages, 54 terms, 30 diagrams, 0 warnings, 0 errors; all four generator `--check` up to date; `node tools/site_check.js` 42 pages x 1280/390, 3956 internal links, 0 problems. B5 [W] facts were already merged in facts.md. Pins: ../vllm ced6857a, ../afd-plugin 7452d52. Committed B5 (fact check pending); README.md left uncommitted until the final commit.
 - 2026-10-29: SUPERVISOR SESSION LOST BASH (safety classifier, not about this project). B5 writer output is
   on disk and uncommitted. See RESUME NOTES. progress.md was repaired with Read/Edit, which still worked.
@@ -202,3 +244,5 @@ usage pauses and no push.
 | 2026-10-28 | explainer-worker: B4 writer | done; 6 pages, 6 diagrams, dbo-timeline, 306k |
 | 2026-10-28 | explainer-worker: FC-B4 (full) | done; ~210 claims, 7 defects |
 | 2026-10-28 | explainer-worker: B5 writer | done; 7 pages, 4 diagrams, 2 generators, 367k |
+| 2026-10-29 | explainer-worker: no-tools re-test (new session) | PASS (site, folder, both repos read only, claude-opus-4-8) |
+| 2026-10-29 | explainer-worker: FC-B5 (full + sample for env-vars, recipes) | done; ~140 claims, 12 edits, 227k tokens, 61 tool calls; report arrived with "safety review could not be evaluated" note; content read as a normal report |

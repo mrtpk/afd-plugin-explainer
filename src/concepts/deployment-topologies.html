@@ -24,7 +24,7 @@ least as many counters as cooks, and each team's size is set when you open. The 
 the two teams talk only through the {{term connector}}.</p>
 
 <h2>The picture</h2>
-<x-diagram name="b5_deployment_topologies" alt="Three panels. Panel 1, colocation 2A2F: an attention-server box (role attention, GPUs 0 and 1, DP1 TP2, ranks A0 and A1, HTTP 18305) on the left, a neutral connector arrow in the middle, and an FFN-server box (role ffn, GPUs 2 and 3, DP1 TP2, ranks F0 and F1, no scheduler, no KV) on the right. Panel 2, disaggregation 2P1A1F: a violet proxy box (HTTP 18305), a neutral two-prefillers box (GPU0, GPU1, NIXL kv_producer), a blue decode-attention box (GPU2, 18303) with an arrow down to an emerald decode-FFN box (GPU3, 18304), and a violet callout that the proxy and prefillers do prefill/decode, not the attention/FFN split. Panel 3, multipod: a 2A2F multipod box (POD ATTENTION_0 or FFN_0, two pods), a Qwen3.5 122B FP8 4A2F box (ATTENTION_0 plus ATTENTION_1 plus FFN_0, three pods), and an amber rule box (attention A equals DP times TP, ffn F equals DP times TP, A greater than or equal to F). A legend marks attention role, FFN role, proxy, the validation rule, and neutral." caption="Figure: the five GPU shapes. Colocation puts both roles on one host; disaggregation adds prefillers and a proxy; multipod puts one role per k8s pod. The rank rule A = DP x TP, F = DP x TP, A >= F holds in every shape." />
+<x-diagram name="b5_deployment_topologies" alt="Three panels. Panel 1, colocation 2A2F: an attention-server box (role attention, GPUs 0 and 1, DP1 TP2, ranks A0 and A1, HTTP 18305) on the left, a neutral connector arrow in the middle, and an FFN-server box (role ffn, GPUs 2 and 3, DP1 TP2, ranks F0 and F1, no real scheduler, no KV) on the right. Panel 2, disaggregation 2P1A1F: a violet proxy box (HTTP 18305), a neutral two-prefillers box (GPU0, GPU1, NIXL kv_producer), a blue decode-attention box (GPU2, 18303) with an arrow down to an emerald decode-FFN box (GPU3, 18304), and a violet callout that the proxy and prefillers do prefill/decode, not the attention/FFN split. Panel 3, multipod: a 2A2F multipod box (POD ATTENTION_0 or FFN_0, two pods), a Qwen3.5 122B FP8 4A2F box (ATTENTION_0 plus ATTENTION_1 plus FFN_0, three pods), and an amber rule box (attention A equals DP times TP, ffn F equals DP times TP, A greater than or equal to F). A legend marks attention role, FFN role, proxy, the validation rule, and neutral." caption="Figure: the five GPU shapes. Colocation puts both roles on one host; disaggregation adds prefillers and a proxy; multipod puts one role per k8s pod. The rank rule A = DP x TP, F = DP x TP, A >= F holds in every shape." />
 <p>Read the three panels top to bottom. Panel 1 is the common case, two servers on one host. Panel 2 adds a
 separate prefill stage and a proxy. Panel 3 splits the same roles across k8s pods. The blue boxes are the
 attention role, the emerald boxes the FFN role.</p>
@@ -74,10 +74,15 @@ These scripts are for the <code>deploy-afd-k8s</code> skill, not for a local run
 ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:62-69}}).</p>
 <x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh" lines="12-16" highlight="15" caption="The POD gate and the connector host, resolved inside the cluster." />
 <p>The Qwen3.5 122B FP8 recipe is a three-pod 4A2F split: two attention pods and one FFN pod. The second
-attention pod sets <code>ATTENTION_HEADLESS=1</code> and <code>ATTENTION_DP_START_RANK=2</code>, so the four
-attention ranks (<code>DP4</code>, <code>DP2</code> local on each pod) come from two pods, and the FFN pod runs
-<code>DP2</code> ({{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:3-8}},
-{{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:46-55}}).</p>
+attention pod sets <code>ATTENTION_HEADLESS=1</code> and <code>ATTENTION_DP_START_RANK=2</code>
+({{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:6-8}}).
+Each attention pod runs <code>--data-parallel-size 4</code> with <code>--data-parallel-size-local 2</code>
+({{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:33-34}}).
+So the two pods together hold the four attention ranks: global <code>DP4</code>, two local ranks per pod, with the
+second pod starting at rank 2
+({{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:27-28}}).
+The FFN pod runs <code>DP2</code>
+({{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:70}}).</p>
 
 <h2>Deep dive</h2>
 
@@ -103,7 +108,7 @@ the full table from the scripts.</p>
   </tbody>
 </table>
 <p>The Qwen3.5 topology is the one case where <code>A &gt; F</code> (4 &gt; 2). The attention ranks spread over
-the FFN ranks in blocks that differ in size by at most one ({{cite afd_plugin/distributed/topology.py:118-146}}).
+the FFN ranks in blocks that differ in size by at most one ({{cite afd_plugin/distributed/topology.py:107-115}}).
 See {{link concepts/topology}}.</p>
 </x-deepdive>
 
@@ -171,10 +176,11 @@ A wrong rank count or a wrong host stops the run before the first token.</p>
       ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:81-85}}).</p></x-a>
   </x-q>
   <x-q level="medium">In the Qwen3.5 multipod recipe, how do two attention pods make four attention ranks?
-    <x-a><p>Each pod runs <code>DP2</code> local, and the second pod sets
-      <code>ATTENTION_DP_START_RANK=2</code>, so together they form <code>DP4</code> (four ranks); the FFN pod
-      runs <code>DP2</code> ({{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:3-8}},
-      {{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:46-55}}).</p></x-a>
+    <x-a><p>Each pod runs <code>--data-parallel-size 4 --data-parallel-size-local 2</code>, so each holds two of
+      the four global DP ranks; the second pod sets <code>ATTENTION_DP_START_RANK=2</code> to start at rank 2. The
+      FFN pod runs <code>DP2</code> ({{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:33-34}},
+      {{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:6-8}},
+      {{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:70}}).</p></x-a>
   </x-q>
   <x-q level="hard">The graph variants replace one flag. Which flag, with what, and which graph mode is allowed on
     GPU?

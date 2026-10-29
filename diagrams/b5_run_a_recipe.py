@@ -22,11 +22,11 @@ d.header(
 y = 112
 
 # Panel 1: the two serve commands
-P1 = 212
+P1 = 228
 d.panel(y, P1, 1, "Two vllm serve processes",
         "Both set the same afd block; only role and GPUs differ.")
 by = y + 66
-d.step_card(46, by, 494, 128, 1, "Attention server", BLUE, tag="role=attention", rows=[
+d.step_card(46, by, 494, 144, 1, "Attention server", BLUE, tag="role=attention", rows=[
     ("env", "VLLM_USE_V2_MODEL_RUNNER=1"),
     ("gpu", "CUDA_VISIBLE_DEVICES=0,1"),
     ("par", "--data-parallel-size 1 --tensor-parallel-size 2"),
@@ -34,26 +34,26 @@ d.step_card(46, by, 494, 128, 1, "Attention server", BLUE, tag="role=attention",
     ("gfx", "cudagraph_mode=FULL_DECODE_ONLY"),
     ("http", "--port 18305  (clients connect here)"),
 ])
-d.step_card(560, by, 494, 128, 2, "FFN server", EMERALD, tag="role=ffn", rows=[
+d.step_card(560, by, 494, 144, 2, "FFN server", EMERALD, tag="role=ffn", rows=[
     ("gpu", "CUDA_VISIBLE_DEVICES=2,3"),
     ("par", "--data-parallel-size 1 --tensor-parallel-size 2"),
     ("afd", "same host:port 6269, same ranks 2/2"),
     ("dbo", "--enable-dbo  2 / 12"),
     ("gfx", "cudagraph_mode=FULL_DECODE_ONLY"),
-    ("note", "no scheduler, no KV, no client traffic"),
+    ("note", "no real scheduler, no KV, no client traffic"),
 ])
 y += P1 + 20
 
 # Panel 2: start order + traffic
-P2 = 150
+P2 = 160
 d.panel(y, P2, 2, "Start order and traffic",
         "Background both, wait for startup, then send requests to the attention port only.")
 by = y + 68
-d.box(46, by, 240, 56, "1. Background both", ["attn.log / ffn.log", "then wait"], col=NEUTRAL, align="left")
-d.arrow(286, by + 28, 330, by + 28, NEUTRAL)
-d.box(332, by, 260, 56, "2. Wait for startup", ["'Application startup", "complete' in each log"], col=AMBER, align="left")
-d.arrow(592, by + 28, 636, by + 28, NEUTRAL)
-d.box(638, by, 416, 56, "3. Send to attention 18305", ["vllm bench serve  ·  README:258", "never to the FFN server"], col=BLUE, align="left")
+d.box(46, by, 240, 64, "1. Background both", ["attn.log / ffn.log", "then wait"], col=NEUTRAL, align="left")
+d.arrow(286, by + 32, 330, by + 32, NEUTRAL)
+d.box(332, by, 260, 64, "2. Wait for startup", ["'Application startup", "complete' in each log"], col=AMBER, align="left")
+d.arrow(592, by + 32, 636, by + 32, NEUTRAL)
+d.box(638, by, 416, 64, "3. Send to attention 18305", ["vllm bench serve  ·  README:258", "never to the FFN server"], col=BLUE, align="left")
 y += P2 + 24
 
 d.legend(30, y, [
