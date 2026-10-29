@@ -1,0 +1,150 @@
+---
+title: FAQ
+nav_title: FAQ
+level: Intermediate
+prerequisites: none
+related: concepts/roles, concepts/deployment-topologies, concepts/tuning, reference/afd-config, reference/compat-patches
+summary: Short answers with citations. Where docs and code disagree, known open questions, and common practical questions about running and understanding AFD.
+---
+<x-sentence>Short answers to common questions about afd-plugin, each with a citation. Longer answers link to the
+concept page that covers the topic.</x-sentence>
+
+<h2>Where do docs and code disagree?</h2>
+<p>The design docs under <code>docs/design/module/</code> were written against an older plugin commit, so
+their line numbers are stale. These pages cite the code at the pinned commit. The differences below are the
+ones a reader is most likely to meet.</p>
+<table>
+  <thead><tr><th>The docs say</th><th>The code does</th><th>Source</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>The README says both roles "require <code>VLLM_USE_V2_MODEL_RUNNER=1</code>"
+        ({{cite README.md:204}}).</td>
+      <td>vLLM picks Model Runner V2 by default when the variable is unset. The validator raises only when V2
+        resolves to off. The recipes still set it to <code>1</code> to be explicit.</td>
+      <td>{{cite vllm:vllm/config/vllm.py:692-694}}, {{cite afd_plugin/validation.py:90-91}}</td>
+    </tr>
+    <tr>
+      <td>The README model table names "Qwen3.5 / Qwen3.6 MoE" ({{cite README.md:51}}).</td>
+      <td>One architecture string is registered: <code>Qwen3_5MoeForConditionalGeneration</code>, mapped to
+        <code>AFDQwen3_5MoeForConditionalGeneration</code>.</td>
+      <td>{{cite afd_plugin/__init__.py:96-131}}</td>
+    </tr>
+    <tr>
+      <td>The design docs cite plugin commit <code>36dadb4</code> ({{cite docs/design/module/index.md:38}}).</td>
+      <td>The plugin is pinned at a later commit. Line numbers in the design docs do not match the current
+        code; read the code.</td>
+      <td>{{project short_sha}}</td>
+    </tr>
+    <tr>
+      <td>Every other connector config key is snake_case.</td>
+      <td>The async CAM connector accepts a camelCase wire key <code>dynamicQuant</code> for its field
+        <code>dynamic_quant</code>.</td>
+      <td>{{cite afd_plugin/connectors/npu/async_cam.py:182-184}}</td>
+    </tr>
+    <tr>
+      <td>The DeepSeek-V2-Lite README benchmark step runs
+        <code>bash tools/benchmarks/benchmark.sh</code> ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:111}}).</td>
+      <td>No <code>tools/benchmarks/benchmark.sh</code> exists at the pinned commit. The benchmark harness is
+        <code>tools/benchmarks/request_generator.sh</code>, a wrapper around <code>vllm bench serve</code>.</td>
+      <td>{{cite tools/benchmarks/request_generator.sh:1-27}}</td>
+    </tr>
+    <tr>
+      <td>The decode-bench script header points to
+        <code>tools/benchmarks/2a2f_graph_dbo_dp2tp1_decode_bench.sh</code> and
+        <code>tools/benchmarks/vllm_bench.sh</code>
+        ({{cite tools/benchmarks/decode_bench_server.sh:26-30}}).</td>
+      <td>Neither file exists at the pinned commit. The present scripts are
+        <code>decode_bench_server.sh</code> and <code>request_generator.sh</code>.</td>
+      <td>{{cite tools/benchmarks/}}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Known open questions</h2>
+<p>These facts are not in either repository. The pages that need them mark them as inferred.</p>
+<ul>
+  <li><strong>DeepSeek-V2-Lite model shape.</strong> The worked examples use hidden size <strong>2048</strong>,
+    dtype <strong>bf16</strong>, and <strong>27</strong> decoder layers (layer 0 dense). These come from the
+    DeepSeek-V2-Lite checkpoint config, not from afd-plugin or vLLM. A unit test fixture uses a synthetic
+    40-layer value, which is not the real model ({{cite tests/unit/connectors/test_p2p_connector.py:136}}).</li>
+  <li><strong>The 32,768-byte per-layer transfer.</strong> The figure <code>8 × 2048 × 2 bytes</code> on the
+    connector pages is derived from the inferred hidden size and bf16, for one decode step of 8 tokens. It is
+    an example, not a repository constant.</li>
+  <li><strong>v0.30 NPU hardware validation.</strong> The recipe index lists both NPU connectors as
+    "integrated v0.30 hardware validation pending"; the measured numbers are from older runtimes
+    ({{cite recipe/README.md:36-38}}). See {{link concepts/npu-overview}}.</li>
+</ul>
+
+<h2>Practical questions</h2>
+
+<h3>Does AFD change the vLLM source?</h3>
+<p>No. AFD is a vLLM general plugin. It registers models, a worker class, a routing strategy and a DBO op, and
+it installs monkey-patches on vLLM functions at import. The vLLM checkout is unchanged
+({{cite afd_plugin/__init__.py:142-216}}). See {{link concepts/compat-patches}}.</p>
+
+<h3>Why does the FFN server reject a request?</h3>
+<p>The FFN worker is connector-driven, not scheduler-driven. If vLLM's scheduler ever calls the FFN worker's
+<code>execute_model</code>, it raises at once, so a misrouted request fails fast
+({{cite afd_plugin/v1/worker/ffn_worker.py:122-131}}). Send requests only to the attention API server
+({{cite README.md:258-260}}). See {{link concepts/roles}}.</p>
+
+<h3>Why does the FFN server have no scheduler?</h3>
+<p>The FFN role runs no KV cache and no request scheduler. Its EngineCore returns after the executor is built,
+and it installs a no-op scheduler stand-in so the native readiness handshake still works
+({{cite afd_plugin/compat/patches/engine_core.py:599-623}}). The connector receive loop drives the FFN side
+instead. See {{link concepts/ffn-runtime}}.</p>
+
+<h3>Can the attention ranks be fewer than the FFN ranks (A &lt; F)?</h3>
+<p>No, not for the GPU connector. The P2P topology requires
+<code>num_attention_ranks &gt;= num_ffn_ranks</code>, and raises otherwise
+({{cite afd_plugin/distributed/topology.py:52-58}}). See {{link concepts/deployment-topologies}}.</p>
+
+<h3>How do the rank counts relate to DP and TP?</h3>
+<p>For each role, the rank count must equal <code>DP &times; TP</code>: <code>num_attention_ranks</code> for the
+attention role, <code>num_ffn_ranks</code> for the FFN role. The validator raises when they do not match
+({{cite afd_plugin/validation.py:107-117}}). See {{link concepts/deployment-topologies}}.</p>
+
+<h3>Which CUDA graph modes are allowed?</h3>
+<p>On GPU, only <code>FULL_DECODE_ONLY</code> ({{cite afd_plugin/v1/worker/cuda_graph.py:20-21}}). The recipes
+pass <code>--compilation-config '{"cudagraph_mode": "FULL_DECODE_ONLY", ...}'</code> for the graph variants.
+See {{link concepts/cuda-graphs}} and {{link concepts/tuning}}.</p>
+
+<h3>Where does sampling run?</h3>
+<p>On the attention side. The attention runner does not override <code>sample_tokens</code>, so it samples
+natively in vLLM's call ({{cite vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050}}). The FFN runner's
+<code>sample_tokens</code> raises ({{cite afd_plugin/v1/worker/ffn_model_runner.py:405-406}}). See
+{{link tours/life-of-a-request}}.</p>
+
+<h3>Why are there two vLLM version checks?</h3>
+<p>The first check, at registration, warns on a version mismatch but does not stop
+({{cite afd_plugin/compat/vllm.py:29-50}}). The second, at patch install, is a stricter gate that tolerates a
+<code>dev</code> suffix and installs the patches only on a matching version
+({{cite afd_plugin/compat/vllm.py:53-68}}). See {{link concepts/compat-patches}}.</p>
+
+<h3>What happens on a different vLLM version?</h3>
+<p>The patch gate fails, so no patch installs and <code>worker_cls</code> is never rewritten; AFD does not take
+effect. The registration still adds the models, the routing strategy and the DBO op
+({{cite afd_plugin/__init__.py:162-216}}). See {{link reference/compat-patches}}.</p>
+
+<h3>Which models does AFD support?</h3>
+<p>DeepSeek V2/V3/V3.2, GLM-style DeepSeek, Qwen3-MoE and the Qwen3.5 family, each registered as an
+<code>AFD&lt;arch&gt;</code> wrapper ({{cite afd_plugin/__init__.py:96-131}}). DeepSeek-V4 and the NPU wrappers
+are device-gated. See {{link concepts/model-registration}}.</p>
+
+<h3>Which connector is the default, and on which device?</h3>
+<p>The default is <code>P2pNcclAFDConnector</code>, the GPU connector ({{cite afd_plugin/config.py:52}}). The
+two NPU connectors are <code>CAMP2pAFDConnector</code> (sync) and <code>CAMAsyncAFDConnector</code> (async).
+See {{link concepts/connector-contract}} and {{link concepts/npu-overview}}.</p>
+
+<h3>How do I benchmark a recipe?</h3>
+<p>Start a recipe, then drive load against the attention HTTP port with
+<code>tools/benchmarks/request_generator.sh</code>, a wrapper around <code>vllm bench serve</code>
+({{cite tools/benchmarks/request_generator.sh:44-57}}). For a Kubernetes run, the repository ships a
+<code>run-vllm-bench-k8s</code> contributor skill
+({{cite .agents/skills/run-vllm-bench-k8s/SKILL.md:1-6}}). See {{link concepts/tuning}}.</p>
+
+<h3>Why two servers for one model?</h3>
+<p>AFD splits the model into an attention role and an FFN role, each a separate <code>vllm serve</code>
+process. The attention side owns the request and the KV cache; the FFN side runs the feed-forward and MoE
+experts and answers over the connector ({{cite README.md:258-260}}). See {{link learn/what-is-afd}} and
+{{link concepts/roles}}.</p>

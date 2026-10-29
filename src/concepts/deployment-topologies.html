@@ -1,0 +1,187 @@
+---
+title: Deployment topologies: how to place the roles
+nav_title: Deployment topologies
+level: Intermediate
+prerequisites: concepts/topology
+related: concepts/tuning, concepts/roles, tours/run-a-recipe, reference/recipes
+summary: The GPU recipes place the attention and FFN roles in five shapes: 2A2F and 4A4F colocation, 2P1A1F prefill/decode disaggregation with a proxy, a k8s multipod split, and the Qwen3.5 4A2F multipod. This page gives the process count, GPUs, ranks, flags, start order and ports of each.
+---
+<x-sentence>AFD runs as two or more <code>vllm serve</code> processes. A topology says how many
+{{term attention-role | attention}} and {{term ffn-role | FFN}} ranks there are, and where they run.</x-sentence>
+
+<h2>The idea</h2>
+<p>AFD splits one model into an attention role and an FFN role. Each role is a separate
+{{term attention-server | server}} process. A topology name <code>xAyF</code> gives the counts: <code>x</code>
+attention ranks and <code>y</code> FFN ranks ({{term xayf | xAyF}}). The GPU recipes ship five shapes of this
+split.</p>
+<p>Two rules fix the rank counts. For each role, the rank count must equal <code>DP &times; TP</code>: the
+attention ranks equal the attention server's data-parallel size times its tensor-parallel size, and the same
+for FFN ({{cite afd_plugin/validation.py:107-117}}). The attention ranks must also be at least the FFN ranks,
+<code>A &gt;= F</code> ({{cite afd_plugin/distributed/topology.py:52-58}}).</p>
+<p><strong>An everyday comparison.</strong> Think of a kitchen with a front counter and a back kitchen. The
+counter takes orders (attention); the kitchen cooks (FFN). You can add counters or cooks, but you need at
+least as many counters as cooks, and each team's size is set when you open. The comparison stops at the wire:
+the two teams talk only through the {{term connector}}.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b5_deployment_topologies" alt="Three panels. Panel 1, colocation 2A2F: an attention-server box (role attention, GPUs 0 and 1, DP1 TP2, ranks A0 and A1, HTTP 18305) on the left, a neutral connector arrow in the middle, and an FFN-server box (role ffn, GPUs 2 and 3, DP1 TP2, ranks F0 and F1, no scheduler, no KV) on the right. Panel 2, disaggregation 2P1A1F: a violet proxy box (HTTP 18305), a neutral two-prefillers box (GPU0, GPU1, NIXL kv_producer), a blue decode-attention box (GPU2, 18303) with an arrow down to an emerald decode-FFN box (GPU3, 18304), and a violet callout that the proxy and prefillers do prefill/decode, not the attention/FFN split. Panel 3, multipod: a 2A2F multipod box (POD ATTENTION_0 or FFN_0, two pods), a Qwen3.5 122B FP8 4A2F box (ATTENTION_0 plus ATTENTION_1 plus FFN_0, three pods), and an amber rule box (attention A equals DP times TP, ffn F equals DP times TP, A greater than or equal to F). A legend marks attention role, FFN role, proxy, the validation rule, and neutral." caption="Figure: the five GPU shapes. Colocation puts both roles on one host; disaggregation adds prefillers and a proxy; multipod puts one role per k8s pod. The rank rule A = DP x TP, F = DP x TP, A >= F holds in every shape." />
+<p>Read the three panels top to bottom. Panel 1 is the common case, two servers on one host. Panel 2 adds a
+separate prefill stage and a proxy. Panel 3 splits the same roles across k8s pods. The blue boxes are the
+attention role, the emerald boxes the FFN role.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: The rank rule (A = DP x TP, F = DP x TP)</h3>
+<p>The validator reads the role's rank count and compares it with <code>DP &times; TP</code> of that server. A
+mismatch raises before the run starts ({{cite afd_plugin/validation.py:107-117}}).</p>
+<x-code file="afd_plugin/validation.py" lines="107-117" highlight="111-117" caption="The configured ranks must equal data-parallel size times tensor-parallel size." />
+<p>So a 2A2F topology has two ways to reach two attention ranks: <code>DP1 TP2</code> or <code>DP2 TP1</code>.
+Both give <code>2 = DP &times; TP</code>. The {{link concepts/topology}} page covers how a role rank maps to a
+world rank.</p>
+
+<h3>Step 2: Colocation 2A2F (two servers, four GPUs)</h3>
+<p>The simplest recipe runs one attention server on GPUs 0 and 1, and one FFN server on GPUs 2 and 3. Each
+server sets <code>num_attention_ranks: 2</code> and <code>num_ffn_ranks: 2</code>, so the topology is 2A2F
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-32}}).</p>
+<x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh" lines="7-20" highlight="7,8,9,13,17,18" caption="The attention server: GPUs 0,1, DP1 TP2, role attention, 2A2F." />
+<p>The DP/TP split is a choice. The <code>dp1tp2</code> variant uses <code>DP1 TP2</code>
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:8-9}});
+the <code>dp2tp1</code> variant uses <code>DP2 TP1</code>
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp2tp1.sh:8-9}}).
+Both give two ranks per role.</p>
+
+<h3>Step 3: Colocation 4A4F (double both roles)</h3>
+<p>The 4A4F recipe doubles both sides: four attention ranks on GPUs 0-3, four FFN ranks on GPUs 4-7, each
+server <code>DP2 TP2</code> ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/4a4f_graph_dbo_dp2tp2.sh:7-18}}).</p>
+<x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/4a4f_graph_dbo_dp2tp2.sh" lines="7-18" highlight="7,8,9,17,18" caption="4A4F: eight GPUs, DP2 TP2 per role, four ranks each." />
+
+<h3>Step 4: Disaggregation 2P1A1F (prefillers and a proxy)</h3>
+<p>The disaggregation recipe adds a prefill stage. It runs five processes: two prefillers, one attention
+decode server, one FFN decode server, and a proxy
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50}}). The attention and FFN servers each
+use <code>1A1F</code> ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:56-98}}).</p>
+<x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh" lines="110-125" highlight="118" caption="The proxy: a NIXL load-balance proxy in front of the prefillers and the decode pair." />
+<x-warning title="The proxy and prefillers are not the A/F split"><p>The proxy is
+<code>tools/proxy_server.py</code>, copied from vLLM-Ascend ({{cite tools/proxy_server.py:1}}). It splits
+prefill and decode with a NIXL KV transfer, not attention and FFN. The attention/FFN split still happens on the
+decode pair, over AFD port 6269 ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:81-85}}).</p></x-warning>
+
+<h3>Step 5: Multipod on Kubernetes</h3>
+<p>The {{term multipod}} recipes put one role per pod. Each <code>vllm serve</code> is wrapped in an
+<code>if [ "$POD" == ... ]</code> block, so with <code>POD</code> unset neither block runs
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh:15-16}}).
+These scripts are for the <code>deploy-afd-k8s</code> skill, not for a local run
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:62-69}}).</p>
+<x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh" lines="12-16" highlight="15" caption="The POD gate and the connector host, resolved inside the cluster." />
+<p>The Qwen3.5 122B FP8 recipe is a three-pod 4A2F split: two attention pods and one FFN pod. The second
+attention pod sets <code>ATTENTION_HEADLESS=1</code> and <code>ATTENTION_DP_START_RANK=2</code>, so the four
+attention ranks (<code>DP4</code>, <code>DP2</code> local on each pod) come from two pods, and the FFN pod runs
+<code>DP2</code> ({{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:3-8}},
+{{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:46-55}}).</p>
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="Every GPU topology at a glance" open="yes">
+<p>The table lists the AFD serve processes of each GPU recipe. The {{link reference/recipes}} page generates
+the full table from the scripts.</p>
+<table>
+  <thead><tr><th>Topology</th><th>Processes</th><th>GPUs</th><th>DP x TP (per role)</th>
+    <th>Ranks (A / F)</th><th>Recipe</th></tr></thead>
+  <tbody>
+    <tr><td>2A2F</td><td>2 serve</td><td>0,1 and 2,3</td><td>DP1 TP2 or DP2 TP1</td><td>2 / 2</td>
+      <td>{{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-18 | 2a2f_*}}</td></tr>
+    <tr><td>4A4F</td><td>2 serve</td><td>0-3 and 4-7</td><td>DP2 TP2</td><td>4 / 4</td>
+      <td>{{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/4a4f_graph_dbo_dp2tp2.sh:7-18 | 4a4f_*}}</td></tr>
+    <tr><td>2P1A1F</td><td>5 (2 prefill + A + F + proxy)</td><td>0,1,2,3 + proxy</td><td>DP1 TP1 (decode)</td>
+      <td>1 / 1</td>
+      <td>{{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:56-108 | 2p1a1f_*}}</td></tr>
+    <tr><td>multipod 2A2F</td><td>2 pods</td><td>0,1 per pod</td><td>DP1 TP2</td><td>2 / 2</td>
+      <td>{{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh:16-27 | multipod_2a_2f}}</td></tr>
+    <tr><td>multipod 4A2F (Qwen3.5)</td><td>3 pods</td><td>0,1 per pod</td>
+      <td>A: DP4 TP1 (DP2 local x2); F: DP2 TP1</td><td>4 / 2</td>
+      <td>{{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:31-98 | multipod_2a_2a_2f}}</td></tr>
+  </tbody>
+</table>
+<p>The Qwen3.5 topology is the one case where <code>A &gt; F</code> (4 &gt; 2). The attention ranks spread over
+the FFN ranks in blocks that differ in size by at most one ({{cite afd_plugin/distributed/topology.py:118-146}}).
+See {{link concepts/topology}}.</p>
+</x-deepdive>
+
+<x-deepdive title="Eager and graph variants">
+<p>Each DeepSeek-V2-Lite colocation topology ships an eager and a graph variant. They differ in two flags.</p>
+<ul>
+  <li><strong>Eager.</strong> The <code>*_eager_*</code> scripts pass <code>--enforce-eager</code>
+    ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh:26}}).</li>
+  <li><strong>Graph.</strong> The <code>*_graph_*</code> scripts replace it with
+    <code>--max-cudagraph-capture-size 64</code> and
+    <code>--compilation-config '{"cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes":[64]}'</code>
+    ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-29}}).</li>
+</ul>
+<p>On GPU, only <code>{{term full-decode-only | FULL_DECODE_ONLY}}</code> is allowed
+({{cite afd_plugin/v1/worker/cuda_graph.py:20-21}}). The {{link concepts/cuda-graphs}} page covers capture and
+replay, and {{link concepts/tuning}} covers the capture size.</p>
+</x-deepdive>
+
+<x-deepdive title="Start order and ports">
+<p>A recipe backgrounds its serve processes, writes <code>attn.log</code> and <code>ffn.log</code>, then
+<code>wait</code>s ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:29-61}}).</p>
+<ol>
+  <li>Both roles start together. They meet at the AFD {{term rendezvous}} <code>host:port</code>, default
+    <code>127.0.0.1:1239</code>; the recipes set <code>6269</code>
+    ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:15-16}}).</li>
+  <li>Wait for <code>Application startup complete</code> in each log before you send traffic
+    ({{cite recipe/gpu/P2pNcclAFDConnector/README.md:39-43}}).</li>
+  <li>Send requests only to the attention HTTP port (<code>18305</code> for colocation, <code>18303</code> for
+    the disaggregation decode server) ({{cite README.md:258-260}}).</li>
+</ol>
+<p>The two ports differ in meaning. The AFD port (<code>6269</code>) is where the two roles set up the
+connector groups. The HTTP port (<code>18305</code>) is where clients send requests.</p>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<x-simplified><p>This page shows the GPU recipes. The NPU recipes use different topologies and scales (for
+example 48A16F), covered on {{link concepts/npu-overview}}.</p></x-simplified>
+<ul>
+  <li><strong>Rank count does not match DP x TP.</strong> The validator raises when
+    <code>num_attention_ranks != DP &times; TP</code> for the attention server, or the same for FFN
+    ({{cite afd_plugin/validation.py:107-117}}).</li>
+  <li><strong>A &lt; F.</strong> The GPU connector requires <code>num_attention_ranks &gt;= num_ffn_ranks</code>
+    and raises otherwise ({{cite afd_plugin/distributed/topology.py:52-58}}).</li>
+  <li><strong>A multipod script run locally.</strong> With <code>POD</code> unset, neither serve block runs, so
+    nothing starts ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh:15-16}}).</li>
+  <li><strong>A host or port mismatch between the roles.</strong> Both roles must use the same AFD
+    <code>host:port</code>, or the group setup hangs until the timeout
+    ({{cite afd_plugin/connectors/gpu/p2p.py:271}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The topology fixes the process count, the GPU count and the rank mapping.
+A wrong rank count or a wrong host stops the run before the first token.</p>
+
+<x-quiz>
+  <x-q level="easy">A 2A2F topology can use which two DP/TP splits per role?
+    <x-a><p><code>DP1 TP2</code> or <code>DP2 TP1</code>. Both give two ranks, because the rank count must
+      equal <code>DP &times; TP</code> ({{cite afd_plugin/validation.py:107-117}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">How many <code>vllm serve</code> processes does the 2P1A1F recipe start, and what are they?
+    <x-a><p>Five: two prefillers, one attention decode server, one FFN decode server, and a proxy
+      ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">What does the proxy in 2P1A1F do, and why is it not part of the attention/FFN split?
+    <x-a><p>It load-balances prefill and decode with a NIXL KV transfer ({{cite tools/proxy_server.py:1}}). The
+      attention/FFN split happens on the decode pair over AFD port 6269, a different path
+      ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:81-85}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">In the Qwen3.5 multipod recipe, how do two attention pods make four attention ranks?
+    <x-a><p>Each pod runs <code>DP2</code> local, and the second pod sets
+      <code>ATTENTION_DP_START_RANK=2</code>, so together they form <code>DP4</code> (four ranks); the FFN pod
+      runs <code>DP2</code> ({{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:3-8}},
+      {{cite recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:46-55}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">The graph variants replace one flag. Which flag, with what, and which graph mode is allowed on
+    GPU?
+    <x-a><p>They replace <code>--enforce-eager</code> with <code>--max-cudagraph-capture-size 64</code> and a
+      <code>--compilation-config</code> that sets <code>cudagraph_mode</code> to <code>FULL_DECODE_ONLY</code>
+      ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-29}}).
+      GPU AFD allows only <code>FULL_DECODE_ONLY</code>
+      ({{cite afd_plugin/v1/worker/cuda_graph.py:20-21}}).</p></x-a>
+  </x-q>
+</x-quiz>

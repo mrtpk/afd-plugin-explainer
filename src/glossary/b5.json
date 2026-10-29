@@ -1,0 +1,22 @@
+{
+  "_about": "Glossary terms owned by batch B5 (deploy, NPU, reference). One file per batch.",
+  "multipod": {
+    "term": "multipod",
+    "short": "A Kubernetes deployment that puts one AFD role per pod. Each vllm serve is gated on a POD environment variable, so with POD unset nothing runs.",
+    "aliases": ["multi-pod", "multipod deployment"],
+    "page": "concepts/deployment-topologies"
+  },
+  "hccl": {
+    "term": "HCCL",
+    "short": "Huawei Collective Communication Library, the Ascend NPU collective transport. The CAMP2p connector carries hidden states over HCCL and DP metadata over a smaller Gloo group.",
+    "aliases": ["Huawei Collective Communication Library"],
+    "page": "concepts/npu-overview"
+  },
+  "batch-size-factor": {
+    "term": "BATCH_SIZE_FACTOR",
+    "short": "An Ascend NPU environment variable that multiplies the CAM receive capacity (base 262144 tokens), with native float rounding. Default 1.",
+    "long": "Read in <code>afd_plugin/validation.py:45-54</code> and <code>afd_plugin/compat/npu/feature_validation.py:245-249</code>. It has no effect on GPU.",
+    "aliases": ["CAM receive capacity"],
+    "page": "concepts/tuning"
+  }
+}

@@ -1,0 +1,169 @@
+---
+title: Tour: Run a recipe
+nav_title: Run a recipe
+level: Intermediate
+prerequisites: concepts/deployment-topologies, reference/afd-config
+related: tours/life-of-a-request, concepts/deployment-topologies, reference/recipes, concepts/dbo, concepts/cuda-graphs
+summary: Read the 2a2f_graph_dbo_dp1tp2 recipe line by line. Each flag, the afd block, the FFN server, the start order, and how to send and benchmark a request, all cited to the script.
+---
+<x-sentence>This tour reads one GPU recipe line by line. It shows what each flag does inside the plugin and
+vLLM, and how to send a request.</x-sentence>
+
+<h2>The idea</h2>
+<p>A recipe is a shell script that starts the two {{term attention-server | servers}} of an AFD run. This tour
+reads <code>2a2f_graph_dbo_dp1tp2.sh</code>, the 2A2F graph recipe for DeepSeek-V2-Lite
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:1-61}}).
+It starts one {{term attention-role | attention}} server on two GPUs and one {{term ffn-role | FFN}} server on
+two GPUs, with CUDA graphs and {{term dbo | DBO}} on.</p>
+<p>Both servers use the same <code>--additional-config</code> block; only <code>role</code> and the GPUs differ.
+The {{link reference/recipes}} page lists every recipe; the {{link tours/life-of-a-request}} tour follows a
+request through this same recipe.</p>
+
+<h2>The picture</h2>
+<x-diagram name="b5_run_a_recipe" alt="Two panels. Panel 1, two vllm serve processes: an attention-server step card (role attention) with rows for the env VLLM_USE_V2_MODEL_RUNNER=1, GPUs 0 and 1, data-parallel-size 1 and tensor-parallel-size 2, the afd connector P2pNcclAFDConnector on port 6269, cudagraph_mode FULL_DECODE_ONLY, and HTTP port 18305 where clients connect; and an FFN-server step card (role ffn) with rows for GPUs 2 and 3, the same parallelism, the same host and port and ranks, enable-dbo 2 slash 12, the same graph mode, and a note that it has no scheduler, no KV and no client traffic. Panel 2, start order and traffic: a background-both box, an arrow to a wait-for-startup box (Application startup complete in each log), an arrow to a send-to-attention-18305 box (vllm bench serve, never to the FFN server). A legend marks attention role and client traffic, FFN role, wait condition, and shell step." caption="Figure: the recipe starts two servers with the same afd block, waits for both to come up, then sends traffic to the attention HTTP port only." />
+<p>Read panel 1 as the two serve commands, side by side. Read panel 2 as the order: background both, wait for
+startup, then send requests to the attention port.</p>
+
+<x-stop n="1" title="Turn the V2 runner on">
+<p>The script exports one environment variable before it starts a server
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:5}}).</p>
+<x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh" lines="4-5" highlight="5" caption="The model path and the V2 runner switch." />
+<p>AFD runs on {{term model-runner-v2 | Model Runner V2}}. Setting
+<code>VLLM_USE_V2_MODEL_RUNNER=1</code> turns the V2 runner on explicitly. vLLM also picks V2 by default when the
+variable is unset ({{cite vllm:vllm/config/vllm.py:692-694}}); the recipe sets it so the choice is clear. The
+validator raises only when V2 resolves to off ({{cite afd_plugin/validation.py:90-91}}).</p>
+</x-stop>
+
+<x-stop n="2" title="The attention serve command and the parallel sizes">
+<p>The attention server runs on GPUs 0 and 1. The parallel flags set the per-role rank count
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-10}}).</p>
+<x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh" lines="7-10" highlight="7,8,9,10" caption="GPUs 0,1; DP1 TP2; expert parallel on." />
+<ul>
+  <li><code>CUDA_VISIBLE_DEVICES=0,1</code> picks the two GPUs for this role.</li>
+  <li><code>--data-parallel-size 1 --tensor-parallel-size 2</code> gives two attention ranks, because the rank
+    count must equal <code>DP &times; TP</code> ({{cite afd_plugin/validation.py:107-117}}).</li>
+  <li><code>--enable-expert-parallel</code> turns on static expert parallelism, which AFD requires
+    ({{cite afd_plugin/validation.py:118-125}}).</li>
+</ul>
+<p>See {{link concepts/deployment-topologies}} for the rank rule.</p>
+</x-stop>
+
+<x-stop n="3" title="The afd block in --additional-config">
+<p>The <code>--additional-config</code> JSON carries the AFD settings under the <code>"afd"</code> key
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:11-20}}).</p>
+<x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh" lines="11-20" highlight="13,14,16,17,18" caption="The afd block: role, connector, host, port and rank counts." />
+<p>The plugin reads this inner mapping and builds an {{term afd-config | AFDConfig}}
+({{cite afd_plugin/config.py:42}}). The <code>role</code> is <code>attention</code> here; the
+<code>connector</code> is the GPU {{term connector | P2P connector}}; <code>host</code> and <code>port</code>
+set the {{term rendezvous}} where the two roles meet; <code>num_attention_ranks</code> and
+<code>num_ffn_ranks</code> are both <code>2</code>. See {{link reference/afd-config}}.</p>
+</x-stop>
+
+<x-stop n="4" title="The batch, DBO and CUDA graph flags">
+<p>The next flags set the batch limits, DBO and the CUDA graph
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:21-29}}).</p>
+<x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh" lines="21-29" highlight="23,24,25,26,28" caption="DBO thresholds and the FULL_DECODE_ONLY graph capture." />
+<ul>
+  <li><code>--enable-dbo</code> with <code>--dbo-decode-token-threshold 2</code> and
+    <code>--dbo-prefill-token-threshold 12</code> turns on {{term dbo | DBO}} with low example thresholds. AFD
+    needs exactly two microbatches when DBO is on ({{cite afd_plugin/validation.py:126-131}}). See
+    {{link concepts/dbo}}.</li>
+  <li><code>--max-cudagraph-capture-size 64</code> and the <code>--compilation-config</code> with
+    <code>cudagraph_mode: FULL_DECODE_ONLY</code> turn on CUDA graphs. GPU AFD allows only
+    <code>FULL_DECODE_ONLY</code> ({{cite afd_plugin/v1/worker/cuda_graph.py:20-21}}). See
+    {{link concepts/cuda-graphs}}.</li>
+</ul>
+</x-stop>
+
+<x-stop n="5" title="The HTTP port and backgrounding">
+<p>The attention server binds an HTTP port and runs in the background
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:30-32}}).</p>
+<x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh" lines="30-32" highlight="31,32" caption="The HTTP host and port; logs to attn.log; runs in the background." />
+<p>Clients connect to this HTTP port, <code>18305</code>. It is a different port from the AFD
+<code>6269</code>: the HTTP port carries requests, the AFD port carries the connector setup. The command ends
+with <code>&amp;</code>, so it runs in the background.</p>
+</x-stop>
+
+<x-stop n="6" title="The FFN server: the same block, role ffn">
+<p>The FFN server is the same command with two changes: GPUs 2 and 3, and <code>role: ffn</code>
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:34-59}}).</p>
+<x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh" lines="34-47" highlight="34,40" caption="The FFN server: GPUs 2,3, role ffn, same host, port and ranks." />
+<p>The FFN server reads the same <code>host</code>, <code>port</code> and rank counts, so the two roles meet at
+the same rendezvous. It runs no request scheduler and no KV cache; the connector drives it
+({{cite afd_plugin/compat/patches/engine_core.py:599-623}}). Send no client traffic here. See
+{{link concepts/roles}} and {{link concepts/ffn-runtime}}.</p>
+</x-stop>
+
+<x-stop n="7" title="Start order: background both, then wait">
+<p>The script backgrounds both servers and ends with <code>wait</code>
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:53-61}}).</p>
+<x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh" lines="59-61" highlight="61" caption="The FFN server backgrounds, then the script waits for both." />
+<p>Both roles start together and meet at the AFD rendezvous. Wait for <code>Application startup complete</code>
+in each log before you send traffic ({{cite recipe/gpu/P2pNcclAFDConnector/README.md:39-43}}).</p>
+<x-deepdive title="Run it from the repository root">
+<p>Set the model path and the V2 runner, then run the script
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:88-92}}).</p>
+<pre><code class="language-bash">export MODEL_PATH=/path/model_weights/DeepSeek-V2-Lite
+export VLLM_USE_V2_MODEL_RUNNER=1
+bash recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh</code></pre>
+<p>The script writes <code>attn.log</code> and <code>ffn.log</code> in the current directory.</p>
+</x-deepdive>
+</x-stop>
+
+<x-stop n="8" title="Send a request, then benchmark it">
+<p>Send requests only to the attention HTTP server
+({{cite README.md:258-260}}). The FFN server has no request path; a request there fails fast
+({{cite afd_plugin/v1/worker/ffn_worker.py:122-131}}).</p>
+<pre><code class="language-bash">curl http://127.0.0.1:18305/v1/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model": "'"$MODEL_PATH"'", "prompt": "Hello", "max_tokens": 16}'</code></pre>
+<p>To benchmark, drive load against the same port with the repository's wrapper around
+<code>vllm bench serve</code> ({{cite tools/benchmarks/request_generator.sh:44-57}}). The README shows the
+benchmark command for this model ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:104-120}}).
+See {{link concepts/tuning}}.</p>
+</x-stop>
+
+<h2>What can go wrong</h2>
+<ul>
+  <li><strong>A request sent to the FFN server.</strong> The FFN worker is connector-driven; a
+    scheduler-driven <code>execute_model</code> raises at once
+    ({{cite afd_plugin/v1/worker/ffn_worker.py:122-131}}).</li>
+  <li><strong>Different host or port on the two roles.</strong> Both must use the same AFD
+    <code>host:port</code>, or the group setup hangs until the timeout
+    ({{cite afd_plugin/connectors/gpu/p2p.py:271}}).</li>
+  <li><strong>Traffic sent before startup.</strong> Wait for <code>Application startup complete</code> in both
+    logs first ({{cite recipe/gpu/P2pNcclAFDConnector/README.md:39-43}}).</li>
+  <li><strong>The rank count does not match DP x TP.</strong> The validator raises before the run starts
+    ({{cite afd_plugin/validation.py:107-117}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The recipe is the full launch contract. One wrong flag, port, or target
+stops the run or hangs the rendezvous.</p>
+
+<x-quiz>
+  <x-q level="easy">Which port do clients connect to, and which port is the AFD rendezvous?
+    <x-a><p>Clients connect to the HTTP port <code>18305</code>; the roles meet at the AFD port <code>6269</code>
+      ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:16}},
+      {{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:31}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">What changes between the attention and FFN serve commands?
+    <x-a><p>The GPUs (0,1 vs 2,3) and the <code>role</code> (<code>attention</code> vs <code>ffn</code>); the rest
+      of the afd block is the same
+      ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:13}},
+      {{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:40}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">Why does the recipe set <code>VLLM_USE_V2_MODEL_RUNNER=1</code> if vLLM picks V2 by default?
+    <x-a><p>To be explicit. vLLM picks V2 by default when the variable is unset
+      ({{cite vllm:vllm/config/vllm.py:692-694}}), and AFD requires the V2 runner
+      ({{cite afd_plugin/validation.py:90-91}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">The recipe turns on DBO with thresholds 2 and 12. What constraint must the run then meet?
+    <x-a><p>Exactly two microbatches. AFD raises when DBO or ubatching is on and
+      <code>num_ubatches != 2</code> ({{cite afd_plugin/validation.py:126-131}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">Which two flags switch this recipe from eager to graph, and which graph mode do they set?
+    <x-a><p><code>--max-cudagraph-capture-size 64</code> and <code>--compilation-config</code> with
+      <code>cudagraph_mode: FULL_DECODE_ONLY</code>
+      ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-28}}).
+      GPU AFD allows only that mode ({{cite afd_plugin/v1/worker/cuda_graph.py:20-21}}).</p></x-a>
+  </x-q>
+</x-quiz>

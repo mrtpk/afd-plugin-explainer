@@ -1,0 +1,238 @@
+---
+title: Ascend NPU overview: the same contract, different transports
+nav_title: Ascend NPU overview
+level: Advanced
+prerequisites: concepts/connector-contract, concepts/control-plane
+related: concepts/roles, concepts/compat-patches, reference/env-vars, reference/recipes
+summary: AFD on Ascend NPU keeps the same attention/FFN contract as GPU but uses two CAM connectors: CAMP2p (sync, with a control plane over HCCL and Gloo) and CAMAsync (async, no control plane, driven by its receive loop). This page maps the NPU workers, runners, model wrappers, patches and the operator loader, and points to the NPU docs.
+---
+<x-sentence>AFD on Ascend NPU keeps the same {{term attention-role | attention}}/{{term ffn-role | FFN}} split
+as GPU. Only the {{term connector}} transport changes.</x-sentence>
+
+<h2>The idea</h2>
+<p>The NPU path is the one place this site covers Ascend code. The attention/FFN contract is the same as on GPU
+(see {{link concepts/connector-contract}}): the attention side sends hidden states, the FFN side runs the
+experts and sends the result back. What changes is the transport. The NPU has two connectors, both backed by
+Ascend CAM operators.</p>
+<ul>
+  <li><code>CAMP2pAFDConnector</code> &mdash; <strong>synchronous</strong>, with a
+    {{term control-plane | control plane}}. {{term hccl | HCCL}} carries the hidden states; a smaller Gloo group
+    carries the DP metadata ({{cite afd_plugin/connectors/npu/camp2p.py:3-8}}).</li>
+  <li><code>CAMAsyncAFDConnector</code> &mdash; <strong>asynchronous</strong>, with
+    <code>control_plane = None</code>. The CAM dispatch/combine operators carry the routing metadata, so a
+    separate control plane is not needed ({{cite afd_plugin/connectors/npu/async_cam.py:277-283}}).</li>
+</ul>
+<x-simplified><p>This page explains how the Python code selects, loads and drives the NPU operators and runners.
+It does not cover the CAM kernel internals or the vendored binaries, which are out of scope
+({{cite afd_plugin/connectors/npu/bin/}}).</p></x-simplified>
+
+<h2>The picture</h2>
+<x-diagram name="b5_npu_overview" alt="Three panels. Panel 1, the contract is unchanged: a blue attention-role box (send hidden states, receive FFN output) on the left, a neutral CAM arrow, and an emerald FFN-role box (receive, experts, send output) on the right. Panel 2, CAMP2pAFDConnector synchronous: an emerald data-plane box (CAMP2p custom ops over HCCL, one group per batch, camp2p.py line 6) and a violet control-plane box (CAMP2pAFDControlPlane at camp2p.py line 385, token counts once per step). Panel 3, CAMAsyncAFDConnector asynchronous: a neutral control_plane equals None box (async_cam.py line 283, no DP metadata path), a teal arrow to a recv_ffn_work_item box (layer index from CAM, async_ffn runner line 441), a teal arrow to an emerald compute-and-send box (per layer). A legend marks attention role, FFN role and data plane, control plane, and async receive loop." caption="Figure: the attention/FFN contract is the same as GPU. CAMP2p is synchronous with a Gloo control plane; CAMAsync is asynchronous, with no control plane, driven by its receive loop." />
+<p>Read the panels top to bottom. Panel 1 is the shared contract. Panel 2 is the synchronous connector, which
+keeps a control plane. Panel 3 is the asynchronous connector, where the receive loop itself drives each FFN
+layer.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: CAMP2p, the synchronous connector with a control plane</h3>
+<p>The synchronous connector builds its own HCCL groups for the hidden states and a smaller Gloo group for the
+DP metadata ({{cite afd_plugin/connectors/npu/camp2p.py:395-400}}). It sets a control plane,
+<code>CAMP2pAFDControlPlane</code> ({{cite afd_plugin/connectors/npu/camp2p.py:385}}), so the DP metadata
+travels once per step, the same timing as the GPU connector. See {{link concepts/control-plane}}.</p>
+
+<h3>Step 2: CAMAsync has no control plane; its receive loop drives the FFN side</h3>
+<p>The asynchronous connector sets <code>control_plane = None</code>
+({{cite afd_plugin/connectors/npu/async_cam.py:283}}). The CAM dispatch/combine operators own both the data
+motion and its routing metadata, so there is no separate DP metadata path
+({{cite afd_plugin/connectors/npu/async_cam.py:277-282}}).</p>
+<x-code file="afd_plugin/connectors/npu/async_cam.py" lines="277-283" highlight="283" caption="The async connector: no control plane; FFN work is triggered by the receive loop." />
+<p>So what drives the FFN side? The NPU async FFN runner loops over the layers and, for each one, calls
+<code>recv_ffn_work_item</code> ({{cite afd_plugin/v1/worker/npu/async_ffn_model_runner.py:441-443}}). Each
+work item carries its own layer index, read from the CAM metadata of the dispatch-receive, not from a
+control-plane payload ({{cite afd_plugin/connectors/npu/async_cam.py:497-541}}).</p>
+<x-code file="afd_plugin/v1/worker/npu/async_ffn_model_runner.py" lines="441-475" highlight="443,456,473" caption="The connector-driven FFN loop: recv_ffn_work_item gives the layer index; dp_metadata stays None." />
+<p>The forward context sets <code>dp_metadata = None</code> for each step
+({{cite afd_plugin/v1/worker/npu/async_ffn_model_runner.py:473}}). The connector receive is the clock: when a
+dispatch arrives, the runner computes that layer and sends the result back. This is the mechanism the
+{{link concepts/control-plane}} page names in one line.</p>
+
+<h3>Step 3: The operator loader</h3>
+<p>Both connectors need the plugin's Ascend operators. The loader
+<code>ensure_cam_p2p_ops_available</code> sets the custom op-API environment, imports
+<code>afd_plugin._C_ascend</code>, and asserts the <code>torch.ops.afd_ascend</code> namespace
+({{cite afd_plugin/compat/npu/ops.py:73-91}}). <code>ensure_afd_ascend_ops_loaded</code> is a backward-compatible
+alias for it ({{cite afd_plugin/compat/npu/ops.py:94-97}}).</p>
+<x-code file="afd_plugin/compat/npu/ops.py" lines="73-91" highlight="81,85,91" caption="The loader imports the built extension and checks the operator namespace. No kernel code here." />
+<p>The async connector needs four more operators, so it calls
+<code>ensure_cam_async_ops_available</code>, which checks the four
+<code>afd_async_*</code> ops ({{cite afd_plugin/compat/npu/ops.py:107-119}}). The extension
+<code>afd_plugin._C_ascend</code> is built from <code>csrc/npu/pybind</code>
+({{cite setup.py:116-120}}), gated on <code>AFD_BUILD_ASCEND_OPS</code> or an Ascend platform
+({{cite setup.py:43-54}}) and the <code>SOC_VERSION</code> ({{cite setup.py:67}}, {{cite setup.py:88}}). See
+{{link reference/env-vars}}.</p>
+<x-note title="The vendored binaries"><p>The folder <code>connectors/npu/bin/</code> holds a prebuilt CAM
+installer (<code>.run</code>) and a wheel (<code>.whl</code>), stored with Git LFS
+({{cite afd_plugin/connectors/npu/bin/}}). The plugin's Python loads the CMake-built
+<code>afd_plugin._C_ascend</code>; it does not import the <code>bin/</code> artifacts directly. The async docs
+note that the source build needs no external CAM wheel
+({{cite docs/npu/CAM_ASYNC_CONNECTOR_USER_GUIDE.md:277}}).</p></x-note>
+
+<h3>Step 4: Async data-parallel patches, gated to NPU</h3>
+<p>The async path needs two extra patches. They install only when the role is attention and
+<code>async_dp</code> is on ({{cite afd_plugin/compat/npu/runtime.py:44-53}}), and the whole NPU patch set
+installs only when the device is <code>npu</code> ({{cite afd_plugin/__init__.py:199-209}}). On GPU,
+<code>async_dp</code> must be false. See {{link concepts/compat-patches}}.</p>
+<ul>
+  <li><code>async_dp_engine</code> &mdash; swaps the attention engine entry point to a plain
+    <code>EngineCoreProc</code> for async DP ({{cite afd_plugin/compat/patches/async_dp_engine.py:117-120}};
+    installed and gated at {{cite afd_plugin/compat/patches/async_dp_engine.py:414-432}}).</li>
+  <li><code>async_dp_forward_context</code> &mdash; skips the DP metadata only for the async path, and rebinds the
+    symbol in the importing modules ({{cite afd_plugin/compat/patches/async_dp_forward_context.py:88-127}},
+    {{cite afd_plugin/compat/patches/async_dp_forward_context.py:207-212}}).</li>
+</ul>
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="NPU workers and runners" open="yes">
+<p>The NPU runtime classes live under <code>afd_plugin/v1/worker/npu/</code>. vLLM-Ascend loads them by their
+explicit class paths, chosen by the worker-selection code ({{cite afd_plugin/validation.py:34-41}}).</p>
+<table>
+  <thead><tr><th>File</th><th>Class</th><th>Role</th><th>Source</th></tr></thead>
+  <tbody>
+    <tr><td><code>attention_worker.py</code></td><td><code>AFDNPUAttentionWorker</code></td>
+      <td>Builds the AFD-aware vLLM-Ascend attention runner.</td>
+      <td>{{cite afd_plugin/v1/worker/npu/attention_worker.py:1-3}}</td></tr>
+    <tr><td><code>attention_model_runner_v2.py</code></td><td><code>AFDNPUAttentionModelRunnerV2</code></td>
+      <td>A thin AFD seam over the native Ascend Model Runner V2.</td>
+      <td>{{cite afd_plugin/v1/worker/npu/attention_model_runner_v2.py:1-3}}</td></tr>
+    <tr><td><code>ffn_worker.py</code></td><td><code>AFDNPUFFNWorker</code></td>
+      <td>Owns a connector-driven NPU daemon loop.</td>
+      <td>{{cite afd_plugin/v1/worker/npu/ffn_worker.py:1-3}}</td></tr>
+    <tr><td><code>ffn_model_runner.py</code></td><td><code>AFDNPUFFNModelRunner</code></td>
+      <td>The synchronous CAMP2p FFN runner.</td>
+      <td>{{cite afd_plugin/v1/worker/npu/ffn_model_runner.py:1-3}}</td></tr>
+    <tr><td><code>async_ffn_model_runner.py</code></td><td><code>AsyncNPUFFNModelRunner</code></td>
+      <td>The async CAM FFN runtime, driven by the connector receive loop.</td>
+      <td>{{cite afd_plugin/v1/worker/npu/async_ffn_model_runner.py:1-3}}</td></tr>
+    <tr><td><code>async_ffn_two_stream.py</code></td><td><code>AsyncFFNTwoStream</code></td>
+      <td>Two-slot async receive/compute with FIFO send.</td>
+      <td>{{cite afd_plugin/v1/worker/npu/async_ffn_two_stream.py:1-3}}</td></tr>
+    <tr><td><code>ubatch_runner.py</code></td><td><code>NPUUBatchRunner</code></td>
+      <td>Ascend inputs and contexts for native Model Runner V2 microbatching.</td>
+      <td>{{cite afd_plugin/v1/worker/npu/ubatch_runner.py:1-3}}</td></tr>
+    <tr><td><code>mla_graph.py</code></td><td>helpers</td>
+      <td>Graph-local MLA parameter helpers for Ascend ubatch execution.</td>
+      <td>{{cite afd_plugin/v1/worker/npu/mla_graph.py:1-3}}</td></tr>
+  </tbody>
+</table>
+</x-deepdive>
+
+<x-deepdive title="NPU model wrappers and Ascend patches">
+<p>Two NPU model wrappers matter for the overview.</p>
+<ul>
+  <li><code>GateOnlyRemoteMoE</code> &mdash; an attention-side MoE module that computes the gate locally and sends
+    only the experts to the FFN role ({{cite afd_plugin/model_executor/models/deepseek_v2.py:197-199}}). It is
+    the NPU branch when the gate is on the attention side.</li>
+  <li><code>npu/deepseek_v4.py</code> &mdash; the DeepSeek-V4 AFD wrapper for the Ascend native implementation,
+    with its own decoder layer and remote-MoE classes
+    ({{cite afd_plugin/model_executor/models/npu/deepseek_v4.py:1-3}}). The model table maps
+    <code>DeepseekV4ForCausalLM</code> to this NPU wrapper only when <code>torch_npu</code> is importable
+    ({{cite afd_plugin/__init__.py:109-113}}).</li>
+</ul>
+<p>The Ascend compat patches live under <code>afd_plugin/compat/patches/npu/</code>. They install only on an
+NPU device ({{cite afd_plugin/__init__.py:199-209}}).</p>
+<table>
+  <thead><tr><th>Patch</th><th>What it does</th><th>Source</th></tr></thead>
+  <tbody>
+    <tr><td><code>ascend_config.py</code></td><td>Keeps AFD settings out of Ascend's strict config namespace.</td>
+      <td>{{cite afd_plugin/compat/patches/npu/ascend_config.py:1-4}}</td></tr>
+    <tr><td><code>ascend_platform.py</code></td><td>Patches vLLM-Ascend platform config for AFD-owned DBO.</td>
+      <td>{{cite afd_plugin/compat/patches/npu/ascend_platform.py:1-4}}</td></tr>
+    <tr><td><code>mla_graph.py</code></td><td>Routes Ascend MLA graph parameters through AFD forward contexts.</td>
+      <td>{{cite afd_plugin/compat/patches/npu/mla_graph.py:1-4}}</td></tr>
+    <tr><td><code>mrv2_ubatching.py</code></td><td>Scoped Ascend seams for the native UBatchRunner.</td>
+      <td>{{cite afd_plugin/compat/patches/npu/mrv2_ubatching.py:1-4}}</td></tr>
+  </tbody>
+</table>
+</x-deepdive>
+
+<x-deepdive title="The NPU recipes and what they report">
+<p>The recipe index lists both NPU connectors as "integrated v0.30 hardware validation pending"; the measured
+numbers come from older runtimes ({{cite recipe/README.md:36-38}}).</p>
+<ul>
+  <li><strong>CAMP2p (sync).</strong> The DeepSeek-V3.2 recipe targets vLLM-Ascend <code>v0.19.1rc1</code> and
+    compares EP64 with 48A16F and 64A16F AFD deployments
+    ({{cite recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md:1-11}},
+    {{cite recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md:28-33}}).</li>
+  <li><strong>CAMAsync (async).</strong> The v0.26 accuracy recipe runs the full DeepSeek-V3.2 (61 layers) with
+    DP2/TP8 attention and EP16 FFN; the index reports a <code>0.9522</code> strict match for that token split
+    ({{cite recipe/README.md:38}}, {{cite recipe/npu/CAMAsyncAFDConnector/deepseek_v3_2/v0_26_accuracy/README.md:1-10}}).</li>
+</ul>
+<p>The NPU recipes also include result images, described with their own captions on the
+{{link concepts/tuning}} page. This page does not restate those numbers as current results.</p>
+</x-deepdive>
+
+<x-deepdive title="Where to read more: the NPU docs">
+<p>The <code>docs/npu/</code> folder documents the NPU path in depth. These are hints; this page cites the
+code.</p>
+<table>
+  <thead><tr><th>Document</th><th>Topic</th></tr></thead>
+  <tbody>
+    <tr><td>{{cite docs/npu/CAM_P2P_CONNECTOR_USER_GUIDE.md | CAM_P2P_CONNECTOR_USER_GUIDE.md}}</td>
+      <td>The CAMP2p connector contract and rank mapping.</td></tr>
+    <tr><td>{{cite docs/npu/CAM_ASYNC_CONNECTOR_USER_GUIDE.md | CAM_ASYNC_CONNECTOR_USER_GUIDE.md}}</td>
+      <td>The CAMAsync connector, rank derivation and native-DBO distinction.</td></tr>
+    <tr><td>{{cite docs/npu/CAM_ASYNC_ROUTED_OPS.md | CAM_ASYNC_ROUTED_OPS.md}}</td>
+      <td>The routed-only async operators.</td></tr>
+    <tr><td>{{cite docs/npu/ASYNC_FFN_RUNTIME.md | ASYNC_FFN_RUNTIME.md}}</td>
+      <td>The async CAM FFN eager/FULL runtime.</td></tr>
+    <tr><td>{{cite docs/npu/LAYERED_W2_MDL_VALIDATION.md | LAYERED_W2_MDL_VALIDATION.md}}</td>
+      <td>The layered W13/W2 graph validation.</td></tr>
+    <tr><td>{{cite docs/npu/TESTING.md | TESTING.md}}, {{cite docs/npu/TROUBLESHOOTING.md | TROUBLESHOOTING.md}}</td>
+      <td>NPU validation and troubleshooting.</td></tr>
+  </tbody>
+</table>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<ul>
+  <li><strong>Operators not built.</strong> The loader raises when <code>afd_plugin._C_ascend</code> is missing;
+    build with Ascend ops enabled ({{cite afd_plugin/compat/npu/ops.py:86-90}}).</li>
+  <li><strong>Async ops missing.</strong> The async connector raises when any of the four
+    <code>afd_async_*</code> operators is absent ({{cite afd_plugin/compat/npu/ops.py:115-119}}).</li>
+  <li><strong>async_dp on GPU.</strong> The async-DP patches are NPU-only and gated at run time; on GPU
+    <code>async_dp</code> must be false ({{cite afd_plugin/compat/npu/runtime.py:44-53}}).</li>
+  <li><strong>Expecting a control plane with the async connector.</strong> The async connector has none; the
+    receive loop drives the FFN side ({{cite afd_plugin/connectors/npu/async_cam.py:283}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The NPU keeps the AFD contract but changes the transport and the driving
+mechanism. The async connector folds the control plane into the data operators, so the FFN side follows the
+receive loop, not a metadata step.</p>
+
+<x-quiz>
+  <x-q level="easy">Which NPU connector has a control plane, and which does not?
+    <x-a><p><code>CAMP2pAFDConnector</code> has one, <code>CAMP2pAFDControlPlane</code>
+      ({{cite afd_plugin/connectors/npu/camp2p.py:385}}). <code>CAMAsyncAFDConnector</code> sets
+      <code>control_plane = None</code> ({{cite afd_plugin/connectors/npu/async_cam.py:283}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">What two collective libraries does CAMP2p use, and for what?
+    <x-a><p>HCCL for the hidden states, and a smaller Gloo group for the DP metadata
+      ({{cite afd_plugin/connectors/npu/camp2p.py:3-8}}, {{cite afd_plugin/connectors/npu/camp2p.py:395-400}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">How does the async FFN side know which layer to compute without a control plane?
+    <x-a><p>The runner calls <code>recv_ffn_work_item</code> in a loop; each item carries its layer index, read
+      from the CAM dispatch metadata ({{cite afd_plugin/v1/worker/npu/async_ffn_model_runner.py:441-443}},
+      {{cite afd_plugin/connectors/npu/async_cam.py:497-541}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">How does the plugin load the Ascend operators, and what does it not load?
+    <x-a><p>It imports the CMake-built <code>afd_plugin._C_ascend</code> and asserts the
+      <code>torch.ops.afd_ascend</code> namespace ({{cite afd_plugin/compat/npu/ops.py:73-91}}). It does not
+      import the vendored <code>bin/</code> artifacts, and the kernel internals are out of scope.</p></x-a>
+  </x-q>
+  <x-q level="hard">When do the async-DP patches install, and why can they not run on GPU?
+    <x-a><p>Only when the role is attention and <code>async_dp</code> is on
+      ({{cite afd_plugin/compat/npu/runtime.py:44-53}}), and only when the device is <code>npu</code>
+      ({{cite afd_plugin/__init__.py:199-209}}). On GPU <code>async_dp</code> must be false, so the gate never
+      opens.</p></x-a>
+  </x-q>
+</x-quiz>

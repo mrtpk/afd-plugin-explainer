@@ -1,0 +1,171 @@
+---
+title: Tuning: the knobs the repo exposes
+nav_title: Tuning
+level: Advanced
+prerequisites: concepts/deployment-topologies
+related: concepts/dbo, concepts/cuda-graphs, reference/env-vars, reference/recipes, concepts/moe-handoff
+summary: What afd-plugin lets you tune, and only what its code and READMEs state: the A:F rank ratio, DBO thresholds, CUDA graph capture, the group timeout, gate placement, the NPU CAM capacity, the profiler, the routing simulator and the benchmark tools. Every number is cited.
+---
+<x-sentence>AFD exposes a small set of knobs. This page lists each one, where the code reads it, and the only
+numbers the repository states for it.</x-sentence>
+
+<h2>The idea</h2>
+<p>Tuning AFD means three things: shape the split and the overlap for throughput, set the timeouts and gate for
+reliable startup, and measure with the profiler and benchmark tools. The repository gives example values for
+some knobs and says to tune them for the workload. This page uses only numbers the code or the READMEs
+state.</p>
+<p><strong>An everyday comparison.</strong> Think of the knobs on an audio mixer. Each one changes one thing,
+and the factory marks are a starting point, not the final mix. The comparison stops at the meters: here the
+meters are the profiler and the benchmark, not your ear.</p>
+<x-warning title="No invented speedups"><p>This page does not claim a speedup for any setting. The recipe
+values (DBO <code>2/12</code>, capture size <code>64</code>) are example values the READMEs say to tune
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:140-143}},
+{{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:154-157}}).</p></x-warning>
+
+<h2>The picture</h2>
+<x-diagram name="b5_tuning" alt="Three panels of knob cards. Panel 1, tune throughput: a rank-ratio card (rule A equals DP times TP, source topology.py line 52, tag A greater than or equal to F), a DBO-thresholds card (vLLM default 32 slash 512, recipe dbo token-threshold flags, tag 2 slash 12), and a CUDA-graph-size card (flag max-cudagraph-capture-size, mode FULL_DECODE_ONLY, tag 64). Panel 2, tune reliability and placement: a group-timeout card (key afd_process_group_timeout_s, source config.py line 70, tag 120 seconds), a gate-placement card (key compute_gate_on_attention, source config.py line 66, tag false), and an NPU CAM-capacity card (env BATCH_SIZE_FACTOR, source validation.py line 45, tag times 1). Panel 3, measure: a profiler card (env AFD_GPU underscore star PROFILER, source compat/profiler.py, tag opt-in), a routing-simulator card (env VLLM_MOE_ROUTING_SIMULATION_STRATEGY, source routing_simulator.py, tag afd_balanced), and a benchmark card (tool request_generator.sh, k8s run-vllm-bench-k8s, tag bench serve). A legend marks throughput, reliability, and measurement." caption="Figure: the knobs AFD exposes, grouped by goal. Each card names the key or flag and its source line. The recipe values are examples to tune." />
+<p>Read the three panels as three goals. Panel 1 shapes throughput; panel 2 keeps startup reliable; panel 3
+measures. Each card gives the key or flag and the file where the code reads it.</p>
+
+<h2>In the code</h2>
+
+<h3>Step 1: The A:F rank ratio</h3>
+<p>The attention ranks must be at least the FFN ranks. The P2P topology check raises when
+<code>A &lt; F</code> ({{cite afd_plugin/distributed/topology.py:52-58}}). Within that rule you choose the
+counts and the DP/TP split per role ({{cite afd_plugin/validation.py:107-117}}). See
+{{link concepts/deployment-topologies}}.</p>
+
+<h3>Step 2: DBO thresholds</h3>
+<p>{{term dbo | DBO}} microbatches a step when the token count passes a threshold. The recipes set a low decode
+threshold <code>2</code> and prefill threshold <code>12</code>
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:24-25}}).
+The vLLM defaults are higher: <code>32</code> for decode and <code>512</code> for prefill
+({{cite vllm:vllm/config/parallel.py:227}}, {{cite vllm:vllm/config/parallel.py:232}}).</p>
+<x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh" lines="23-25" caption="The recipe's DBO thresholds: example values, lower than the vLLM defaults." />
+<p>vLLM reads these thresholds per step to decide whether to microbatch
+({{cite vllm:vllm/v1/worker/ubatch_utils.py:141-149}}). AFD requires exactly two microbatches when DBO is on
+({{cite afd_plugin/validation.py:126-131}}). See {{link concepts/dbo}}.</p>
+
+<h3>Step 3: CUDA graph capture size</h3>
+<p>The graph variants set <code>--max-cudagraph-capture-size</code> and the
+<code>cudagraph_capture_sizes</code> list together, with
+<code>cudagraph_mode: FULL_DECODE_ONLY</code>
+({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-29}}).</p>
+<x-code file="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh" lines="26-29" caption="Capture size 64 and the FULL_DECODE_ONLY mode. The README says to adjust both together." />
+<p>On GPU, AFD allows only <code>FULL_DECODE_ONLY</code>
+({{cite afd_plugin/v1/worker/cuda_graph.py:20-21}}). The README says to set
+<code>--max-cudagraph-capture-size</code> and <code>cudagraph_capture_sizes</code> together, based on the batch
+sizes and GPU memory ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:154-157}}). See
+{{link concepts/cuda-graphs}}.</p>
+
+<h3>Step 4: The group timeout</h3>
+<p><code>afd_process_group_timeout_s</code> sets how long the world process-group rendezvous waits; the default
+is <code>120</code> seconds ({{cite afd_plugin/config.py:70}}). The P2P connector reads it when it builds the
+world group ({{cite afd_plugin/connectors/gpu/p2p.py:275}}). The config comment says the right value depends on
+rank count, placement and model size, so it is left to the caller
+({{cite afd_plugin/config.py:67-70}}).</p>
+
+<h3>Step 5: Gate placement</h3>
+<p><code>compute_gate_on_attention</code> moves the MoE gate to the attention side. When it is on, the FFN side
+runs only the expert layers ({{cite afd_plugin/v1/worker/ffn_model_runner.py:211-215}}). It defaults to
+<code>false</code> ({{cite afd_plugin/config.py:66}}). Not every model allows it: the Qwen3-MoE wrapper
+requires it to be false ({{cite afd_plugin/model_executor/models/qwen3_moe.py:84-87}}). See
+{{link concepts/moe-handoff}}.</p>
+
+<h2>Deep dive</h2>
+
+<x-deepdive title="BATCH_SIZE_FACTOR: the NPU CAM receive capacity">
+<p>On an Ascend NPU, {{term batch-size-factor | BATCH_SIZE_FACTOR}} multiplies the CAM receive capacity. The base is
+<code>262144</code> tokens; the factor is applied with native float rounding, default <code>1</code>
+({{cite afd_plugin/validation.py:45-54}}). The async FFN graph capacity check uses the same figure
+({{cite afd_plugin/compat/npu/feature_validation.py:245-249}}). This knob matters only on NPU; see
+{{link concepts/npu-overview}}.</p>
+</x-deepdive>
+
+<x-deepdive title="The profiler">
+<p>The plugin owns a torch profiler for each GPU runner role, enabled by environment variables with the prefix
+<code>AFD_GPU_ATTENTION_PROFILER</code> or <code>AFD_GPU_FFN_PROFILER</code>. The profiler is off until you set
+<code>..._ENABLE</code> ({{cite afd_plugin/compat/profiler.py:46-61}}). Only then does the plugin build a torch
+profiler with the schedule from the other variables
+({{cite afd_plugin/compat/profiler.py:64-96}}). The trace directory falls back to
+<code>VLLM_TORCH_PROFILER_DIR</code>, then to a per-role default
+({{cite afd_plugin/compat/profiler.py:131-132}}). The NPU profiler is the same shape with one extra setting,
+<code>..._WITH_STACK</code> ({{cite afd_plugin/compat/npu/profiler.py:52-70}}). The
+{{link reference/env-vars}} page lists every profiler variable.</p>
+</x-deepdive>
+
+<x-deepdive title="The routing simulator">
+<p>For controlled MoE benchmarks, the plugin registers a deterministic routing strategy,
+<code>afd_balanced</code> ({{cite afd_plugin/model_executor/routing_simulator.py:166-171}}). Select it with
+vLLM's <code>VLLM_MOE_ROUTING_SIMULATION_STRATEGY</code>
+({{cite afd_plugin/model_executor/routing_simulator.py:5-8}}). It returns uniform weights and deterministic
+expert ids from a fixed seed <code>1024</code>
+({{cite afd_plugin/model_executor/routing_simulator.py:28}}). The optional
+<code>AFD_BENCHMARK_FORCE_LB_TOPN_PER_RANK</code> limits the local expert pool per EP rank; <code>0</code>
+selects all local experts ({{cite afd_plugin/model_executor/routing_simulator.py:125-127}}).</p>
+<x-warning title="The simulator changes model outputs"><p>The strategy replaces real routing with a synthetic
+cycle, so it changes model outputs ({{cite afd_plugin/model_executor/routing_simulator.py:10-11}}). Use it only
+for benchmark and profiling runs, not for serving.</p></x-warning>
+</x-deepdive>
+
+<x-deepdive title="The benchmark tools and the result images">
+<p>The repository ships a benchmark harness under <code>tools/benchmarks/</code>. The
+<code>request_generator.sh</code> script drives load against a running server; it wraps
+<code>vllm bench serve</code> and takes every knob as an environment variable
+({{cite tools/benchmarks/request_generator.sh:44-57}}). The <code>decode_bench_server.sh</code> script starts a
+2A2F decode-only stand that fakes out prefill
+({{cite tools/benchmarks/decode_bench_server.sh:4-20}}). For a Kubernetes run, the repository ships a
+<code>run-vllm-bench-k8s</code> contributor skill
+({{cite .agents/skills/run-vllm-bench-k8s/SKILL.md:1-6}}).</p>
+<p>The NPU recipes include result images with their own captions. The CAMP2p recipe reports DeepSeek-V3.2
+decode throughput per die at 16K and 32K
+({{cite recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md:365}},
+{{cite recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md:373}}); the async recipe reports a text-matched
+median TTFT comparison ({{cite recipe/npu/CAMAsyncAFDConnector/deepseek_v3_2/README.md:432}}). These numbers
+are from older runtimes, so this page does not restate them as current results. See
+{{link concepts/npu-overview}}.</p>
+</x-deepdive>
+
+<h2>What can go wrong</h2>
+<x-simplified><p>This page lists the knobs the repository exposes. It does not tune them for you; the right
+values depend on the model, the hardware and the workload, as the READMEs say.</p></x-simplified>
+<ul>
+  <li><strong>DBO on without two microbatches.</strong> AFD requires exactly two microbatches when DBO is on,
+    and raises otherwise ({{cite afd_plugin/validation.py:126-131}}).</li>
+  <li><strong>A graph mode other than FULL_DECODE_ONLY on GPU.</strong> The GPU runner accepts only
+    <code>FULL_DECODE_ONLY</code> ({{cite afd_plugin/v1/worker/cuda_graph.py:20-21}}).</li>
+  <li><strong>A timeout too short for the placement.</strong> The rendezvous fails when the world group does not
+    form in time ({{cite afd_plugin/connectors/gpu/p2p.py:275}}).</li>
+  <li><strong>The routing simulator left on for serving.</strong> It changes model outputs, so it gives wrong
+    answers outside a benchmark ({{cite afd_plugin/model_executor/routing_simulator.py:10-11}}).</li>
+</ul>
+<p><strong>Why it matters.</strong> The knobs trade throughput, memory and startup time. The repository gives
+example values and the read sites; the right values come from measuring your own workload.</p>
+
+<x-quiz>
+  <x-q level="easy">What DBO thresholds do the recipes set, and how do they compare with the vLLM defaults?
+    <x-a><p>The recipes set decode <code>2</code> and prefill <code>12</code>
+      ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:24-25}}).
+      The vLLM defaults are higher, <code>32</code> and <code>512</code>
+      ({{cite vllm:vllm/config/parallel.py:227}}, {{cite vllm:vllm/config/parallel.py:232}}).</p></x-a>
+  </x-q>
+  <x-q level="easy">Is the profiler on by default?
+    <x-a><p>No. Each role's profiler is off until you set its <code>..._ENABLE</code> variable
+      ({{cite afd_plugin/compat/profiler.py:46-61}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">What does <code>compute_gate_on_attention</code> change, and which model forbids it?
+    <x-a><p>When on, the FFN side runs only the expert layers, because the attention side computes the gate
+      ({{cite afd_plugin/v1/worker/ffn_model_runner.py:211-215}}). The Qwen3-MoE wrapper requires it to be
+      false ({{cite afd_plugin/model_executor/models/qwen3_moe.py:84-87}}).</p></x-a>
+  </x-q>
+  <x-q level="medium">How do you select the deterministic benchmark routing, and why not use it for serving?
+    <x-a><p>Set <code>VLLM_MOE_ROUTING_SIMULATION_STRATEGY=afd_balanced</code>
+      ({{cite afd_plugin/model_executor/routing_simulator.py:5-8}}). It replaces real routing with a synthetic
+      cycle, so it changes model outputs ({{cite afd_plugin/model_executor/routing_simulator.py:10-11}}).</p></x-a>
+  </x-q>
+  <x-q level="hard">On an NPU, what does <code>BATCH_SIZE_FACTOR</code> control, and from what base?
+    <x-a><p>It multiplies the CAM receive capacity, base <code>262144</code> tokens, with native float
+      rounding; default <code>1</code> ({{cite afd_plugin/validation.py:45-54}}). It has no effect on
+      GPU.</p></x-a>
+  </x-q>
+</x-quiz>

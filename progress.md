@@ -1,7 +1,7 @@
 # AFD Plugin Explainer — Progress
 
-Last update: 2026-10-28
-Current phase: **2 Full build** — Phase 1 done (8 sample pages fact-checked, site check clean); usage pause; next: B1 writer.
+Last update: 2026-10-29
+Current phase: **2 Full build** — B5 verified and committed (2026-10-29, new session). Next: FC-B5, then F.
 
 This file is the memory of the project. A new session must be able to continue from it alone.
 Update it after every subagent finishes and after every user decision.
@@ -27,7 +27,7 @@ Update it after every subagent finishes and after every user decision.
 | B2 Roles, topology, connectors | done (277k) | done (2 defects) | yes |
 | B3 Model split + execution | done (260k) | done (2 defects, 252k) | yes |
 | B4 Graphs, DBO, patches | done (306k) | done (7 defects) | yes |
-| B5 Deploy, NPU, reference | running | – | – |
+| B5 Deploy, NPU, reference | done (367k) | next | yes (writer) |
 | F Final | – | – | – |
 
 ## USER INSTRUCTIONS
@@ -51,10 +51,45 @@ Update it after every subagent finishes and after every user decision.
 
 ## RESUME NOTES
 
-(none)
+**2026-10-29. The supervisor session lost the Bash tool.** A safety classifier (not a tool error, not about
+this project) blocked every Bash call for the rest of that conversation, including read-only ones. Read,
+Write and Edit still worked, which is how these notes were written. START A NEW SESSION to continue.
+
+State at that moment:
+- Last commit: `ee31e83` "B4 fact-checked: 7 defects fixed". Everything up to and including B4 is committed.
+- The B5 writer FINISHED and left its files on disk, UNCOMMITTED: 7 pages (concepts/deployment-topologies,
+  tuning, npu-overview; tours/run-a-recipe; reference/env-vars, recipes, faq), diagrams/b5_*.py (4),
+  src/glossary/b5.json (3 terms), tools/gen_env_vars.py, tools/gen_recipes.py.
+- The B5 writer reported: `build.py --strict` = 42 pages, 54 glossary terms, 30 diagrams, 0 errors,
+  0 warnings; both new generators' `--check` pass. The supervisor COULD NOT VERIFY this (Bash was blocked).
+  Verify before you trust it.
+- FC-B5 has NOT run. The final pass has NOT run. README.md is still the unfilled template.
+
+First steps in the new session:
+1. `python3 build.py --strict`; `--check` on all four generators (gen_afd_config, gen_env_vars, gen_recipes,
+   gen_folder_tree); `node tools/site_check.js`.
+2. Merge the B5 writer facts (below, marked [W]) into notes/facts.md, then commit B5 as
+   "B5: ... (fact check pending)".
+3. FC-B5, then the final pass (see "Next step").
 
 ## Done
 
+- 2026-10-29: NEW SESSION verified B5: `build.py --strict` 42 pages, 54 terms, 30 diagrams, 0 warnings, 0 errors; all four generator `--check` up to date; `node tools/site_check.js` 42 pages x 1280/390, 3956 internal links, 0 problems. B5 [W] facts were already merged in facts.md. Pins: ../vllm ced6857a, ../afd-plugin 7452d52. Committed B5 (fact check pending); README.md left uncommitted until the final commit.
+- 2026-10-29: SUPERVISOR SESSION LOST BASH (safety classifier, not about this project). B5 writer output is
+  on disk and uncommitted. See RESUME NOTES. progress.md was repaired with Read/Edit, which still worked.
+- 2026-10-28: B5 writer done (367k tokens, last batch): concepts deployment-topologies, tuning,
+  npu-overview; tours/run-a-recipe; reference/env-vars, recipes, faq; diagrams b5_* (4); b5.json
+  (multipod, hccl, batch-size-factor); generators tools/gen_env_vars.py (51 variables) and
+  tools/gen_recipes.py (24 AFD serve blocks), both with `--check` and `--report`. Writer reported
+  `build.py --strict` 0 errors and 0 warnings (UNVERIFIED by the supervisor). No suspected bugs.
+  The 4 B5 concept and tour pages ended the earlier "coming soon" warnings.
+- FINAL-PASS TODO: FAQ "docs vs code" gained 3 more items from B5, all to verify in FC-B5:
+  (a) recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:111 says `bash tools/benchmarks/benchmark.sh`,
+  which does not exist at the pin (the real harness is tools/benchmarks/request_generator.sh);
+  (b) tools/benchmarks/decode_bench_server.sh:26-30 names two scripts that do not exist at the pin;
+  (c) VLLM_TORCH_PROFILER_DIR is read by the plugin profilers (compat/profiler.py:132,
+  compat/npu/profiler.py:149) but is not declared anywhere in vLLM v0.30.0, so it is read with plain
+  os.getenv and unset only means the per-role default.
 - 2026-10-28: FC-B4 done (full): ~210 claims, 7 defects (async_dp_engine selection :117-120 in 2 places; config_validation cite :200-214; "five patch modules imported by register_afd" → four + scoped gpu_mrv2_ubatching in diagram and alt; 3 off-by-one ranges). All 13 vLLM patch targets verified. No suspected bugs.
 - FINAL-PASS TODO: "no scheduler" for the FFN EngineCore → "no real scheduler (a no-op stand-in)" on concepts/compat-patches step 4, reference/compat-patches __init__ row, concepts/roles (check), tours/life-of-a-request (check). Source: engine_core.py:599-623.
 - 2026-10-28: B4 writer done: concepts cuda-graphs, dbo (+ dbo-timeline visual), compat-patches; reference/compat-patches; tours start-up, one-decode-step; 6 diagrams; b4.json (5 terms). Build 0 errors; site check 35 pages 0 problems; dbo-timeline tested on both pages (40 px, aria-live, 390). No suspected bugs.
@@ -95,7 +130,36 @@ Update it after every subagent finishes and after every user decision.
 
 ## Next step
 
-B5 WRITER RUNNING (no pause, user instruction). If cut off: resume it, do not restart. B1 writer (plan §13: learn/what-is-afd, learn/vllm-v1-map, concepts/plugin-entry-point, afd-config, worker-selection, model-registration, code/config-py, code/validation-py; no visual) → build → commit "B1 (fact check pending)" → FC-B1 (no pause, user instruction) (full for learn + concepts; sample 1 in 3 for code/config-py and code/validation-py) → commit "B1 fact-checked" → B2 → B3 with no pauses → PAUSE after B3 fact-checked. Then B4, B5 with pauses, then F.
+In a NEW session (the old one lost Bash; see RESUME NOTES). The user approved running to the end with no
+usage pauses and no push.
+
+1. **Verify and commit B5.** Build `--strict`, all four generator `--check`s, `node tools/site_check.js`.
+   Merge the B5 [W] facts into notes/facts.md. Commit "B5: ... (fact check pending)".
+2. **FC-B5** (explainer-worker, notes/brief-factcheck.md). FULL check: concepts/deployment-topologies,
+   tuning, npu-overview; tours/run-a-recipe; reference/faq; diagrams b5_*; src/glossary/b5.json.
+   SAMPLE check (1 in 3 + every default, number, order): reference/env-vars and reference/recipes, plus a
+   verification that each generator's output matches the source (run `--report`).
+   FACT-CHECK FOCUS for FC-B5:
+   - the Qwen 122B multipod page: the 4A2F rank counts are literal, but "DP4 = DP2 local x 2 pods" is the
+     writer's interpretation of --data-parallel-size 4 / --data-parallel-size-local 2 /
+     ATTENTION_DP_START_RANK=2. Re-derive it.
+   - gen_env_vars completeness: 51 variables claimed. Spot-check the profiler and setup.py rows for a
+     missed read or a false positive.
+   - the async CAM layer index from token_nums_rankid_layeridx[2] (async_cam.py:497-556, :526-541).
+   - camp2p.py:395-400 is cited from a docstring; move it to the HCCL/Gloo group-creation lines if better.
+   - every FAQ answer, because the FAQ repeats facts from all earlier batches.
+   Then commit "B5 fact-checked: N defects fixed".
+3. **Final pass** (one explainer-worker, template E): clear every FINAL-PASS TODO line in this file, sweep
+   all pages against notes/facts.md, re-run every generator with `--check`.
+4. **Supervisor (not a subagent):** `node tools/site_check.js` over all 42 pages; test all three visuals
+   (request-stepper, topology-mapper, dbo-timeline) with mouse and keyboard at 1280 and 390 px; mark this
+   file done; final commit. Do NOT push or publish.
+   README.md is ALREADY WRITTEN (2026-10-29, supervisor, no Bash needed). Before the final commit, check
+   these three things in it, which were written from reports and not verified by a build:
+   - the page count (42) and the part descriptions;
+   - "about 1,000 claims examined, about 30 corrected" (add up the fact-check reports in this file);
+   - the reduced-check list, against the BUDGET NOTE lines below, plus reference/env-vars and
+     reference/recipes once FC-B5 confirms they were sample-checked.
 
 ## Questions for the user
 
@@ -137,4 +201,4 @@ B5 WRITER RUNNING (no pause, user instruction). If cut off: resume it, do not re
 | 2026-10-28 | explainer-worker: FC-B3 (full + sample for 3 module pages) | done; ~190 claims, 2 defects |
 | 2026-10-28 | explainer-worker: B4 writer | done; 6 pages, 6 diagrams, dbo-timeline, 306k |
 | 2026-10-28 | explainer-worker: FC-B4 (full) | done; ~210 claims, 7 defects |
-| 2026-10-28 | explainer-worker: B5 writer | running |
+| 2026-10-28 | explainer-worker: B5 writer | done; 7 pages, 4 diagrams, 2 generators, 367k |
