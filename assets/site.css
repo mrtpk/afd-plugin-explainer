@@ -675,6 +675,6 @@ dl.glossary dd { margin: 4px 0 0; padding-left: 0; border-left: 0; }
 .sm-path { display: block; font-family: var(--mono); font-size: .72rem; color: var(--mute); margin-top: .25rem; word-break: break-word; }
 .sm-arrow { text-align: center; color: var(--mute); font-size: 1.1rem; line-height: 1; margin: -.15rem 0; }
 .sm-connector { margin: 1rem 0; }
-.sm-around { margin-top: 1.1rem; }
+section.sm-around { margin-top: 1.1rem; }
 .sm-around .sm-steps { display: grid; grid-template-columns: 1fr; gap: .5rem; }
 @media (min-width: 620px) { .sm-around .sm-steps { grid-template-columns: repeat(3, 1fr); } }

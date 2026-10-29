@@ -16,7 +16,7 @@ from svglib import EMERALD, BLUE, NEUTRAL, INK, Diagram  # noqa: E402
 
 d = Diagram(width=1100)
 d.header("The FFN runtime",
-         "No scheduler and no KV cache: a daemon thread reads the control plane and drives the model.",
+         "No real scheduler and no KV cache: a daemon thread reads the control plane and drives the model.",
          params="ffn_worker.py  ·  ffn_model_runner.py  ·  canvas 1100")
 
 # ---- Panel 1: the server loop ----------------------------------------------

@@ -102,28 +102,28 @@ explicit class paths, chosen by the worker-selection code ({{cite afd_plugin/val
   <tbody>
     <tr><td><code>attention_worker.py</code></td><td><code>AFDNPUAttentionWorker</code></td>
       <td>Builds the AFD-aware vLLM-Ascend attention runner.</td>
-      <td>{{cite afd_plugin/v1/worker/npu/attention_worker.py:1-3}}</td></tr>
+      <td>{{cite afd_plugin/v1/worker/npu/attention_worker.py:30}}</td></tr>
     <tr><td><code>attention_model_runner_v2.py</code></td><td><code>AFDNPUAttentionModelRunnerV2</code></td>
       <td>A thin AFD seam over the native Ascend Model Runner V2.</td>
-      <td>{{cite afd_plugin/v1/worker/npu/attention_model_runner_v2.py:1-3}}</td></tr>
+      <td>{{cite afd_plugin/v1/worker/npu/attention_model_runner_v2.py:208}}</td></tr>
     <tr><td><code>ffn_worker.py</code></td><td><code>AFDNPUFFNWorker</code></td>
       <td>Owns a connector-driven NPU daemon loop.</td>
-      <td>{{cite afd_plugin/v1/worker/npu/ffn_worker.py:1-3}}</td></tr>
+      <td>{{cite afd_plugin/v1/worker/npu/ffn_worker.py:67}}</td></tr>
     <tr><td><code>ffn_model_runner.py</code></td><td><code>AFDNPUFFNModelRunner</code></td>
       <td>The synchronous CAMP2p FFN runner.</td>
-      <td>{{cite afd_plugin/v1/worker/npu/ffn_model_runner.py:1-3}}</td></tr>
+      <td>{{cite afd_plugin/v1/worker/npu/ffn_model_runner.py:56}}</td></tr>
     <tr><td><code>async_ffn_model_runner.py</code></td><td><code>AsyncNPUFFNModelRunner</code></td>
       <td>The async CAM FFN runtime, driven by the connector receive loop.</td>
-      <td>{{cite afd_plugin/v1/worker/npu/async_ffn_model_runner.py:1-3}}</td></tr>
+      <td>{{cite afd_plugin/v1/worker/npu/async_ffn_model_runner.py:73}}</td></tr>
     <tr><td><code>async_ffn_two_stream.py</code></td><td><code>AsyncFFNTwoStream</code></td>
       <td>Two-slot async receive/compute with FIFO send.</td>
-      <td>{{cite afd_plugin/v1/worker/npu/async_ffn_two_stream.py:1-3}}</td></tr>
+      <td>{{cite afd_plugin/v1/worker/npu/async_ffn_two_stream.py:41}}</td></tr>
     <tr><td><code>ubatch_runner.py</code></td><td><code>NPUUBatchRunner</code></td>
       <td>Ascend inputs and contexts for native Model Runner V2 microbatching.</td>
-      <td>{{cite afd_plugin/v1/worker/npu/ubatch_runner.py:1-3}}</td></tr>
+      <td>{{cite afd_plugin/v1/worker/npu/ubatch_runner.py:67}}</td></tr>
     <tr><td><code>mla_graph.py</code></td><td>helpers</td>
       <td>Graph-local MLA parameter helpers for Ascend ubatch execution.</td>
-      <td>{{cite afd_plugin/v1/worker/npu/mla_graph.py:1-3}}</td></tr>
+      <td>{{cite afd_plugin/v1/worker/npu/mla_graph.py:23}}</td></tr>
   </tbody>
 </table>
 </x-deepdive>
@@ -136,7 +136,7 @@ explicit class paths, chosen by the worker-selection code ({{cite afd_plugin/val
     the NPU branch when the gate is on the attention side.</li>
   <li><code>npu/deepseek_v4.py</code> &mdash; the DeepSeek-V4 AFD wrapper for the Ascend native implementation,
     with its own decoder layer and remote-MoE classes
-    ({{cite afd_plugin/model_executor/models/npu/deepseek_v4.py:1-3}}). The model table maps
+    ({{cite afd_plugin/model_executor/models/npu/deepseek_v4.py:649}}). The model table maps
     <code>DeepseekV4ForCausalLM</code> to this NPU wrapper only when <code>torch_npu</code> is importable
     ({{cite afd_plugin/__init__.py:109-113}}).</li>
 </ul>
@@ -146,13 +146,13 @@ NPU device ({{cite afd_plugin/__init__.py:199-209}}).</p>
   <thead><tr><th>Patch</th><th>What it does</th><th>Source</th></tr></thead>
   <tbody>
     <tr><td><code>ascend_config.py</code></td><td>Keeps AFD settings out of Ascend's strict config namespace.</td>
-      <td>{{cite afd_plugin/compat/patches/npu/ascend_config.py:1-4}}</td></tr>
+      <td>{{cite afd_plugin/compat/patches/npu/ascend_config.py:3}}</td></tr>
     <tr><td><code>ascend_platform.py</code></td><td>Patches vLLM-Ascend platform config for AFD-owned DBO.</td>
-      <td>{{cite afd_plugin/compat/patches/npu/ascend_platform.py:1-4}}</td></tr>
+      <td>{{cite afd_plugin/compat/patches/npu/ascend_platform.py:3}}</td></tr>
     <tr><td><code>mla_graph.py</code></td><td>Routes Ascend MLA graph parameters through AFD forward contexts.</td>
-      <td>{{cite afd_plugin/compat/patches/npu/mla_graph.py:1-4}}</td></tr>
+      <td>{{cite afd_plugin/compat/patches/npu/mla_graph.py:3}}</td></tr>
     <tr><td><code>mrv2_ubatching.py</code></td><td>Scoped Ascend seams for the native UBatchRunner.</td>
-      <td>{{cite afd_plugin/compat/patches/npu/mrv2_ubatching.py:1-4}}</td></tr>
+      <td>{{cite afd_plugin/compat/patches/npu/mrv2_ubatching.py:3-8}}</td></tr>
   </tbody>
 </table>
 </x-deepdive>

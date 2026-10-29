@@ -1,7 +1,15 @@
 # AFD Plugin Explainer — Progress
 
 Last update: 2026-10-29
-Current phase: **2 Full build** — B5 fact-checked and committed (2026-10-29). Next: F (final pass), then supervisor checks and the final commit.
+Current phase: **DONE (2026-10-29).** All phases written, fact-checked, final-passed and committed. Not pushed or published (user instruction). Final checks: build --strict 0 warnings / 0 errors; 4 generator --checks up to date; site_check 42 pages x 1280/390, 3956 internal links, 0 problems; concepts = 19 pages (README:51 verified).
+
+Final-commit contents (2026-10-29):
+- F final-pass subagent (237k tokens, 77 tool calls): TODO a ("no real scheduler (a no-op stand-in)" on compat-patches x2, roles, ffn-runtime, start-up, code/ffn-worker, vllm-v1-map + diagrams b3_ffn_runtime, s2_request_ffn, b4_startup_ffn); b (glossary afd-forward-metadata had the wrong field list; supervisor confirmed metadata.py:294-304); g (deployment-topologies: clients send to the proxy 18305 in disaggregation; supervisor confirmed 2p1a1f_eager_dbo.sh:110-115); h (npu-overview cites point at class lines; supervisor spot-checked attention_worker.py:30, deepseek_v4.py:649). c, d, e, f checked: already correct. Consistency sweep clean; no facts.md errors; no suspected bugs. Supervisor read the full diff.
+- notes/facts.md: new section "Added after the final pass" (AFDForwardContextMetadata fields; disaggregation client port).
+- request-stepper CSS moved into assets/viz/viz.css (like the other two visuals); example_stepper.js deleted. Browser test of all 3 visuals (4 mounts) at 1280 and 390: click and keyboard change the aria-live text, all buttons >= 40 px, 0 overflow, 0 JS errors.
+- Home legend: `.sm-around { margin-top }` also hit the legend swatch → scoped to `section.sm-around` (assets/site.css:678). Measured: all swatches centred at both widths.
+- Diagrams: a measuring script (scratchpad final_check.js) found text on or past box borders in 9 diagrams. Fix in diagrams/svglib.py: new `_fit_rows` tightens the line step (box min 13, step card min 14) and moves the first line up when lines do not fit, and prints a stderr warning (= build warning) when they still do not fit. Hand fixes: b2_wire_data "split back" box (h 58), b4_dbo (lane moved down, ffn boxes wider, dashed return arrow starts at the box edge). Also from earlier this session: b5_npu_overview footer was past the canvas edge (shortened). Re-measured: 0 flags except b4_dbo, which was then fixed and looked at.
+- README.md: status → complete; fact-check totals → about 960 claims / about 40 corrected + final pass; out-of-scope bin/ line corrected (the Python does not import bin/; it loads the setup.py-built _C_ascend). Page count 42 and the reduced-check list verified.
 
 This file is the memory of the project. A new session must be able to continue from it alone.
 Update it after every subagent finishes and after every user decision.
@@ -13,8 +21,8 @@ Update it after every subagent finishes and after every user decision.
 | 0a Survey | done | notes/survey/survey.md, vllm-plugin-hooks.md; 5 claims spot-checked by supervisor (all true) |
 | 0b Plan approval | done | 2026-10-28: "defaults ok" |
 | 1 Foundation + samples | done | 8 pages fact-checked; site check 0 problems (2026-10-28) |
-| Full build (plan §13) | next | B1 first |
-| F Final pass | not started | |
+| Full build (plan §13) | done | S1-S2, B1-B5 written, fact-checked, committed |
+| F Final pass | done, committed | see top of file |
 
 ## Full build — batch status
 
@@ -28,7 +36,7 @@ Update it after every subagent finishes and after every user decision.
 | B3 Model split + execution | done (260k) | done (2 defects, 252k) | yes |
 | B4 Graphs, DBO, patches | done (306k) | done (7 defects) | yes |
 | B5 Deploy, NPU, reference | done (367k) | done (~140 claims, 12 defects + supervisor diagram fixes, 227k) | yes |
-| F Final | – | – | – |
+| F Final | done (237k) + supervisor checks | (consistency pass) | yes |
 
 ## USER INSTRUCTIONS
 
@@ -246,3 +254,4 @@ usage pauses and no push.
 | 2026-10-28 | explainer-worker: B5 writer | done; 7 pages, 4 diagrams, 2 generators, 367k |
 | 2026-10-29 | explainer-worker: no-tools re-test (new session) | PASS (site, folder, both repos read only, claude-opus-4-8) |
 | 2026-10-29 | explainer-worker: FC-B5 (full + sample for env-vars, recipes) | done; ~140 claims, 12 edits, 227k tokens, 61 tool calls; report arrived with "safety review could not be evaluated" note; content read as a normal report |
+| 2026-10-29 | explainer-worker: F final consistency pass (template E; TODOs a-h) | done; 237k tokens, 77 tool calls; a, b, g, h fixed; c-f already correct; no suspected bugs |

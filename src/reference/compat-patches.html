@@ -50,7 +50,7 @@ actually changes; the others see native behavior. Every GPU patch is behind the
       <td><code>EngineCore.__init__</code> ({{cite vllm:vllm/v1/engine/core.py:108}})</td>
       <td>import time, gated ({{cite afd_plugin/compat/patches/engine_core.py:722-727}})</td>
       <td>role is <code>ffn</code></td>
-      <td>returns after the executor is built; no scheduler, no KV cache ({{cite afd_plugin/compat/patches/engine_core.py:56-68}}, {{cite afd_plugin/compat/patches/engine_core.py:599-623}})</td>
+      <td>returns after the executor is built; no real scheduler (a no-op stand-in), no KV cache ({{cite afd_plugin/compat/patches/engine_core.py:56-68}}, {{cite afd_plugin/compat/patches/engine_core.py:599-623}})</td>
       <td>{{link concepts/roles}}</td>
     </tr>
     <tr>

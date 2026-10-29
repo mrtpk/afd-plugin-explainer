@@ -40,7 +40,7 @@ AFD hook. The vLLM lines are in the pinned vLLM checkout; the hook lines are in 
     <tr><td><strong>EngineCore process</strong></td>
       <td>Builds the <code>model_executor</code> and the scheduler
         ({{cite vllm:vllm/v1/engine/core.py:134}}, {{cite vllm:vllm/v1/engine/core.py:162}}).</td>
-      <td>The FFN EngineCore returns after the executor, with no scheduler or KV cache
+      <td>The FFN EngineCore returns after the executor, with no real scheduler (a no-op stand-in) or KV cache
         ({{cite afd_plugin/compat/patches/engine_core.py:59-68}}). See {{link concepts/roles}}.</td></tr>
     <tr><td><strong>Executor</strong></td>
       <td><code>mp</code> starts worker processes; <code>uni</code> runs one worker

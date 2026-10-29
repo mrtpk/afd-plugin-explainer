@@ -33,7 +33,7 @@ steps = [
     (3, "create_engine_config: worker_cls auto -> AFDFFNWorker", BLUE, "patch",
      [("only if", "worker_cls was 'auto'  (:92-93, :179-197)")]),
     (4, "FFN EngineCore: return after the executor", EMERALD, "early",
-     [("no scheduler, blocks 0", "engine_core.py:56-68, 599-623")]),
+     [("no real scheduler, blocks 0", "engine_core.py:56-68, 599-623")]),
     (5, "AFDFFNWorker.init_device: swap runner class", EMERALD, "afd",
      [("builds", "GPUFFNModelRunner  (:93-98)")]),
     (6, "initialize_from_config: join connector, start loop", EMERALD, "afd",

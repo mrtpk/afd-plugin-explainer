@@ -22,12 +22,12 @@ d.header("Dual-batch overlap (DBO)",
 
 # ---- Panel 1: the overlap --------------------------------------------------
 y0 = 124
-P1_H = 214
+P1_H = 226
 d.panel(y0, P1_H, 1, "Two stages overlap on one layer",
         "The proxy sends stage 0, yields, then stage 1 runs; the FFN side answers each stage (deepseek_v2.py:146-158).")
 
 # attention lane
-lane_y = y0 + 66
+lane_y = y0 + 76
 d.text(46, lane_y - 6, "attention", 12, BLUE, "bold")
 d.box(46, lane_y, 150, 40, "attn s0", ["compute"], col=BLUE, align="left")
 d.box(206, lane_y, 120, 40, "send s0", [":146"], col=BLUE, align="left")
@@ -43,11 +43,11 @@ d.line(266, lane_y + 40, 266, lane_y + 52, VIOLET, sw=1.4, dash="3 3")
 # ffn lane
 fy = lane_y + 92
 d.text(46, fy - 6, "FFN", 12, EMERALD, "bold")
-d.box(206, fy, 130, 40, "ffn s0", ["recv/compute/send"], col=EMERALD, align="left")
-d.box(496, fy, 130, 40, "ffn s1", ["recv/compute/send"], col=EMERALD, align="left")
+d.box(206, fy, 150, 40, "ffn s0", ["recv/compute/send"], col=EMERALD, align="left")
+d.box(496, fy, 150, 40, "ffn s1", ["recv/compute/send"], col=EMERALD, align="left")
 d.arrow(266, lane_y + 40, 266, fy - 2, EMERALD)
 d.arrow(556, lane_y + 40, 556, fy - 2, EMERALD)
-d.arrow(271, fy + 40, 686, lane_y + 40, EMERALD, dash="4 3")
+d.arrow(356, fy + 20, 686, lane_y + 42, EMERALD, dash="4 3")
 
 # ---- Panel 2: where DP1 DBO is enabled -------------------------------------
 y2 = y0 + P1_H + 20

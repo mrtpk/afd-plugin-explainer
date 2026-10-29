@@ -136,11 +136,15 @@ replay, and {{link concepts/tuning}} covers the capture size.</p>
     ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:15-16}}).</li>
   <li>Wait for <code>Application startup complete</code> in each log before you send traffic
     ({{cite recipe/gpu/P2pNcclAFDConnector/README.md:39-43}}).</li>
-  <li>Send requests only to the attention HTTP port (<code>18305</code> for colocation, <code>18303</code> for
-    the disaggregation decode server) ({{cite README.md:258-260}}).</li>
+  <li>Send requests only to the client-facing HTTP endpoint. In colocation that is the attention server's HTTP
+    port (<code>18305</code>) ({{cite README.md:258-260}},
+    {{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50}}). In disaggregation that is the
+    proxy (<code>18305</code>), not the decode-attention server's own port (<code>18303</code>)
+    ({{cite recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:110-115}}).</li>
 </ol>
 <p>The two ports differ in meaning. The AFD port (<code>6269</code>) is where the two roles set up the
-connector groups. The HTTP port (<code>18305</code>) is where clients send requests.</p>
+connector groups. The client-facing HTTP port (<code>18305</code>) is where clients send requests: the
+attention server in colocation, the proxy in disaggregation.</p>
 </x-deepdive>
 
 <h2>What can go wrong</h2>

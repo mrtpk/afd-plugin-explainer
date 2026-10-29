@@ -74,40 +74,6 @@
   var SIDE_COLOR = { attn: "var(--viz-c1)", ffn: "var(--viz-c3)", both: "var(--viz-c5)" };
   var SIDE_LABEL = { attn: "Attention server", ffn: "FFN server", both: "Across the connector" };
 
-  var CSS = [
-    ".rqs-root{font-family:var(--sans);color:var(--ink)}",
-    ".rqs-stops{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px;padding:0;list-style:none}",
-    ".rqs-stop{min-width:40px;min-height:40px;border:1px solid var(--line);border-radius:6px;",
-    "  background:var(--surface);font:600 14px var(--mono);color:var(--ink);cursor:pointer}",
-    ".rqs-stop:hover{border-color:var(--gray-mid)}",
-    ".rqs-stop[aria-current=step]{border-color:var(--rqs-c,var(--blue));",
-    "  box-shadow:inset 0 -3px 0 var(--rqs-c,var(--blue))}",
-    ".rqs-card{border-left:5px solid var(--rqs-c,var(--line));padding:10px 16px;margin:0 0 14px;",
-    "  background:var(--panel-bg);border-radius:0 6px 6px 0}",
-    ".rqs-title{margin:0 0 8px;font-weight:700;font-size:17px;line-height:1.35}",
-    ".rqs-row{display:flex;flex-wrap:wrap;gap:4px 10px;margin:4px 0;font-size:14px}",
-    ".rqs-key{font:600 12px var(--sans);letter-spacing:.03em;text-transform:uppercase;color:var(--mute);min-width:118px}",
-    ".rqs-val{font:13.5px var(--mono);color:var(--ink);overflow-wrap:anywhere}",
-    ".rqs-badge{display:inline-block;padding:2px 10px;border-radius:11px;font:600 12.5px var(--sans);",
-    "  color:#fff;background:var(--rqs-c,var(--mute))}",
-    ".rqs-wire{font:600 13.5px var(--mono);color:var(--rqs-c,var(--ink))}",
-    ".rqs-none{font:13.5px var(--mono);color:var(--mute)}",
-    ".rqs-ctrl{display:flex;flex-wrap:wrap;gap:8px}",
-    ".rqs-btn{min-height:40px;padding:0 16px;border:1px solid var(--line);border-radius:6px;",
-    "  background:var(--surface);color:var(--ink);font:600 14.5px var(--sans);cursor:pointer;",
-    "  touch-action:manipulation}",
-    ".rqs-btn:hover{border-color:var(--gray-mid);background:var(--panel-bg)}",
-    ".rqs-btn:disabled{opacity:.45;cursor:default}",
-    ".rqs-live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}"
-  ].join("\n");
-
-  function injectCss() {
-    if (document.getElementById("rqs-style")) return;
-    var st = document.createElement("style");
-    st.id = "rqs-style";
-    st.textContent = CSS;
-    document.head.appendChild(st);
-  }
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -211,7 +177,6 @@
   };
 
   function init() {
-    injectCss();
     var mounts = document.querySelectorAll('[data-viz="' + VIZ_ID + '"]');
     Array.prototype.forEach.call(mounts, function (m) { new Viz(m); });
   }

@@ -4,15 +4,15 @@ nav_title: Attention and FFN roles
 level: Intermediate
 prerequisites: learn/what-is-afd
 related: concepts/topology, concepts/connector-contract, concepts/ffn-runtime
-summary: AFD runs the attention part and the FFN part as two server processes. This page shows what each role owns, and why the FFN side has no scheduler, no KV cache and no sampler.
+summary: AFD runs the attention part and the FFN part as two server processes. This page shows what each role owns, and why the FFN side has no real scheduler, no KV cache and no sampler.
 ---
 <x-sentence>{{term afd}} runs one model as two servers. The {{term attention-role | attention role}} keeps vLLM's front end; the {{term ffn-role | FFN role}} is a connector-driven loop.</x-sentence>
 
 <h2>The idea</h2>
 <p>A normal vLLM server owns the whole request path: the API server, the scheduler, the KV cache, the model
 and the sampler. AFD keeps all of that on the {{term attention-server | attention server}}. The
-{{term ffn-server | FFN server}} is different. It has no API server, no scheduler and no KV cache. A
-{{term connector}} loop drives it: it waits for work, runs the feed-forward and MoE experts, and sends the
+{{term ffn-server | FFN server}} is different. It has no API server, no KV cache and no real scheduler (only a
+no-op stand-in). A {{term connector}} loop drives it: it waits for work, runs the feed-forward and MoE experts, and sends the
 result back.</p>
 <p>Each side also owns a different part of every decoder layer. The attention server builds the real attention
 module and sends its output to the FFN side. The FFN server builds the real experts and drops the attention
@@ -166,7 +166,7 @@ normal vLLM server, nothing schedules its work and no token comes back.</p>
 
 <x-quiz>
   <x-q level="easy">Which three parts does the FFN server not have?
-    <x-a><p>No API server, no scheduler and no KV cache. Its EngineCore returns after the executor is built
+    <x-a><p>No API server, no KV cache and no real scheduler (only a no-op stand-in). Its EngineCore returns after the executor is built
       ({{cite afd_plugin/compat/patches/engine_core.py:59-68}}), and the worker reports an empty KV cache spec
       ({{cite afd_plugin/v1/worker/ffn_worker.py:102-105}}).</p></x-a>
   </x-q>

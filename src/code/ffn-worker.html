@@ -9,7 +9,7 @@ summary: Three files run the FFN role: the worker that starts the daemon loop, t
 <x-sentence>The FFN role is a native vLLM {{term worker-cls | worker}} that starts a daemon loop, a stand-alone runner driven by the {{term control-plane | control plane}}, and small token-count helpers.</x-sentence>
 
 <h2>Purpose</h2>
-<p>These three files run the FFN side with no scheduler and no KV cache. The concept is on
+<p>These three files run the FFN side with no real scheduler (a no-op stand-in) and no KV cache. The concept is on
 {{link concepts/ffn-runtime}}; this page maps the files.</p>
 <table>
   <thead><tr><th>Item</th><th>Value</th></tr></thead>

@@ -144,3 +144,8 @@ From the B5 writer report; all CONFIRMED by FC-B5 (2026-10-29), with the line co
 - Docs vs code (FAQ material, verify in FC-B5): recipe .../deepseek_v2_lite/README.md:111 names tools/benchmarks/benchmark.sh, which does not exist at the pin (request_generator.sh is the real harness); tools/benchmarks/decode_bench_server.sh:26-30 names two more scripts that do not exist at the pin; VLLM_TORCH_PROFILER_DIR is read by the plugin profilers but is not declared in vLLM v0.30.0, so it is read with plain os.getenv. [FC]
 - Multipod Qwen 122B: each attention pod runs --data-parallel-size 4 --data-parallel-size-local 2 (multipod_2a_2a_2f_graph.sh:33-34); pod 2 adds --data-parallel-start-rank 2 (:27-28); FFN pod --data-parallel-size 2 (:70). Global DP4 = 2 local x 2 pods. [FC]
 - FFN rank blocks are contiguous with sizes within one: subgroup_attention_block (topology.py:107-115), not build_rank_mapping (:118-146). [FC]
+
+## Added after the final pass (2026-10-29)
+
+- AFDForwardContextMetadata fields: tokens_start_loc, requests_start_loc, stage_idx, connector, tokens_lens, num_stages, transaction_id, tokens_unpadded_lens (afd_plugin/connectors/metadata.py:294-304). No "per-stage token counts" field; the per-DP token counts travel in the control payload. [FC]
+- Disaggregation: clients send to the proxy at 18305, not to the decode-attention server's own port 18303 (recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:110-115). [FC]

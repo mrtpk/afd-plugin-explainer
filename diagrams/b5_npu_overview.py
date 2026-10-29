@@ -79,7 +79,7 @@ d.legend(30, y, [
 ])
 y += 40
 y = d.footnotes(30, y, [
-    "Out of scope: the CAM kernel internals. The plugin loads its compiled Ascend extension (afd_plugin._C_ascend, built by setup.py) and asserts the torch.ops.afd_ascend namespace (ops.py:73-91).",
+    "Out of scope: the CAM kernel internals. The plugin loads its compiled extension afd_plugin._C_ascend (built by setup.py) and asserts torch.ops.afd_ascend (ops.py:73-91).",
     "The async receive loop reads each layer index from CAM metadata, so no separate control plane is needed.",
 ])
 d.save(height=y + 14)

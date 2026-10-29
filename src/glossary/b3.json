@@ -9,7 +9,7 @@
   },
   "afd-forward-metadata": {
     "term": "AFD forward metadata",
-    "short": "A sidecar object that AFD attaches to the vLLM forward context. It holds the connector, the transaction id and the per-stage token counts.",
+    "short": "A sidecar object that AFD attaches to the vLLM forward context. It holds the connector, the stage index and count, the transaction id, and the token offsets and lengths.",
     "long": "Model wrappers read it with <code>get_afd_metadata_from_forward_context</code>; the runner installs it as vLLM makes each forward context ({{cite afd_plugin/model_executor/models/forward_context.py:18-67}}).",
     "aliases": ["AFDForwardContextMetadata", "afd_metadata", "forward-context sidecar"],
     "page": "concepts/attention-runtime"

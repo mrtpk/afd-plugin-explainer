@@ -56,7 +56,7 @@ cy = y2 + 72
 d.box(46, cy, 240, 50, "A0 send", ["[8, 2048]"], col=BLUE, align="left")
 d.box(46, cy + 64, 240, 50, "A1 send", ["[8, 2048]"], col=BLUE, align="left")
 d.box(430, cy + 32, 260, 50, "F0 concat", ["[16, 2048]  seq_lens=[8,8]"], col=EMERALD, align="left")
-d.box(820, cy + 32, 234, 50, "split back", ["[8,2048] -> A0", "[8,2048] -> A1"], col=EMERALD, align="left")
+d.box(820, cy + 28, 234, 58, "split back", ["[8,2048] -> A0", "[8,2048] -> A1"], col=EMERALD, align="left")
 d.arrow(286, cy + 25, 430 - 2, cy + 50, EMERALD)
 d.arrow(286, cy + 89, 430 - 2, cy + 66, EMERALD)
 d.arrow(690, cy + 57, 820 - 2, cy + 57, EMERALD)

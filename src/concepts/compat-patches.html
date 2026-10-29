@@ -61,8 +61,8 @@ check for AFD configs ({{cite afd_plugin/compat/patches/config_validation.py:200
 <code>vllm/v1/engine/core.py</code> ({{cite vllm:vllm/v1/engine/core.py:108 | EngineCore.__init__}},
 {{cite vllm:vllm/v1/engine/core.py:1403 | EngineCoreProc.run_busy_loop}}).</p>
 <p>What it changes: for an {{term ffn-role | FFN}} config, <code>__init__</code> returns right after the executor
-is built, so the FFN EngineCore has no scheduler and no KV cache
-({{cite afd_plugin/compat/patches/engine_core.py:56-68}}). The busy loop instead runs the connector loop
+is built, so the FFN EngineCore has no real scheduler (a no-op stand-in) and no KV cache
+({{cite afd_plugin/compat/patches/engine_core.py:56-68}}, {{cite afd_plugin/compat/patches/engine_core.py:614}}). The busy loop instead runs the connector loop
 ({{cite afd_plugin/compat/patches/engine_core.py:411-419}}). See {{link concepts/roles}}.</p>
 
 <h3>Step 5: gpu_mrv2_ubatching</h3>

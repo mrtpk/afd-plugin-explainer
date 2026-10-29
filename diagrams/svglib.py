@@ -58,6 +58,25 @@ MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
 W = 1100
 
 
+def _fit_rows(h, n, title_y, top, step, min_step, what):
+    """Baseline of the first detail line and the line step, so n lines end above the bottom border.
+
+    Keeps the default layout when it fits. Otherwise tightens the step (down to min_step), then moves
+    the first line up (no closer than 13 below the title). Warns on stderr when the text still does not fit.
+    """
+    pad = 6  # descenders + a little air above the border
+    if n == 0 or top + (n - 1) * step + pad <= h:
+        return top, step
+    if n > 1 and (h - pad - top) / (n - 1) >= min_step:
+        return top, (h - pad - top) / (n - 1)
+    first = h - pad - (n - 1) * min_step
+    if first >= title_y + 13:
+        return first, min_step
+    need = title_y + 13 + (n - 1) * min_step + pad
+    print(f"warning: {what}: {n} line(s) need h >= {need:.0f}, got {h:.0f}", file=sys.stderr)
+    return title_y + 13, min_step
+
+
 def _c(col):
     """Accept a role tuple or a hex string; return the strong color."""
     return col[0] if isinstance(col, tuple) else col
@@ -171,14 +190,16 @@ class Diagram:
             align="middle", sw=1.5):
         """6.2 Box: tinted fill, accent stroke, centered title, mono detail lines."""
         self.rect(x, y, w, h, fill=fill or _t(col), stroke=col, sw=sw)
+        # Lines start at +38 and step 15; if that runs into the bottom border, tighten (never below 13).
+        top, step = _fit_rows(h, len(lines), 20, 38, 15, 13, f"box '{title}'")
         if align == "middle":
             self.text(x + w / 2, y + 20, title, tsize, _c(col), "bold", "middle")
             for i, s in enumerate(lines):
-                self.text(x + w / 2, y + 38 + i * 15, s, mono_size, INK, anchor="middle", mono=True)
+                self.text(x + w / 2, y + top + i * step, s, mono_size, INK, anchor="middle", mono=True)
         else:
             self.text(x + 12, y + 20, title, tsize, _c(col), "bold")
             for i, s in enumerate(lines):
-                self.text(x + 12, y + 38 + i * 15, s, mono_size, INK, mono=True)
+                self.text(x + 12, y + top + i * step, s, mono_size, INK, mono=True)
 
     def pill(self, x, y, w, label, col, h=19):
         """6.5 Pill / tag: rx=h/2, white fill, accent stroke 1, mono 11 bold."""
@@ -216,11 +237,12 @@ class Diagram:
         if tag:
             tw = text_width(tag, 11, mono=True) + 20
             self.pill(x + w - tw - 8, y + 8, tw, tag, col)
+        top, step = _fit_rows(h, len(rows), 22, 42, 17, 14, f"step card '{title}'")
         for i, row in enumerate(rows):
             key, val = row[0], row[1]
             kc = row[2] if len(row) > 2 else MUTE
             vc = row[2] if len(row) > 2 else INK
-            ry = y + 42 + i * 17
+            ry = y + top + i * step
             self.text(x + 38, ry, key, 11, kc, "bold", mono=True)
             self.text(x + 38 + key_w, ry, val, 12, vc, mono=True)
 

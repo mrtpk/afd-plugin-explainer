@@ -4,12 +4,13 @@ nav_title: FFN runtime
 level: Advanced
 prerequisites: concepts/roles
 related: concepts/attention-runtime, concepts/control-plane, concepts/moe-handoff, code/ffn-worker
-summary: The FFN side has no scheduler and no KV cache. A daemon thread reads one control payload per step and drives the FFN model runner, which runs the FFN or experts for each layer and stage.
+summary: The FFN side has no real scheduler (a no-op stand-in) and no KV cache. A daemon thread reads one control payload per step and drives the FFN model runner, which runs the FFN or experts for each layer and stage.
 ---
 <x-sentence>The {{term ffn-role | FFN role}} runs a stand-alone runner, not a vLLM scheduler. A daemon loop reads the {{term control-plane | control plane}} once per {{term step}} and drives the model.</x-sentence>
 
 <h2>The idea</h2>
-<p>On the FFN role, {{term afd}} drops the vLLM serving loop. There is no scheduler, no KV cache and no sampler.
+<p>On the FFN role, {{term afd}} drops the vLLM serving loop. There is no real scheduler (only a no-op stand-in),
+no KV cache and no sampler.
 Instead, a daemon thread blocks on the {{term control-plane | control plane}}. When a payload arrives, it runs
 one {{term step}}: for each decoder layer and {{term stage}}, it receives hidden states, runs the FFN or experts,
 and sends the result back.</p>

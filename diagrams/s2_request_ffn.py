@@ -50,7 +50,7 @@ d.text((midl + midr) / 2, ry + 66, "FFN output  (data plane, back)", 11.5, EMERA
 y2 = y0 + P1_H + 22
 P2_H = 236
 d.panel(y2, P2_H, 2, "What does the FFN server loop do?",
-        "It has no API server and no scheduler. A connector-driven thread runs each step.")
+        "It has no API server and no real scheduler. A connector-driven thread runs each step.")
 
 bx = 60
 bw = 300
