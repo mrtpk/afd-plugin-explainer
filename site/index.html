@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AFD Plugin Explained</title>
+<meta name="description" content="A study site for afd-plugin, the vLLM external plugin for Attention-FFN Disaggregation (AFD). It explains the code at two pinned commits.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="assets/site.css">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="" data-page="index">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home current" href="index.html">Home</a>
+<details class="nav-sec" open><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="concepts/model-registration.html">Model registration</a></li>
+<li><a href="concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="concepts/control-plane.html">The control plane</a></li>
+<li><a href="concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="tours/start-up.html">Start-up</a></li>
+<li><a href="tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="tours/one-decode-step.html">One decode step</a></li>
+<li><a href="tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="code/config-py.html">config.py</a></li>
+<li><a href="code/validation-py.html">validation.py</a></li>
+<li><a href="code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="reference/afd-config.html">AFD config reference</a></li>
+<li><a href="reference/env-vars.html">Environment variables</a></li>
+<li><a href="reference/recipes.html">Recipes</a></li>
+<li><a href="reference/compat-patches.html">Compat patches</a></li>
+<li><a href="reference/faq.html">FAQ</a></li>
+<li><a href="reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="index.html">Home</a></nav>
+<h1 class="page-title">AFD Plugin Explained</h1>
+
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+
+<!-- Home page. Keep the id "code-version": the footer links to it. -->
+
+<p><strong>afd-plugin</strong> is a <a class="term" href="reference/glossary.html#term-plugin" data-term="afd-plugin" data-def="The vLLM external plugin that adds AFD. vLLM loads it; it changes no vLLM source file.">vLLM external plugin</a> for
+<a class="term" href="reference/glossary.html#term-afd" data-term="AFD" data-def="Attention-FFN Disaggregation. The attention part and the feed-forward (FFN/MoE) part of a model run in separate server processes and exchange hidden states.">AFD</a>. The attention part and the feed-forward (FFN/MoE) part of a model run in two separate server
+processes, and a <a class="term" href="reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">connector</a> moves hidden states between them. The plugin adds its own worker classes,
+model runners, model wrappers, connectors, config validation and compatibility <a class="term" href="reference/glossary.html#term-patch" data-term="patch" data-def="A compat module that replaces a vLLM function at load time. The plugin applies a small set of patches.">patches</a>, and
+it changes no vLLM source file (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L9-L13" target="_blank" rel="noopener" title="README.md:9-13 at afd-plugin 7452d52"><code>README.md:9-13</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L21-L24" target="_blank" rel="noopener" title="README.md:21-24 at afd-plugin 7452d52"><code>README.md:21-24</code></a>). This site explains the
+plugin code at commit <code>7452d52</code>, and the vLLM code it builds on at commit
+<code>ced6857</code>. You need to know Python and the basics of LLM serving.</p>
+
+<h2 id="facts">At a glance<a class="h-anchor" href="#facts" aria-label="Link to this section">#</a></h2>
+<table>
+  <tbody>
+    <tr><th>What it is</th><td>A vLLM external plugin for Attention-FFN Disaggregation (AFD)
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L9-L13" target="_blank" rel="noopener" title="README.md:9-13 at afd-plugin 7452d52"><code>README.md:9-13</code></a>).</td></tr>
+    <tr><th>Runs on</th><td>NVIDIA CUDA GPU and Ascend NPU (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L11-L13" target="_blank" rel="noopener" title="README.md:11-13 at afd-plugin 7452d52"><code>README.md:11-13</code></a>). This site explains the
+      GPU paths in full; one page, <a href="concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a>, covers the NPU.</td></tr>
+    <tr><th>Targets</th><td>vLLM <code>v0.30.0</code> at commit <code>ced6857</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L21" target="_blank" rel="noopener" title="README.md:21 at afd-plugin 7452d52"><code>README.md:21</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/pyproject.toml#L37" target="_blank" rel="noopener" title="pyproject.toml:37 at afd-plugin 7452d52"><code>pyproject.toml:37</code></a>). Other vLLM versions are not supported on GPU
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L69-L70" target="_blank" rel="noopener" title="README.md:69-70 at afd-plugin 7452d52"><code>README.md:69-70</code></a>).</td></tr>
+    <tr><th>Models</th><td>DeepSeek V2 / V3 / V3.2 / V4, GLM-MoE-DSA, Qwen3-MoE, and one Qwen3.5-MoE
+      architecture, <code>Qwen3_5MoeForConditionalGeneration</code> (the README lists this one under
+      "Qwen3.5 / Qwen3.6 MoE"). The code registers eight architectures, each under an
+      <code>AFD</code>-prefixed name (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L96-L131" target="_blank" rel="noopener" title="afd_plugin/__init__.py:96-131 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:96-131</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L47-L51" target="_blank" rel="noopener" title="README.md:47-51 at afd-plugin 7452d52"><code>README.md:47-51</code></a>).</td></tr>
+    <tr><th>Connectors</th><td>Three: <code>P2pNcclAFDConnector</code> (CUDA),
+      <code>CAMP2pAFDConnector</code> and <code>CAMAsyncAFDConnector</code> (both NPU)
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L88-L102" target="_blank" rel="noopener" title="afd_plugin/connectors/factory.py:88-102 at afd-plugin 7452d52"><code>afd_plugin/connectors/factory.py:88-102</code></a>).</td></tr>
+    <tr><th>Code size</th><td>About 20,195 lines of Python in <code>afd_plugin/</code>, across 78 files.
+      The C/C++ kernels in <code>csrc/</code> are out of scope. See <a href="code/index.html">The code map: folders, sizes and dependencies</a> for the breakdown and
+      the method.</td></tr>
+    <tr><th>How to run</th><td>Start two <code>vllm serve</code> processes, one for each role, and give each one
+      <code>--additional-config '{"afd":{ ... }}'</code>. Send requests only to the attention API server
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L218-L240" target="_blank" rel="noopener" title="README.md:218-240 at afd-plugin 7452d52"><code>README.md:218-240</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L258-L260" target="_blank" rel="noopener" title="README.md:258-260 at afd-plugin 7452d52"><code>README.md:258-260</code></a>).</td></tr>
+  </tbody>
+</table>
+
+<h2 id="system-map">The system map<a class="h-anchor" href="#system-map" aria-label="Link to this section">#</a></h2>
+<p>One decode step runs left to right, then back. The attention server computes attention and hands its hidden
+states to the FFN server through the connector. The FFN server runs the experts and hands the result back. The
+colour stripe shows where the code runs. Each box links to its page and to the file.</p>
+
+<div class="sm">
+  <div class="sm-legend" aria-hidden="true">
+    <span class="sm-k"><span class="sm-sw sm-attn"></span> attention side</span>
+    <span class="sm-k"><span class="sm-sw sm-ffn"></span> FFN side</span>
+    <span class="sm-k"><span class="sm-sw sm-xport"></span> connector (the transport)</span>
+    <span class="sm-k"><span class="sm-sw sm-around"></span> around every step</span>
+    <span class="sm-k"><span class="sm-tag">vLLM</span> vLLM code</span>
+    <span class="sm-k"><span class="sm-tag sm-afd">afd</span> afd-plugin code</span>
+  </div>
+
+  <div class="sm-cols">
+    <section class="sm-col" aria-label="Attention server: one decode step">
+      <h3 id="attention-server" class="sm-col-h">Attention server<a class="h-anchor" href="#attention-server" aria-label="Link to this section">#</a></h3>
+      <ul class="sm-steps">
+        <li class="sm-box sm-attn">
+          <div class="sm-head"><span class="sm-n">1</span>
+            <span class="sm-t"><a href="concepts/roles.html">API server</a></span>
+            <span class="sm-tag">vLLM</span></div>
+          <span class="sm-path"><a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/entrypoints/openai/api_server.py" target="_blank" rel="noopener">vllm/entrypoints/openai/api_server.py</a></span>
+        </li>
+        <li class="sm-arrow" aria-hidden="true">&#8595;</li>
+        <li class="sm-box sm-attn">
+          <div class="sm-head"><span class="sm-n">2</span>
+            <span class="sm-t"><a href="concepts/roles.html">EngineCore / scheduler</a></span>
+            <span class="sm-tag">vLLM</span></div>
+          <span class="sm-path"><a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/engine/core.py" target="_blank" rel="noopener">vllm/v1/engine/core.py</a></span>
+        </li>
+        <li class="sm-arrow" aria-hidden="true">&#8595;</li>
+        <li class="sm-box sm-attn">
+          <div class="sm-head"><span class="sm-n">3</span>
+            <span class="sm-t"><a href="code/attention-worker.html">attention worker</a></span>
+            <span class="sm-tag sm-afd">afd</span></div>
+          <span class="sm-path"><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_worker.py" target="_blank" rel="noopener">afd_plugin/v1/worker/attention_worker.py</a></span>
+        </li>
+        <li class="sm-arrow" aria-hidden="true">&#8595;</li>
+        <li class="sm-box sm-attn">
+          <div class="sm-head"><span class="sm-n">4</span>
+            <span class="sm-t"><a href="concepts/attention-runtime.html">attention model runner</a></span>
+            <span class="sm-tag sm-afd">afd</span></div>
+          <span class="sm-path"><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py" target="_blank" rel="noopener">afd_plugin/v1/worker/attention_model_runner_v2.py</a></span>
+        </li>
+        <li class="sm-arrow" aria-hidden="true">&#8595;</li>
+        <li class="sm-box sm-attn">
+          <div class="sm-head"><span class="sm-n">5</span>
+            <span class="sm-t"><a href="concepts/model-wrappers.html">model wrapper layer</a></span>
+            <span class="sm-tag sm-afd">afd</span></div>
+          <span class="sm-path"><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py" target="_blank" rel="noopener">afd_plugin/model_executor/models/deepseek_v2.py</a></span>
+        </li>
+        <li class="sm-arrow" aria-hidden="true">&#8595;</li>
+        <li class="sm-box sm-attn">
+          <div class="sm-head"><span class="sm-n">6</span>
+            <span class="sm-t"><a href="concepts/connector-contract.html">connector (send / receive)</a></span>
+            <span class="sm-tag sm-afd">afd</span></div>
+          <span class="sm-path"><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py" target="_blank" rel="noopener">afd_plugin/connectors/base.py</a></span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="sm-col" aria-label="FFN server: the server loop">
+      <h3 id="ffn-server" class="sm-col-h">FFN server<a class="h-anchor" href="#ffn-server" aria-label="Link to this section">#</a></h3>
+      <ul class="sm-steps">
+        <li class="sm-box sm-ffn">
+          <div class="sm-head"><span class="sm-n">A</span>
+            <span class="sm-t"><a href="code/ffn-worker.html">FFN worker server loop</a></span>
+            <span class="sm-tag sm-afd">afd</span></div>
+          <span class="sm-path"><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py" target="_blank" rel="noopener">afd_plugin/v1/worker/ffn_worker.py</a></span>
+        </li>
+        <li class="sm-arrow" aria-hidden="true">&#8595;</li>
+        <li class="sm-box sm-ffn">
+          <div class="sm-head"><span class="sm-n">B</span>
+            <span class="sm-t"><a href="concepts/ffn-runtime.html">FFN model runner</a></span>
+            <span class="sm-tag sm-afd">afd</span></div>
+          <span class="sm-path"><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py" target="_blank" rel="noopener">afd_plugin/v1/worker/ffn_model_runner.py</a></span>
+        </li>
+        <li class="sm-arrow" aria-hidden="true">&#8595;</li>
+        <li class="sm-box sm-ffn">
+          <div class="sm-head"><span class="sm-n">C</span>
+            <span class="sm-t"><a href="concepts/moe-handoff.html">FFN / MoE layer</a></span>
+            <span class="sm-tag sm-afd">afd</span></div>
+          <span class="sm-path"><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py" target="_blank" rel="noopener">afd_plugin/model_executor/models/deepseek_v2.py</a></span>
+        </li>
+      </ul>
+    </section>
+  </div>
+
+  <div class="sm-connector">
+    <div class="sm-box sm-xport">
+      <div class="sm-head"><span class="sm-n">&#8644;</span>
+        <span class="sm-t"><a href="concepts/connector-contract.html">The connector between the two servers</a></span>
+        <span class="sm-tag sm-afd">afd</span></div>
+      <span class="sm-path"><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py" target="_blank" rel="noopener">afd_plugin/connectors/gpu/p2p.py</a> ·
+        <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py" target="_blank" rel="noopener">base.py</a></span>
+      <p style="margin:.4rem 0 0;font-size:.86rem;">Step 6 sends the hidden states to the FFN server (the
+      <a class="term" href="reference/glossary.html#term-data-plane" data-term="data plane" data-def="The path that carries the hidden-state tensors between the two roles. It is the connector&#x27;s send and receive calls.">data plane</a>), and the per-stage token counts travel on the
+      <a class="term" href="reference/glossary.html#term-control-plane" data-term="control plane" data-def="The path that carries DP metadata (per-stage token counts) from the attention side to the FFN side. It is optional.">control plane</a>. The FFN output comes back the same way.</p>
+    </div>
+  </div>
+
+  <section class="sm-around">
+    <h3 id="around-every-step" class="sm-col-h">Around every step<a class="h-anchor" href="#around-every-step" aria-label="Link to this section">#</a></h3>
+    <ul class="sm-steps">
+      <li class="sm-box sm-around">
+        <div class="sm-head"><span class="sm-t"><a href="concepts/compat-patches.html">Config + patches at start-up</a></span>
+          <span class="sm-tag sm-afd">afd</span></div>
+        <span class="sm-path"><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py" target="_blank" rel="noopener">afd_plugin/config.py</a> ·
+          <a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches" target="_blank" rel="noopener">compat/patches/</a></span>
+      </li>
+      <li class="sm-box sm-around">
+        <div class="sm-head"><span class="sm-t"><a href="concepts/plugin-entry-point.html">Plugin entry point</a></span>
+          <span class="sm-tag sm-afd">afd</span></div>
+        <span class="sm-path"><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L142" target="_blank" rel="noopener" title="afd_plugin/__init__.py:142 at afd-plugin 7452d52">afd_plugin/__init__.py register_afd</a></span>
+      </li>
+      <li class="sm-box sm-around">
+        <div class="sm-head"><span class="sm-t"><a href="concepts/topology.html">Topology and role ranks</a></span>
+          <span class="sm-tag sm-afd">afd</span></div>
+        <span class="sm-path"><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed/topology.py" target="_blank" rel="noopener">afd_plugin/distributed/topology.py</a></span>
+      </li>
+    </ul>
+  </section>
+</div>
+
+<aside class="callout callout-simplified"><p class="callout-title">Simplified</p><div class="callout-body"><p>The map shows one decode step on a simple one-attention, one-FFN topology. It leaves out data
+parallelism, the per-peer split and concatenation, <a class="term" href="reference/glossary.html#term-dbo" data-term="DBO" data-def="Dual-batch overlap. The step is split into two microbatches so compute and communication overlap. AFD uses exactly two.">DBO</a> (two <a class="term" href="reference/glossary.html#term-stage" data-term="stage" data-def="The DBO ubatch index of one transfer on the wire. A connector sends one transfer per layer and stage.">stages</a> per layer)
+and the CUDA graph replay. The connector runs once per model layer, not once per step. The tours and the
+concept pages give the full detail.</p></div></aside>
+
+<h2 id="start-here">Start here<a class="h-anchor" href="#start-here" aria-label="Link to this section">#</a></h2>
+<p>Pick the path that fits what you know.</p>
+<ul>
+  <li><strong>Path A — new to AFD.</strong> Start with <a href="learn/what-is-afd.html">What is AFD?</a>, then
+    <a href="learn/vllm-plugins.html">How vLLM plugins work</a> and <a href="learn/vllm-v1-map.html">The vLLM v1 map</a>. Then read <a href="concepts/roles.html">Attention and FFN roles: what each server owns</a> and the tour
+    <a href="tours/life-of-a-request.html">Tour: Life of a request</a>.</li>
+  <li><strong>Path B — you know vLLM internals.</strong> Go straight to <a href="concepts/plugin-entry-point.html">The plugin entry point: register_afd</a>,
+    <a href="concepts/worker-selection.html">Worker selection: choosing the role worker</a> and <a href="concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a>. Then follow
+    <a href="tours/one-decode-step.html">Tour: One decode step</a>.</li>
+  <li><strong>Path C — you want to deploy.</strong> Read <a href="concepts/deployment-topologies.html">Deployment topologies: how to place the roles</a> and
+    <a href="concepts/tuning.html">Tuning: the knobs the repo exposes</a>, then <a href="tours/run-a-recipe.html">Tour: Run a recipe</a> and the <a href="reference/recipes.html">Recipes reference</a> table.</li>
+</ul>
+
+<h2 id="how-to-use">How to use this site<a class="h-anchor" href="#how-to-use" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li><strong>Levels.</strong> Each page shows a level dot: Beginner, Intermediate or Advanced.</li>
+  <li><strong>Two depths.</strong> Each page starts simple, then has a <em>Deep dive</em> with shapes, numbers
+    and a line-by-line code reading. Use "Open all deep dives" to expand them.</li>
+  <li><strong>Check yourself.</strong> Most pages end with a short quiz.</li>
+  <li><strong>Search.</strong> Press <kbd>/</kbd> to search. Hover a glossary term for its tooltip.</li>
+  <li><strong>Code links.</strong> Every <code>file:line</code> link opens the exact code at the pinned
+    commit.</li>
+  <li><strong>Grey "soon" entries</strong> in the sidebar are pages that are not written yet.</li>
+</ul>
+
+<h2 id="not-in-this-release">What is not in this release<a class="h-anchor" href="#not-in-this-release" aria-label="Link to this section">#</a></h2>
+<p>This site has limits of scope, and the plugin itself states limits.</p>
+<p><strong>Out of the site's scope.</strong></p>
+<ul>
+  <li>The C/C++ kernel sources in <code>csrc/</code>. The site explains only how the Python code selects,
+    builds, loads and calls them.</li>
+  <li>The Ascend NPU code, except the one overview page <a href="concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a>. Other pages name the
+    NPU variant in one line only.</li>
+  <li>The tests. They are a source of facts, not a page topic.</li>
+</ul>
+<p><strong>What the repository calls experimental or limited.</strong></p>
+<ul>
+  <li>The project is experimental and needs more large-scale testing (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L17-L19" target="_blank" rel="noopener" title="README.md:17-19 at afd-plugin 7452d52"><code>README.md:17-19</code></a>).</li>
+  <li>The GPU target is exactly vLLM <code>0.30.0</code>; other versions are not supported on GPU
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L69-L70" target="_blank" rel="noopener" title="README.md:69-70 at afd-plugin 7452d52"><code>README.md:69-70</code></a>).</li>
+  <li>GPU CUDA graphs are limited to <code>FULL_DECODE_ONLY</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L86" target="_blank" rel="noopener" title="README.md:86 at afd-plugin 7452d52"><code>README.md:86</code></a>).</li>
+  <li>Native <a class="term" href="reference/glossary.html#term-dbo" data-term="DBO" data-def="Dual-batch overlap. The step is split into two microbatches so compute and communication overlap. AFD uses exactly two.">DBO</a> is limited to exactly two <a class="term" href="reference/glossary.html#term-ubatch" data-term="ubatch" data-def="A microbatch: one of the two token groups that DBO runs at the same time. On the wire its index is the stage.">ubatches</a> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L87" target="_blank" rel="noopener" title="README.md:87 at afd-plugin 7452d52"><code>README.md:87</code></a>).</li>
+  <li>Qwen3-MoE rejects attention-side gate placement, sequence-parallel MoE, EPLB, pipeline parallelism,
+    speculative decoding, LoRA and NPU (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L91-L92" target="_blank" rel="noopener" title="README.md:91-92 at afd-plugin 7452d52"><code>README.md:91-92</code></a>).</li>
+  <li>The GPU and NPU end-to-end tests are opt-in and need real hardware and model weights
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L85" target="_blank" rel="noopener" title="README.md:85 at afd-plugin 7452d52"><code>README.md:85</code></a>).</li>
+</ul>
+
+<h2 id="code-version">The code version this site explains<a class="h-anchor" href="#code-version" aria-label="Link to this section">#</a></h2>
+<p>This site explains one exact <a class="term" href="reference/glossary.html#term-commit" data-term="commit" data-def="One saved version of a git repository. A 40-character id names it. This site explains one pinned commit of each repository.">commit</a> of each repository. Use these versions when you study the
+code with the site. The plugin pins vLLM to one release: <code>vllm==0.30.0</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/pyproject.toml#L37" target="_blank" rel="noopener" title="pyproject.toml:37 at afd-plugin 7452d52"><code>pyproject.toml:37</code></a>),
+and the README names the exact commit (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L21" target="_blank" rel="noopener" title="README.md:21 at afd-plugin 7452d52"><code>README.md:21</code></a>). So every line number on this site is stable
+only at these two commits.</p>
+<p>To get exactly this version of the code, run these commands:</p>
+<table><tbody><tr><th>Commit</th><td><code>7452d52748fec2a858b63e4cb22941dadd7a3ee3</code> (short: <code>7452d52</code>)</td></tr><tr><th>Date</th><td>2026-10-27 19:15:00 +0800</td></tr><tr><th>Subject</th><td>“Provide a skill for benchmarking AFD recipes (#465)”</td></tr><tr><th>Browse</th><td><a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener">vllm-project/afd-plugin at 7452d52</a></td></tr></tbody></table>
+<pre><code class="language-bash">git clone https://github.com/vllm-project/afd-plugin.git
+cd afd-plugin
+git checkout 7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></pre>
+<p>The site also cites <strong>vLLM</strong>. Citations with the prefix <code>vllm:</code> point to this commit:</p>
+<table><tbody><tr><th>Commit</th><td><code>ced6857afa0ea7b2e3f0846a62e1394e90f15607</code> (short: <code>ced6857</code>)</td></tr><tr><th>Date</th><td>2026-09-21 15:32:49 -0700</td></tr><tr><th>Subject</th><td>“[CI][Build] Harden triton-cpu sleef submodule fetch in CPU image build (#57871)”</td></tr><tr><th>Browse</th><td><a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener">vllm-project/vllm (v0.30.0) at ced6857</a></td></tr></tbody></table>
+<pre><code class="language-bash">git clone https://github.com/vllm-project/vllm.git
+cd vllm
+git checkout ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></pre>
+<aside class="callout callout-note"><p class="callout-title">Line numbers belong to these commits</p><div class="callout-body"><p>Every code excerpt and every <code>file:line</code> link on this site points to commit <code>7452d52</code>, <code>ced6857</code> (vLLM). In a newer version, the line numbers and the code can be different.</p></div></aside>
+
+
+<nav class="prevnext" aria-label="Previous and next page"><span></span><a class="pn pn-next" href="learn/what-is-afd.html"><span class="pn-dir">Next →</span><span class="pn-title">What is AFD?</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#facts">At a glance</a></li><li class="toc-l2"><a href="#system-map">The system map</a></li><li class="toc-l3"><a href="#attention-server">Attention server</a></li><li class="toc-l3"><a href="#ffn-server">FFN server</a></li><li class="toc-l3"><a href="#around-every-step">Around every step</a></li><li class="toc-l2"><a href="#start-here">Start here</a></li><li class="toc-l2"><a href="#how-to-use">How to use this site</a></li><li class="toc-l2"><a href="#not-in-this-release">What is not in this release</a></li><li class="toc-l2"><a href="#code-version">The code version this site explains</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="assets/search-index.js" defer></script>
+<script src="assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

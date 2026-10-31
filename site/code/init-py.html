@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>afd_plugin/__init__.py: the plugin entry module · AFD Plugin Explained</title>
+<meta name="description" content="The package init holds register_afd (the entry point vLLM calls), the AFD model table, and the opt-in spawn override. This page reads it step by step.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="code/init-py">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a class="current" aria-current="page" href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>Code map</span><span class="sep">›</span><span>Modules</span><span class="sep">›</span><span aria-current="page">afd_plugin/__init__.py</span></nav>
+<h1 class="page-title">afd_plugin/__init__.py: the plugin entry module</h1>
+<div class="page-meta"><span class="level level-intermediate" title="Level">Intermediate</span><span class="meta-sec">Code map</span><span class="meta-time">about 5 min read + 1 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a> <span class="level level-intermediate level-sm">Intermediate</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">This module is the plugin entry point. <code>register_afd</code> applies the compat patches and
+registers the routing strategy, the DBO op and the <code>AFD</code> models.</p></div>
+
+<h2 id="purpose">Purpose<a class="h-anchor" href="#purpose" aria-label="Link to this section">#</a></h2>
+<p>vLLM calls <code>register_afd</code> once per process through the <code>vllm.general_plugins</code> entry
+point. The function installs AFD and then stops; it runs no model and keeps no connection.</p>
+<table>
+  <tbody>
+    <tr><th>File</th><td><code>afd_plugin/__init__.py</code> (234 lines, afd-plugin).</td></tr>
+    <tr><th>Main functions</th><td><code>register_afd</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L142" target="_blank" rel="noopener" title="afd_plugin/__init__.py:142 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:142</code></a>),
+      <code>_force_spawn_multiprocessing_if_requested</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L51" target="_blank" rel="noopener" title="afd_plugin/__init__.py:51 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:51</code></a>),
+      <code>__getattr__</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L19" target="_blank" rel="noopener" title="afd_plugin/__init__.py:19 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:19</code></a>).</td></tr>
+    <tr><th>Runs in</th><td>Every process that loads general plugins: process 0, the engine core, each worker,
+      and the model-inspection subprocess. See <a href="../learn/vllm-plugins.html">How vLLM plugins work</a>.</td></tr>
+    <tr><th>Called by</th><td>vLLM's <code>load_general_plugins</code>, through the entry point
+      <code>afd = "afd_plugin:register_afd"</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/pyproject.toml#L45-L46" target="_blank" rel="noopener" title="pyproject.toml:45-46 at afd-plugin 7452d52"><code>pyproject.toml:45-46</code></a>).</td></tr>
+    <tr><th>Calls</th><td>The four compat patch modules, the routing simulator, the DBO custom op, the NPU
+      Ascend config patch (NPU only), and vLLM's <code>ModelRegistry</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L172-L214" target="_blank" rel="noopener" title="afd_plugin/__init__.py:172-214 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:172-214</code></a>).</td></tr>
+    <tr><th>Not in this file</th><td>The patch bodies, the connector code, and the worker classes. The worker
+      classes are reached lazily through <code>__getattr__</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L19-L33" target="_blank" rel="noopener" title="afd_plugin/__init__.py:19-33 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:19-33</code></a>).</td></tr>
+  </tbody>
+</table>
+
+<h2 id="where-it-sits">Where it sits<a class="h-anchor" href="#where-it-sits" aria-label="Link to this section">#</a></h2>
+<figure class="diagram" id="fig-s1_register_afd_order"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Two panels showing the ordered steps of register_afd. Panel 1, safety first: step 1 guard returns early if _registered is set; step 2 forces the spawn start method if the environment variable is set; step 3 returns early if vLLM is not importable; step 4 checks the vLLM version with strict False. Panel 2, registration when vLLM is present: step 5 imports the four compat patch modules; step 6 registers the routing strategy; step 7 registers the DBO yield custom op; step 8, NPU only, applies the Ascend config patch; step 9 registers each AFD-prefixed model; step 10 sets _registered to True. A legend marks always, NPU only, check or early exit, and done."><svg role="img" aria-label="Two panels showing the ordered steps of register_afd. Panel 1, safety first: step 1 guard returns early if _registered is set; step 2 forces the spawn start method if the environment variable is set; step 3 returns early if vLLM is not importable; step 4 checks the vLLM version with strict False. Panel 2, registration when vLLM is present: step 5 imports the four compat patch modules; step 6 registers the routing strategy; step 7 registers the DBO yield custom op; step 8, NPU only, applies the Ascend config patch; step 9 registers each AFD-prefixed model; step 10 sets _registered to True. A legend marks always, NPU only, check or early exit, and done." xmlns="http://www.w3.org/2000/svg" width="1100" height="1082" viewBox="0 0 1100 1082">
+<defs></defs>
+<rect width="1100" height="1082" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">What register_afd() does, in order</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The entry point runs safety checks first, then the registration steps.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_plugin/__init__.py:142-216  ·  one call per process</text>
+<rect x="20.0" y="128.0" width="1060.0" height="348.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="154.0" r="13" fill="#111827"/>
+<text x="46.0" y="158.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="159.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Safety first (before any registration)</text>
+<text x="68.0" y="178.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Any of these steps can return early, so registration never runs on a bad setup.</text>
+<rect x="80.0" y="192.0" width="940.0" height="58.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<rect x="80.0" y="192.0" width="6.0" height="58.0" rx="3" fill="#9ca3af" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="209.0" r="10" fill="#9ca3af"/>
+<text x="102.0" y="213.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="118.0" y="214.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Guard: already registered?</text>
+<rect x="866.2" y="200.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1"/>
+<text x="939.1" y="213.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:150-153</text>
+<text x="118.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">if</text>
+<text x="152.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">_registered -&gt; return</text>
+<rect x="80.0" y="260.0" width="940.0" height="58.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<rect x="80.0" y="260.0" width="6.0" height="58.0" rx="3" fill="#9ca3af" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="277.0" r="10" fill="#9ca3af"/>
+<text x="102.0" y="281.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="118.0" y="282.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Force spawn start method, if requested</text>
+<rect x="892.7" y="268.0" width="119.3" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1"/>
+<text x="952.3" y="281.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:155</text>
+<text x="118.0" y="302.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">env</text>
+<text x="152.0" y="302.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">AFD_FORCE_SPAWN_MULTIPROCESSING == 1</text>
+<rect x="80.0" y="328.0" width="940.0" height="58.0" rx="8" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<rect x="80.0" y="328.0" width="6.0" height="58.0" rx="3" fill="#d97706" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="345.0" r="10" fill="#d97706"/>
+<text x="102.0" y="349.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="118.0" y="350.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Is vLLM importable?</text>
+<rect x="866.2" y="336.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#d97706" stroke-width="1"/>
+<text x="939.1" y="349.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#d97706" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:157-160</text>
+<text x="118.0" y="370.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">if not</text>
+<text x="152.0" y="370.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">set _registered = True, then return</text>
+<rect x="80.0" y="396.0" width="940.0" height="58.0" rx="8" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<rect x="80.0" y="396.0" width="6.0" height="58.0" rx="3" fill="#d97706" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="413.0" r="10" fill="#d97706"/>
+<text x="102.0" y="417.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">4</text>
+<text x="118.0" y="418.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Check the vLLM version</text>
+<rect x="866.2" y="404.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#d97706" stroke-width="1"/>
+<text x="939.1" y="417.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#d97706" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:162-165</text>
+<text x="118.0" y="438.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">call</text>
+<text x="152.0" y="438.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">assert_vllm_version_supported(strict=False)</text>
+<rect x="20.0" y="498.0" width="1060.0" height="480.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="524.0" r="13" fill="#111827"/>
+<text x="46.0" y="528.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="529.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Then register (vLLM is present)</text>
+<text x="68.0" y="548.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">These steps run in this order; step 8 runs only on NPU.</text>
+<rect x="80.0" y="562.0" width="940.0" height="58.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="80.0" y="562.0" width="6.0" height="58.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="579.0" r="10" fill="#2563eb"/>
+<text x="102.0" y="583.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">5</text>
+<text x="118.0" y="584.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Import the 4 compat patch modules</text>
+<rect x="866.2" y="570.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="939.1" y="583.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:172-176</text>
+<text x="118.0" y="604.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">imports</text>
+<text x="152.0" y="604.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">async_dp_engine, async_dp_forward_context, ...</text>
+<rect x="80.0" y="630.0" width="940.0" height="58.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="80.0" y="630.0" width="6.0" height="58.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="647.0" r="10" fill="#2563eb"/>
+<text x="102.0" y="651.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">6</text>
+<text x="118.0" y="652.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Register the AFD routing strategy</text>
+<rect x="866.2" y="638.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="939.1" y="651.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:183-187</text>
+<text x="118.0" y="672.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">call</text>
+<text x="152.0" y="672.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">register_afd_balanced_routing_strategy()</text>
+<rect x="80.0" y="698.0" width="940.0" height="58.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="80.0" y="698.0" width="6.0" height="58.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="715.0" r="10" fill="#2563eb"/>
+<text x="102.0" y="719.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">7</text>
+<text x="118.0" y="720.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Register the DBO yield custom op</text>
+<rect x="866.2" y="706.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="939.1" y="719.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:189-192</text>
+<text x="118.0" y="740.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">call</text>
+<text x="152.0" y="740.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">register_dbo_yield_custom_op()</text>
+<rect x="80.0" y="766.0" width="940.0" height="58.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<rect x="80.0" y="766.0" width="6.0" height="58.0" rx="3" fill="#7c3aed" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="783.0" r="10" fill="#7c3aed"/>
+<text x="102.0" y="787.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">8</text>
+<text x="118.0" y="788.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">NPU only: apply the Ascend config patch</text>
+<rect x="866.2" y="774.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1"/>
+<text x="939.1" y="787.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#7c3aed" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:202-209</text>
+<text x="118.0" y="808.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">if</text>
+<text x="152.0" y="808.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">current_platform.device_type == &quot;npu&quot;</text>
+<rect x="80.0" y="834.0" width="940.0" height="58.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="80.0" y="834.0" width="6.0" height="58.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="851.0" r="10" fill="#2563eb"/>
+<text x="102.0" y="855.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">9</text>
+<text x="118.0" y="856.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Register each AFD&lt;arch&gt; model</text>
+<rect x="866.2" y="842.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="939.1" y="855.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:211-214</text>
+<text x="118.0" y="876.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">loop</text>
+<text x="152.0" y="876.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">ModelRegistry.register_model(&quot;AFD&quot;+arch, cls)</text>
+<rect x="80.0" y="902.0" width="940.0" height="58.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<rect x="80.0" y="902.0" width="6.0" height="58.0" rx="3" fill="#059669" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="919.0" r="10" fill="#059669"/>
+<text x="102.0" y="923.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">10</text>
+<text x="118.0" y="924.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Mark the process done</text>
+<rect x="892.7" y="910.0" width="119.3" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#059669" stroke-width="1"/>
+<text x="952.3" y="923.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:216</text>
+<text x="118.0" y="944.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">set</text>
+<text x="152.0" y="944.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">_registered = True</text>
+<text x="30.0" y="1007.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="996.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="1007.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">always (vLLM present)</text>
+<rect x="274.4" y="996.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="295.4" y="1007.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">NPU only</text>
+<rect x="370.7" y="996.0" width="14.0" height="14.0" rx="3" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<text x="391.7" y="1007.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">check / early exit</text>
+<rect x="518.4" y="996.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="539.4" y="1007.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">done</text>
+<text x="30.0" y="1032.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Steps 4, 5 and 7 are wrapped in try/except; a failure is logged and does not stop the rest (__init__.py:162-197).</text>
+<text x="30.0" y="1050.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">_force_spawn_multiprocessing_if_requested also runs once at package import time (__init__.py:94).</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: register_afd runs safety checks first (any can return early), then the registration steps in order. Step 8 runs only on NPU.</figcaption><a class="diagram-open" href="../diagrams/s1_register_afd_order.svg" target="_blank">Open full size ↗</a></div></figure>
+<h3 id="who-calls-it">Who calls it<a class="h-anchor" href="#who-calls-it" aria-label="Link to this section">#</a></h3>
+<p>Only vLLM calls it, through the entry point (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/pyproject.toml#L45-L46" target="_blank" rel="noopener" title="pyproject.toml:45-46 at afd-plugin 7452d52"><code>pyproject.toml:45-46</code></a>). The call sites and processes
+are on the <a href="../learn/vllm-plugins.html">How vLLM plugins work</a> page.</p>
+<h3 id="what-it-calls">What it calls<a class="h-anchor" href="#what-it-calls" aria-label="Link to this section">#</a></h3>
+<p>It imports the four patch modules (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L172-L176" target="_blank" rel="noopener" title="afd_plugin/__init__.py:172-176 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:172-176</code></a>), the routing simulator
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L183-L185" target="_blank" rel="noopener" title="afd_plugin/__init__.py:183-185 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:183-185</code></a>), the DBO op (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L190" target="_blank" rel="noopener" title="afd_plugin/__init__.py:190 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:190</code></a>), and, on NPU, the
+Ascend config patch (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L205-L207" target="_blank" rel="noopener" title="afd_plugin/__init__.py:205-207 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:205-207</code></a>). It ends by calling vLLM's
+<code>ModelRegistry.register_model</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L211-L214" target="_blank" rel="noopener" title="afd_plugin/__init__.py:211-214 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:211-214</code></a>).</p>
+
+<h2 id="key-classes-and-functions">Key classes and functions<a class="h-anchor" href="#key-classes-and-functions" aria-label="Link to this section">#</a></h2>
+<table>
+  <thead><tr><th>Name</th><th>Line</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td><code>register_afd</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L142" target="_blank" rel="noopener" title="afd_plugin/__init__.py:142 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:142</code></a></td>
+      <td>The entry point. Applies the patches and registers the models.</td></tr>
+    <tr><td><code>_force_spawn_multiprocessing_if_requested</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L51" target="_blank" rel="noopener" title="afd_plugin/__init__.py:51 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:51</code></a></td>
+      <td>Opt-in: force the <code>spawn</code> start method and redirect <code>forkserver</code>.</td></tr>
+    <tr><td><code>__getattr__</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L19" target="_blank" rel="noopener" title="afd_plugin/__init__.py:19 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:19</code></a></td>
+      <td>Lazy access to the worker classes and <code>assert_compatible_afd_stack</code>.</td></tr>
+    <tr><td><code>_MODEL_REGISTRATIONS</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L133-L139" target="_blank" rel="noopener" title="afd_plugin/__init__.py:133-139 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:133-139</code></a></td>
+      <td>The read-only map from a vLLM architecture name to an AFD model class.</td></tr>
+    <tr><td><code>__version__</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L36-L44" target="_blank" rel="noopener" title="afd_plugin/__init__.py:36-44 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:36-44</code></a></td>
+      <td>The package version, with a fallback that never raises.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="walk-through-register-afd">Walk through register_afd<a class="h-anchor" href="#walk-through-register-afd" aria-label="Link to this section">#</a></h2>
+<p>The function runs in two parts: safety checks that can return early, then the registration steps.</p>
+
+<h3 id="part-1-guard-import-safety-and-version-check">Part 1: Guard, import safety and version check<a class="h-anchor" href="#part-1-guard-import-safety-and-version-check" aria-label="Link to this section">#</a></h3>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L150-L170" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/__init__.py:150-170</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L150-L170" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">150</span><span class="ln hl">151</span><span class="ln">152</span><span class="ln">153</span><span class="ln">154</span><span class="ln">155</span><span class="ln">156</span><span class="ln hl">157</span><span class="ln">158</span><span class="ln">159</span><span class="ln">160</span><span class="ln">161</span><span class="ln">162</span><span class="ln">163</span><span class="ln">164</span><span class="ln hl">165</span><span class="ln">166</span><span class="ln">167</span><span class="ln">168</span><span class="ln">169</span><span class="ln">170</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(1 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(7 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(15 * var(--code-lh))"></span><pre><code class="language-python">    global _registered
+    if _registered:
+        _logger.debug(&quot;AFD plugin: register_afd() already completed&quot;)
+        return
+
+    _force_spawn_multiprocessing_if_requested()
+    _logger.debug(&quot;AFD plugin: register_afd() called&quot;)
+    if importlib.util.find_spec(&quot;vllm&quot;) is None:
+        _logger.debug(&quot;AFD plugin: vLLM not found, skipping runtime registration&quot;)
+        _registered = True
+        return
+
+    try:
+        from afd_plugin.compat.vllm import assert_vllm_version_supported
+
+        assert_vllm_version_supported(strict=False)
+    except Exception:
+        _logger.debug(
+            &quot;AFD plugin: vLLM version check could not be completed&quot;,
+            exc_info=True,
+        )</code></pre></div></div></div><figcaption class="code-caption">The guard, the spawn override, the vLLM check and the version check.</figcaption></figure>
+<ol>
+  <li><strong>Line 151.</strong> The guard returns if <code>_registered</code> is already set, so the
+    registration body runs once per process (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L150-L153" target="_blank" rel="noopener" title="afd_plugin/__init__.py:150-153 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:150-153</code></a>).</li>
+  <li><strong>Line 155.</strong> It applies the opt-in spawn override again (it also ran at import time).</li>
+  <li><strong>Line 157.</strong> If vLLM is not importable, it sets <code>_registered</code> and returns. So
+    importing the package stays safe on a machine with no vLLM (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L157-L160" target="_blank" rel="noopener" title="afd_plugin/__init__.py:157-160 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:157-160</code></a>).</li>
+  <li><strong>Line 165.</strong> It checks the vLLM version with <code>strict=False</code>, so a mismatch gives
+    a warning, not an error (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/vllm.py#L38-L50" target="_blank" rel="noopener" title="afd_plugin/compat/vllm.py:38-50 at afd-plugin 7452d52"><code>afd_plugin/compat/vllm.py:38-50</code></a>). The whole check sits in a
+    <code>try/except</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L162-L170" target="_blank" rel="noopener" title="afd_plugin/__init__.py:162-170 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:162-170</code></a>).</li>
+</ol>
+
+<h3 id="part-2-patches-routing-dbo-the-npu-patch-and-the-models">Part 2: Patches, routing, DBO, the NPU patch and the models<a class="h-anchor" href="#part-2-patches-routing-dbo-the-npu-patch-and-the-models" aria-label="Link to this section">#</a></h3>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L172-L197" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/__init__.py:172-197</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L172-L197" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">172</span><span class="ln">173</span><span class="ln">174</span><span class="ln">175</span><span class="ln">176</span><span class="ln">177</span><span class="ln">178</span><span class="ln">179</span><span class="ln">180</span><span class="ln">181</span><span class="ln">182</span><span class="ln">183</span><span class="ln">184</span><span class="ln">185</span><span class="ln">186</span><span class="ln hl">187</span><span class="ln">188</span><span class="ln">189</span><span class="ln">190</span><span class="ln">191</span><span class="ln hl">192</span><span class="ln">193</span><span class="ln">194</span><span class="ln">195</span><span class="ln">196</span><span class="ln">197</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(15 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(20 * var(--code-lh))"></span><pre><code class="language-python">    try:
+        import afd_plugin.compat.patches.async_dp_engine  # noqa: F401
+        import afd_plugin.compat.patches.async_dp_forward_context  # noqa: F401
+        import afd_plugin.compat.patches.config_validation  # noqa: F401
+        import afd_plugin.compat.patches.engine_core  # noqa: F401
+    except Exception:
+        _logger.debug(
+            &quot;AFD plugin: compatibility patches could not be applied&quot;,
+            exc_info=True,
+        )
+
+    from afd_plugin.model_executor.routing_simulator import (
+        register_afd_balanced_routing_strategy,
+    )
+
+    register_afd_balanced_routing_strategy()
+
+    try:
+        from afd_plugin.v1.worker.dbo import register_dbo_yield_custom_op
+
+        register_dbo_yield_custom_op()
+    except Exception:
+        _logger.debug(
+            &quot;AFD plugin: DBO yield custom op could not be registered&quot;,
+            exc_info=True,
+        )</code></pre></div></div></div><figcaption class="code-caption">Import the patches, register the routing strategy, then the DBO custom op.</figcaption></figure>
+<ol>
+  <li><strong>Lines 172-176.</strong> It imports the four patch modules. Importing a patch module applies it.
+    The import sits in a <code>try/except</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L172-L181" target="_blank" rel="noopener" title="afd_plugin/__init__.py:172-181 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:172-181</code></a>).</li>
+  <li><strong>Line 187.</strong> It registers the AFD routing strategy. This call is not wrapped
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L183-L187" target="_blank" rel="noopener" title="afd_plugin/__init__.py:183-187 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:183-187</code></a>).</li>
+  <li><strong>Line 192.</strong> It registers the DBO yield custom op, inside a <code>try/except</code>
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L189-L197" target="_blank" rel="noopener" title="afd_plugin/__init__.py:189-197 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:189-197</code></a>).</li>
+</ol>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L199-L216" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/__init__.py:199-216</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L199-L216" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">199</span><span class="ln">200</span><span class="ln">201</span><span class="ln">202</span><span class="ln">203</span><span class="ln hl">204</span><span class="ln">205</span><span class="ln">206</span><span class="ln">207</span><span class="ln">208</span><span class="ln">209</span><span class="ln">210</span><span class="ln">211</span><span class="ln">212</span><span class="ln">213</span><span class="ln hl">214</span><span class="ln">215</span><span class="ln hl">216</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(5 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(15 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(17 * var(--code-lh))"></span><pre><code class="language-python">    # EngineCore constructs Ascend schedulers before handshake revalidation or
+    # AFD worker startup. Install the namespace factory at plugin registration
+    # so direct scheduler calls and already imported aliases accept AFD settings.
+    from vllm.platforms import current_platform
+
+    if current_platform.device_type == &quot;npu&quot;:
+        from afd_plugin.compat.patches.npu.ascend_config import (
+            apply_afd_ascend_config_patch,
+        )
+
+        apply_afd_ascend_config_patch()
+
+    from vllm.model_executor.models import ModelRegistry
+
+    for model_arch, model_cls in _MODEL_REGISTRATIONS.items():
+        ModelRegistry.register_model(f&quot;AFD{model_arch}&quot;, model_cls)
+
+    _registered = True</code></pre></div></div></div><figcaption class="code-caption">The NPU-only Ascend patch, the model registration loop, and the final flag.</figcaption></figure>
+<ol start="4">
+  <li><strong>Line 204.</strong> It applies the Ascend config patch only when the platform device type is
+    <code>"npu"</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L202-L209" target="_blank" rel="noopener" title="afd_plugin/__init__.py:202-209 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:202-209</code></a>). This step is not wrapped.</li>
+  <li><strong>Lines 211-214.</strong> It registers each model under its <code>AFD</code>-prefixed name
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L211-L214" target="_blank" rel="noopener" title="afd_plugin/__init__.py:211-214 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:211-214</code></a>).</li>
+  <li><strong>Line 216.</strong> It sets <code>_registered = True</code>, so a later call in the same process
+    returns early.</li>
+</ol>
+
+<h3 id="the-model-registration-table">The model registration table<a class="h-anchor" href="#the-model-registration-table" aria-label="Link to this section">#</a></h3>
+<p>The map keys are vLLM architecture names; the loop registers each one under the name
+<code>"AFD" + key</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L211-L214" target="_blank" rel="noopener" title="afd_plugin/__init__.py:211-214 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:211-214</code></a>). So <code>DeepseekV2ForCausalLM</code>
+becomes <code>AFDDeepseekV2ForCausalLM</code>.</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L96-L117" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/__init__.py:96-117</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L96-L117" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">96</span><span class="ln">97</span><span class="ln">98</span><span class="ln">99</span><span class="ln">100</span><span class="ln">101</span><span class="ln">102</span><span class="ln">103</span><span class="ln">104</span><span class="ln">105</span><span class="ln">106</span><span class="ln">107</span><span class="ln">108</span><span class="ln hl">109</span><span class="ln hl">110</span><span class="ln hl">111</span><span class="ln hl">112</span><span class="ln hl">113</span><span class="ln">114</span><span class="ln">115</span><span class="ln">116</span><span class="ln">117</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(13 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(14 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(15 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(16 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(17 * var(--code-lh))"></span><pre><code class="language-python">_DEEPSEEK_MODEL_REGISTRATIONS = {
+    &quot;DeepseekForCausalLM&quot;: (
+        &quot;afd_plugin.model_executor.models.deepseek_v2:AFDDeepseekForCausalLM&quot;
+    ),
+    &quot;DeepseekV2ForCausalLM&quot;: (
+        &quot;afd_plugin.model_executor.models.deepseek_v2:AFDDeepseekV2ForCausalLM&quot;
+    ),
+    &quot;DeepseekV3ForCausalLM&quot;: (
+        &quot;afd_plugin.model_executor.models.deepseek_v2:AFDDeepseekV3ForCausalLM&quot;
+    ),
+    &quot;DeepseekV32ForCausalLM&quot;: (
+        &quot;afd_plugin.model_executor.models.deepseek_v2:AFDDeepseekV3ForCausalLM&quot;
+    ),
+    &quot;DeepseekV4ForCausalLM&quot;: (
+        &quot;afd_plugin.model_executor.models.npu.deepseek_v4:AFDDeepseekV4ForCausalLM&quot;
+        if importlib.util.find_spec(&quot;torch_npu&quot;) is not None
+        else &quot;afd_plugin.model_executor.models.deepseek_v4:AFDDeepseekV4ForCausalLM&quot;
+    ),
+    &quot;GlmMoeDsaForCausalLM&quot;: (
+        &quot;afd_plugin.model_executor.models.deepseek_v2:AFDGlmMoeDsaForCausalLM&quot;
+    ),
+}</code></pre></div></div></div><figcaption class="code-caption">The DeepSeek registrations. DeepseekV4 picks the NPU or GPU class by torch_npu.</figcaption></figure>
+<table>
+  <thead><tr><th>Registered name</th><th>Resolves to</th><th>Note</th></tr></thead>
+  <tbody>
+    <tr><td><code>AFDDeepseekForCausalLM</code></td><td><code>deepseek_v2:AFDDeepseekForCausalLM</code></td><td></td></tr>
+    <tr><td><code>AFDDeepseekV2ForCausalLM</code></td><td><code>deepseek_v2:AFDDeepseekV2ForCausalLM</code></td><td></td></tr>
+    <tr><td><code>AFDDeepseekV3ForCausalLM</code></td><td><code>deepseek_v2:AFDDeepseekV3ForCausalLM</code></td><td></td></tr>
+    <tr><td><code>AFDDeepseekV32ForCausalLM</code></td><td><code>deepseek_v2:AFDDeepseekV3ForCausalLM</code></td>
+      <td>V3.2 reuses the V3 class (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L106-L108" target="_blank" rel="noopener" title="afd_plugin/__init__.py:106-108 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:106-108</code></a>).</td></tr>
+    <tr><td><code>AFDDeepseekV4ForCausalLM</code></td>
+      <td><code>npu.deepseek_v4:...</code> or <code>deepseek_v4:...</code></td>
+      <td>NPU class when <code>torch_npu</code> is importable, else the GPU class
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L109-L113" target="_blank" rel="noopener" title="afd_plugin/__init__.py:109-113 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:109-113</code></a>).</td></tr>
+    <tr><td><code>AFDGlmMoeDsaForCausalLM</code></td><td><code>deepseek_v2:AFDGlmMoeDsaForCausalLM</code></td><td></td></tr>
+    <tr><td><code>AFDQwen3MoeForCausalLM</code></td><td><code>qwen3_moe:AFDQwen3MoeForCausalLM</code></td><td></td></tr>
+    <tr><td><code>AFDQwen3_5MoeForConditionalGeneration</code></td>
+      <td><code>qwen3_5:AFDQwen3_5MoeForConditionalGeneration</code></td><td></td></tr>
+  </tbody>
+</table>
+
+<h3 id="the-spawn-override">The spawn override<a class="h-anchor" href="#the-spawn-override" aria-label="Link to this section">#</a></h3>
+<p>The override is opt-in through one environment variable. It changes Python's default multiprocessing
+context, for an Ascend async recipe that cannot use <code>forkserver</code>.</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L51-L62" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/__init__.py:51-62</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L51-L62" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">51</span><span class="ln">52</span><span class="ln">53</span><span class="ln">54</span><span class="ln">55</span><span class="ln">56</span><span class="ln">57</span><span class="ln">58</span><span class="ln">59</span><span class="ln hl">60</span><span class="ln">61</span><span class="ln hl">62</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(9 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(11 * var(--code-lh))"></span><pre><code class="language-python">def _force_spawn_multiprocessing_if_requested() -&gt; None:
+    &quot;&quot;&quot;Pin Python&#x27;s default context for the A3 Python 3.12 runtime.
+
+    ``VLLM_WORKER_MULTIPROC_METHOD`` controls vLLM&#x27;s explicit context only.
+    Some NPU runtime helpers use Python&#x27;s default context and otherwise retain
+    the task&#x27;s inherited ``forkserver`` setting, which cannot restore the
+    signal-handler state in this environment.  Keep the override opt-in so it
+    remains isolated to the affected CAM async recipe.
+    &quot;&quot;&quot;
+    if os.environ.get(&quot;AFD_FORCE_SPAWN_MULTIPROCESSING&quot;) != &quot;1&quot;:
+        return
+    multiprocessing.set_start_method(&quot;spawn&quot;, force=True)</code></pre></div></div></div><figcaption class="code-caption">The guard and the start-method change.</figcaption></figure>
+<ol>
+  <li><strong>Line 60.</strong> It returns at once unless <code>AFD_FORCE_SPAWN_MULTIPROCESSING</code> is
+    <code>"1"</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L60" target="_blank" rel="noopener" title="afd_plugin/__init__.py:60 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:60</code></a>).</li>
+  <li><strong>Line 62.</strong> It forces the default start method to <code>spawn</code>.</li>
+  <li>It then redirects the <code>forkserver</code> context and <code>get_context("forkserver")</code> to the
+    spawn context (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L70-L87" target="_blank" rel="noopener" title="afd_plugin/__init__.py:70-87 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:70-87</code></a>).</li>
+</ol>
+<p>It runs once at import time (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L94" target="_blank" rel="noopener" title="afd_plugin/__init__.py:94 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:94</code></a>) and again inside <code>register_afd</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L155" target="_blank" rel="noopener" title="afd_plugin/__init__.py:155 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:155</code></a>). The import-time call reaches the Ascend workers, which import the worker
+class directly and do not call the entry point (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L90-L94" target="_blank" rel="noopener" title="afd_plugin/__init__.py:90-94 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:90-94</code></a>).</p>
+
+<h2 id="deep-dive">Deep dive<a class="h-anchor" href="#deep-dive" aria-label="Link to this section">#</a></h2>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="error-paths-what-is-caught-and-what-is-not" class="dd-title">Error paths: what is caught, and what is not</h3></summary><div class="dd-body"><p>Four steps swallow their own exceptions, and three do not. The difference decides which failures are quiet
+and which stop the process.</p>
+<table>
+  <thead><tr><th>Step</th><th>Lines</th><th>On failure</th></tr></thead>
+  <tbody>
+    <tr><td>Version check</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L162-L170" target="_blank" rel="noopener" title="afd_plugin/__init__.py:162-170 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:162-170</code></a></td><td>Caught: logged at debug.</td></tr>
+    <tr><td>Import the 4 patches</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L172-L181" target="_blank" rel="noopener" title="afd_plugin/__init__.py:172-181 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:172-181</code></a></td><td>Caught: logged at debug.</td></tr>
+    <tr><td>DBO custom op</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L189-L197" target="_blank" rel="noopener" title="afd_plugin/__init__.py:189-197 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:189-197</code></a></td><td>Caught: logged at debug.</td></tr>
+    <tr><td>Routing strategy</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L183-L187" target="_blank" rel="noopener" title="afd_plugin/__init__.py:183-187 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:183-187</code></a></td><td>Not caught: the error propagates.</td></tr>
+    <tr><td>NPU Ascend patch</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L199-L209" target="_blank" rel="noopener" title="afd_plugin/__init__.py:199-209 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:199-209</code></a></td><td>Not caught: the error propagates.</td></tr>
+    <tr><td>Model registration</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L211-L214" target="_blank" rel="noopener" title="afd_plugin/__init__.py:211-214 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:211-214</code></a></td><td>Not caught: the error propagates.</td></tr>
+  </tbody>
+</table>
+<p>The version-check exception is caught twice: the helper warns instead of raising with
+<code>strict=False</code>, and the call also sits in a <code>try/except</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/vllm.py#L48-L50" target="_blank" rel="noopener" title="afd_plugin/compat/vllm.py:48-50 at afd-plugin 7452d52"><code>afd_plugin/compat/vllm.py:48-50</code></a>).</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="import-safety-and-environment-variables" class="dd-title">Import safety and environment variables</h3></summary><div class="dd-body"><p><strong>Import safety.</strong> Importing <code>afd_plugin</code> must not need vLLM, so local CPU tests work.
+Two things make it safe: <code>register_afd</code> returns early when <code>find_spec("vllm")</code> is
+<code>None</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L157-L160" target="_blank" rel="noopener" title="afd_plugin/__init__.py:157-160 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:157-160</code></a>), and <code>__version__</code> falls back to a
+<code>setuptools_scm</code> value or <code>"0.0.0+unknown"</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L36-L44" target="_blank" rel="noopener" title="afd_plugin/__init__.py:36-44 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:36-44</code></a>).</p>
+<table>
+  <thead><tr><th>Variable</th><th>Read at</th><th>Effect</th></tr></thead>
+  <tbody>
+    <tr><td><code>AFD_FORCE_SPAWN_MULTIPROCESSING</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L60" target="_blank" rel="noopener" title="afd_plugin/__init__.py:60 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:60</code></a></td>
+      <td><code>"1"</code> forces the <code>spawn</code> start method and redirects <code>forkserver</code>.
+      Any other value does nothing.</td></tr>
+  </tbody>
+</table></div></details>
+
+<h2 id="related-concepts">Related concepts<a class="h-anchor" href="#related-concepts" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li><a href="../concepts/plugin-entry-point.html">The plugin entry point: register_afd</a></li>
+  <li><a href="../concepts/compat-patches.html">Compat patches: how AFD changes vLLM without editing it</a></li>
+  <li><a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a></li>
+  <li><a href="../concepts/model-registration.html">Model registration: the AFD&lt;arch&gt; wrappers</a></li>
+  <li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+</ul>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>Under what name is <code>DeepseekV2ForCausalLM</code> registered?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p><code>AFDDeepseekV2ForCausalLM</code>. The loop registers each key under <code>"AFD" + key</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L211-L214" target="_blank" rel="noopener" title="afd_plugin/__init__.py:211-214 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:211-214</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>Which step runs only on NPU?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The Ascend config patch. It runs only when the platform device type is <code>"npu"</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L202-L209" target="_blank" rel="noopener" title="afd_plugin/__init__.py:202-209 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:202-209</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>What happens when <code>register_afd</code> runs on a machine with no vLLM installed?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>It sets <code>_registered = True</code> and returns before any registration, so the import stays
+      safe (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L157-L160" target="_blank" rel="noopener" title="afd_plugin/__init__.py:157-160 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:157-160</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>If registering a model raises, does the process keep running? And if the version check
+    raises?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Model registration is not wrapped, so its error propagates
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L211-L214" target="_blank" rel="noopener" title="afd_plugin/__init__.py:211-214 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:211-214</code></a>). The version check is wrapped in a <code>try/except</code>, and
+      with <code>strict=False</code> it only warns, so it does not stop the process
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L162-L170" target="_blank" rel="noopener" title="afd_plugin/__init__.py:162-170 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:162-170</code></a>).</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/plugin-entry-point.html">The plugin entry point: register_afd</a><span class="rel-sum">register_afd is the one function vLLM calls to install AFD. This page explains why it is safe to call many times, how it stays importable without vLLM, its version gate, and the order and error behaviour of its registration steps.</span></li><li><a href="../concepts/compat-patches.html">Compat patches: how AFD changes vLLM without editing it</a><span class="rel-sum">AFD edits no vLLM source. It imports patch modules that replace vLLM functions in place, behind a version gate. This page covers the discipline, the gates, and what each GPU patch changes.</span></li><li><a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a><span class="rel-sum">AFD chooses a role-specific worker class by rewriting parallel_config.worker_cls, but only when the user left it as &quot;auto&quot;. This page shows the rewrite, the platform-to-worker table, the native resolution, the runner swap and the compatibility check.</span></li><li><a href="../concepts/model-registration.html">Model registration: the AFD&lt;arch&gt; wrappers</a><span class="rel-sum">AFD registers each supported architecture under an AFD&lt;arch&gt; name, as a lazy string. At build time it swaps the model to its AFD identity with a deepcopy. This page shows the registration, the identity swap, and which architectures map to which wrapper.</span></li><li><a href="../code/config-py.html">afd_plugin/config.py: the AFD config schema and parser</a><span class="rel-sum">config.py defines AFDConfig and the functions that parse and validate additional_config[&quot;afd&quot;]. config_utils.py holds the type coercers; envs.py holds two diagnostic environment flags. This page reads the three files.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../code/index.html"><span class="pn-dir">← Previous</span><span class="pn-title">The code map: folders, sizes and dependencies</span></a><a class="pn pn-next" href="../code/config-py.html"><span class="pn-dir">Next →</span><span class="pn-title">afd_plugin/config.py: the AFD config schema and parser</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#purpose">Purpose</a></li><li class="toc-l2"><a href="#where-it-sits">Where it sits</a></li><li class="toc-l3"><a href="#who-calls-it">Who calls it</a></li><li class="toc-l3"><a href="#what-it-calls">What it calls</a></li><li class="toc-l2"><a href="#key-classes-and-functions">Key classes and functions</a></li><li class="toc-l2"><a href="#walk-through-register-afd">Walk through register_afd</a></li><li class="toc-l3"><a href="#part-1-guard-import-safety-and-version-check">Part 1: Guard, import safety and version check</a></li><li class="toc-l3"><a href="#part-2-patches-routing-dbo-the-npu-patch-and-the-models">Part 2: Patches, routing, DBO, the NPU patch and the models</a></li><li class="toc-l3"><a href="#the-model-registration-table">The model registration table</a></li><li class="toc-l3"><a href="#the-spawn-override">The spawn override</a></li><li class="toc-l2"><a href="#deep-dive">Deep dive</a></li><li class="toc-l3"><a href="#error-paths-what-is-caught-and-what-is-not">Error paths: what is caught, and what is not</a></li><li class="toc-l3"><a href="#import-safety-and-environment-variables">Import safety and environment variables</a></li><li class="toc-l2"><a href="#related-concepts">Related concepts</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

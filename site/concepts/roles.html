@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attention and FFN roles: what each server owns · AFD Plugin Explained</title>
+<meta name="description" content="AFD runs the attention part and the FFN part as two server processes. This page shows what each role owns, and why the FFN side has no real scheduler, no KV cache and no sampler.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="concepts/roles">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a class="current" aria-current="page" href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>AFD concepts</span><span class="sep">›</span><span>Roles and topology</span><span class="sep">›</span><span aria-current="page">Attention and FFN roles</span></nav>
+<h1 class="page-title">Attention and FFN roles: what each server owns</h1>
+<div class="page-meta"><span class="level level-intermediate" title="Level">Intermediate</span><span class="meta-sec">AFD concepts</span><span class="meta-time">about 6 min read + 2 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../learn/what-is-afd.html">What is AFD?</a> <span class="level level-beginner level-sm">Beginner</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text"><a class="term" href="../reference/glossary.html#term-afd" data-term="AFD" data-def="Attention-FFN Disaggregation. The attention part and the feed-forward (FFN/MoE) part of a model run in separate server processes and exchange hidden states.">AFD</a> runs one model as two servers. The <a class="term" href="../reference/glossary.html#term-attention-role" data-term="attention role" data-def="The side that runs attention and sends hidden states to the FFN side. The default role of a process.">attention role</a> keeps vLLM's front end; the <a class="term" href="../reference/glossary.html#term-ffn-role" data-term="FFN role" data-def="The side that runs the feed-forward and MoE experts. It receives hidden states, computes, and sends the result back.">FFN role</a> is a connector-driven loop.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p>A normal vLLM server owns the whole request path: the API server, the scheduler, the KV cache, the model
+and the sampler. AFD keeps all of that on the <a class="term" href="../reference/glossary.html#term-attention-server" data-term="attention server" data-def="The vllm serve process that plays the attention role. It owns the API server, the scheduler and the KV cache.">attention server</a>. The
+<a class="term" href="../reference/glossary.html#term-ffn-server" data-term="FFN server" data-def="The vllm serve process that plays the FFN role. It has no API server, no scheduler and no KV cache; a connector loop drives it.">FFN server</a> is different. It has no API server, no KV cache and no real scheduler (only a
+no-op stand-in). A <a class="term" href="../reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">connector</a> loop drives it: it waits for work, runs the feed-forward and MoE experts, and sends the
+result back.</p>
+<p>Each side also owns a different part of every decoder layer. The attention server builds the real attention
+module and sends its output to the FFN side. The FFN server builds the real experts and drops the attention
+module.</p>
+<p><strong>An everyday comparison.</strong> Think of a kitchen with a front counter. The counter takes the
+order, tracks the bill and hands finished plates to the customer. The cooks only cook what the counter passes
+through. The comparison stops here: the FFN server is not a separate service. It runs part of the same model's
+forward pass, once per layer, for every step.</p>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<figure class="diagram" id="fig-b2_roles"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Two panels. Panel 1: two boxes side by side. The attention server box (blue) lists API server, scheduler, KV cache, sampler, native self_attn, and mlp replaced by RemoteFFNProxy or remote experts. The FFN server box (emerald) lists no API server, no scheduler, no KV cache (get_kv_cache_spec returns empty), no sampler (sample_tokens raises), self_attn replaced by PPMissingLayer, and native MoE/MLP experts plus a loop. Panel 2: a native decoder layer box in the centre splits by role; the attention role keeps native self_attn and a remote mlp, the FFN role drops attention and keeps the native experts."><svg role="img" aria-label="Two panels. Panel 1: two boxes side by side. The attention server box (blue) lists API server, scheduler, KV cache, sampler, native self_attn, and mlp replaced by RemoteFFNProxy or remote experts. The FFN server box (emerald) lists no API server, no scheduler, no KV cache (get_kv_cache_spec returns empty), no sampler (sample_tokens raises), self_attn replaced by PPMissingLayer, and native MoE/MLP experts plus a loop. Panel 2: a native decoder layer box in the centre splits by role; the attention role keeps native self_attn and a remote mlp, the FFN role drops attention and keeps the native experts." xmlns="http://www.w3.org/2000/svg" width="1100" height="672" viewBox="0 0 1100 672">
+<defs><marker id="dg-b2_roles-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker><marker id="dg-b2_roles-m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker></defs>
+<rect width="1100" height="672" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Two servers, one model</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The attention server owns scheduling and KV cache; the FFN server is a connector-driven loop.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_plugin/v1/worker/  ·  model_executor/models/deepseek_v2.py  ·  canvas 1100</text>
+<rect x="20.0" y="120.0" width="1060.0" height="232.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="146.0" r="13" fill="#111827"/>
+<text x="46.0" y="150.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="151.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">What does each server own?</text>
+<text x="68.0" y="170.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The attention server keeps the native vLLM parts. The FFN server drops them.</text>
+<rect x="46.0" y="186.0" width="500.0" height="150.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="58.0" y="206.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Attention server  (attention role)</text>
+<text x="58.0" y="224.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">API server          receives the request</text>
+<text x="58.0" y="239.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">scheduler           batches tokens per step</text>
+<text x="58.0" y="254.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">KV cache            native, per layer</text>
+<text x="58.0" y="269.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">sampler             logits + sampling, every step</text>
+<text x="58.0" y="284.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">self_attn           native attention module</text>
+<text x="58.0" y="299.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">mlp -&gt; RemoteFFNProxy / remote experts</text>
+<rect x="566.0" y="186.0" width="500.0" height="150.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="578.0" y="206.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN server  (FFN role)</text>
+<text x="578.0" y="224.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">no API server       requests never arrive here</text>
+<text x="578.0" y="239.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">no scheduler        a no-op stand-in only</text>
+<text x="578.0" y="254.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">no KV cache         get_kv_cache_spec -&gt; {}</text>
+<text x="578.0" y="269.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">no sampler          sample_tokens raises</text>
+<text x="578.0" y="284.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">self_attn -&gt; PPMissingLayer (no attention)</text>
+<text x="578.0" y="299.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">mlp -&gt; native MoE / MLP experts + loop</text>
+<rect x="20.0" y="374.0" width="1060.0" height="196.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="400.0" r="13" fill="#111827"/>
+<text x="46.0" y="404.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="405.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">How is one decoder layer split?</text>
+<text x="68.0" y="424.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">AFDDeepseekV2DecoderLayer builds only the modules its role owns (deepseek_v2.py:383-559).</text>
+<rect x="400.0" y="440.0" width="300.0" height="44.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="550.0" y="460.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">native decoder layer</text>
+<text x="550.0" y="478.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">self_attn  +  mlp</text>
+<rect x="46.0" y="502.0" width="500.0" height="56.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="58.0" y="522.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">attention role</text>
+<text x="58.0" y="539.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">self_attn: native   ·   mlp: RemoteFFNProxy</text>
+<text x="58.0" y="552.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">MoE layer -&gt; AFDDeepseekV2RemoteExpertsMoE</text>
+<rect x="566.0" y="502.0" width="500.0" height="56.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="578.0" y="522.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN role</text>
+<text x="578.0" y="539.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">self_attn: PPMissingLayer  (dropped)</text>
+<text x="578.0" y="552.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">mlp: native DeepseekV2MoE / DeepseekV2MLP</text>
+<line x1="500.0" y1="484.0" x2="300.0" y2="500.0" stroke="#2563eb" stroke-width="1.6" marker-end="url(#dg-b2_roles-m0)"/>
+<line x1="600.0" y1="484.0" x2="820.0" y2="500.0" stroke="#059669" stroke-width="1.6" marker-end="url(#dg-b2_roles-m1)"/>
+<text x="30.0" y="599.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="588.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="599.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention server / role</text>
+<rect x="276.8" y="588.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="297.8" y="599.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN server / role</text>
+<rect x="424.9" y="588.0" width="14.0" height="14.0" rx="3" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<text x="445.9" y="599.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">native vLLM module</text>
+<text x="30.0" y="622.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The FFN EngineCore returns after the executor is built: no KV cache, a no-op scheduler (engine_core.py:59-68, :605, :614).</text>
+<text x="30.0" y="640.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Send requests only to the attention API server (README.md:258-260).</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: the attention server keeps vLLM's front end; the FFN server drops the scheduler, KV cache and sampler and runs a connector loop.</figcaption><a class="diagram-open" href="../diagrams/b2_roles.svg" target="_blank">Open full size ↗</a></div></figure>
+<p>Read panel 1 as a comparison of what each server owns. Read panel 2 as the split of one decoder layer: the
+same layer is built with different modules on each side.</p>
+
+<h2 id="in-the-code">In the code<a class="h-anchor" href="#in-the-code" aria-label="Link to this section">#</a></h2>
+
+<h3 id="step-1-two-workers-two-runners">Step 1: Two workers, two runners<a class="h-anchor" href="#step-1-two-workers-two-runners" aria-label="Link to this section">#</a></h3>
+<p>AFD does not register its role workers through a vLLM API. A patch rewrites
+<code>parallel_config.worker_cls</code> when it is <code>"auto"</code>; see <a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a>.
+Each role worker then swaps in its own model runner inside <code>init_device</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_worker.py#L82-L87" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_worker.py:82-87 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_worker.py:82-87</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L93-L98" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:93-98 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:93-98</code></a>).</p>
+<table>
+  <thead>
+    <tr><th>Role</th><th>Worker class</th><th>Runner class</th><th>Owns</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>attention</td>
+      <td><code>AFDAttentionWorker</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_worker.py#L22" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_worker.py:22 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_worker.py:22</code></a>)</td>
+      <td><code>AFDAttentionModelRunnerV2</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L358" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:358 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:358</code></a>)</td>
+      <td>API server, scheduler, KV cache, sampler, native <code>self_attn</code>, remote FFN proxy</td>
+    </tr>
+    <tr>
+      <td>FFN</td>
+      <td><code>AFDFFNWorker</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L32" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:32 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:32</code></a>)</td>
+      <td><code>GPUFFNModelRunner</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L52" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:52 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:52</code></a>)</td>
+      <td>native MoE / MLP experts, the connector server loop</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="step-2-the-ffn-enginecore-returns-early">Step 2: The FFN EngineCore returns early<a class="h-anchor" href="#step-2-the-ffn-enginecore-returns-early" aria-label="Link to this section">#</a></h3>
+<p>A patch on <code>EngineCore.__init__</code> checks the role. For an FFN config, it builds the model
+executor and then returns, before the KV cache and the scheduler are set up
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L59-L68" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:59-68 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:59-68</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L56-L69" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/compat/patches/engine_core.py:56-69</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L56-L69" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">56</span><span class="ln">57</span><span class="ln">58</span><span class="ln hl">59</span><span class="ln">60</span><span class="ln">61</span><span class="ln">62</span><span class="ln">63</span><span class="ln">64</span><span class="ln">65</span><span class="ln">66</span><span class="ln">67</span><span class="ln hl">68</span><span class="ln">69</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(3 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(12 * var(--code-lh))"></span><pre><code class="language-python">    # ### PATCH START: AFD FFN EngineCore daemon initialization
+    # FFN ranks are connector daemons, so stop EngineCore initialization after
+    # executor construction instead of setting up KV cache and scheduler state.
+    if _is_afd_ffn_config(vllm_config):
+        _initialize_ffn_engine_core(
+            self,
+            core_module,
+            vllm_config,
+            executor_class,
+            log_stats,
+            executor_fail_callback,
+        )
+        return
+    # ### PATCH END: AFD FFN EngineCore daemon initialization</code></pre></div></div></div><figcaption class="code-caption">The FFN EngineCore stops after the executor is built.</figcaption></figure>
+<p>The FFN EngineCore sets the KV block counts to zero and installs a no-op scheduler. The no-op scheduler is
+not <code>None</code>, because a native readiness handshake calls a method on it
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L605-L606" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:605-606 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:605-606</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L608-L614" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:608-614 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:608-614</code></a>).</p>
+
+<h3 id="step-3-the-ffn-worker-has-no-kv-cache-and-does-not-sample">Step 3: The FFN worker has no KV cache and does not sample<a class="h-anchor" href="#step-3-the-ffn-worker-has-no-kv-cache-and-does-not-sample" aria-label="Link to this section">#</a></h3>
+<p>The FFN worker reports an empty KV cache spec, so vLLM allocates no KV blocks for it
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L102-L105" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:102-105 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:102-105</code></a>). The FFN runner repeats this
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L147-L148" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:147-148 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:147-148</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L102-L105" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/ffn_worker.py:102-105</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L102-L105" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">102</span><span class="ln">103</span><span class="ln">104</span><span class="ln">105</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">    def get_kv_cache_spec(self) -&gt; dict[str, KVCacheSpec]:
+        &quot;&quot;&quot;FFN workers do not allocate KV cache.&quot;&quot;&quot;
+
+        return {}</code></pre></div></div></div><figcaption class="code-caption">The FFN worker allocates no KV cache.</figcaption></figure>
+<p>Two methods guard against the native scheduler path. The scheduler-driven
+<code>execute_model</code> raises, and the FFN runner's <code>sample_tokens</code> raises
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L122-L131" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:122-131 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:122-131</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L405-L406" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:405-406 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:405-406</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L122-L131" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/ffn_worker.py:122-131</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L122-L131" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">122</span><span class="ln">123</span><span class="ln">124</span><span class="ln">125</span><span class="ln">126</span><span class="ln">127</span><span class="ln hl">128</span><span class="ln">129</span><span class="ln">130</span><span class="ln">131</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><pre><code class="language-python">    def execute_model(
+        self,
+        scheduler_output: SchedulerOutput,
+    ) -&gt; ModelRunnerOutput | AsyncModelRunnerOutput | None:
+        &quot;&quot;&quot;Fail fast if the default scheduler tries to execute FFN work.&quot;&quot;&quot;
+
+        raise RuntimeError(
+            &quot;AFD FFN workers are connector-driven; scheduler-driven &quot;
+            &quot;execute_model() is not supported.&quot;,
+        )</code></pre></div></div></div><figcaption class="code-caption">Scheduler-driven FFN execution fails fast.</figcaption></figure>
+
+<h3 id="step-4-each-role-builds-half-of-a-decoder-layer">Step 4: Each role builds half of a decoder layer<a class="h-anchor" href="#step-4-each-role-builds-half-of-a-decoder-layer" aria-label="Link to this section">#</a></h3>
+<p>The model wrapper is role-aware. <code>AFDDeepseekV2DecoderLayer</code> reads the role, then builds only
+the modules that role owns (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L383-L396" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:383-396 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:383-396</code></a>). On the
+attention role it builds the native attention module
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L474-L491" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:474-491 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:474-491</code></a>) and replaces the feed-forward:</p>
+<ul>
+  <li>a dense layer becomes a <a class="term" href="../reference/glossary.html#term-remote-ffn-proxy" data-term="RemoteFFNProxy" data-def="A parameter-free module on the attention side. It replaces the FFN stage of a decoder layer and uses the connector instead.">RemoteFFNProxy</a>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L516-L517" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:516-517 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:516-517</code></a>);</li>
+  <li>an MoE layer becomes an <code>AFDDeepseekV2RemoteExpertsMoE</code> shell
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L493-L500" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:493-500 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:493-500</code></a>).</li>
+</ul>
+<p>On the FFN role it drops attention (a <code>PPMissingLayer</code>) and keeps the native experts
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L520" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:520 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:520</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L538-L559" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:538-559 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:538-559</code></a>). The <a href="../concepts/model-wrappers.html">Model wrappers: the role-aware decoder layer</a> page
+reads this split in full.</p>
+
+<h3 id="step-5-where-requests-go-and-the-start-order">Step 5: Where requests go, and the start order<a class="h-anchor" href="#step-5-where-requests-go-and-the-start-order" aria-label="Link to this section">#</a></h3>
+<p>Requests go only to the attention API server. The two servers may start in either order
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L258-L260" target="_blank" rel="noopener" title="README.md:258-260 at afd-plugin 7452d52"><code>README.md:258-260</code></a>).</p>
+<figure class="code-excerpt" data-lang="none"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L258-L260" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">README.md:258-260</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L258-L260" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">258</span><span class="ln">259</span><span class="ln">260</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-none">Attention and FFN may be started in either order. Send requests only to the
+Attention API server. FFN workers are connector-driven; scheduler-driven FFN
+`execute_model()` calls fail fast.</code></pre></div></div></div><figcaption class="code-caption">From the README.</figcaption></figure>
+
+<h2 id="deep-dive">Deep dive<a class="h-anchor" href="#deep-dive" aria-label="Link to this section">#</a></h2>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="what-each-side-owns-line-by-line" class="dd-title">What each side owns, line by line</h3></summary><div class="dd-body"><p>The table maps each responsibility to the line that proves it.</p>
+<table>
+  <thead>
+    <tr><th>Part</th><th>Attention server</th><th>FFN server</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>API server</td><td>yes (native vLLM front end)</td><td>no: requests never arrive (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L258-L260" target="_blank" rel="noopener" title="README.md:258-260 at afd-plugin 7452d52"><code>README.md:258-260</code></a>)</td></tr>
+    <tr><td>scheduler</td><td>yes (native)</td><td>no-op stand-in (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L614" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:614 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:614</code></a>)</td></tr>
+    <tr><td>KV cache</td><td>yes (native, per layer)</td><td>none (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L102-L105" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:102-105 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:102-105</code></a>)</td></tr>
+    <tr><td>sampler / logits</td><td>native, every step (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L582-L594" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:582-594 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:582-594</code></a>)</td><td>raises (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L405-L406" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:405-406 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:405-406</code></a>)</td></tr>
+    <tr><td>attention module</td><td>native <code>self_attn</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L474-L491" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:474-491 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:474-491</code></a>)</td><td><code>PPMissingLayer</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L520" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:520 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:520</code></a>)</td></tr>
+    <tr><td>feed-forward / experts</td><td>remote proxy (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L516-L517" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:516-517 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:516-517</code></a>)</td><td>native MoE / MLP (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L538-L559" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:538-559 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:538-559</code></a>)</td></tr>
+    <tr><td>what drives a step</td><td>the vLLM scheduler</td><td>the connector loop (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L160-L196" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:160-196 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:160-196</code></a>)</td></tr>
+  </tbody>
+</table>
+<p>The attention side keeps logits and sampling because only it holds the whole token state and the KV cache.
+The sampling runs once per step, after the last layer, on every step
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L582-L594" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:582-594 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:582-594</code></a>).</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-ffn-server-loop" class="dd-title">The FFN server loop</h3></summary><div class="dd-body"><p>The FFN worker does not wait for the scheduler. After the connector is initialized, it starts a daemon
+thread that runs the <a class="term" href="../reference/glossary.html#term-ffn-server-loop" data-term="FFN server loop" data-def="The connector-driven daemon thread on the FFN worker. It waits for DP metadata, then runs the FFN compute for one step. No scheduler drives it.">FFN server loop</a>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L107-L113" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:107-113 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:107-113</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L133-L158" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:133-158 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:133-158</code></a>). The loop body runs one step at a time:</p>
+<ol>
+  <li>If the connector has no control plane, raise. GPU FFN needs a control-plane-driven connector
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L169-L174" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:169-174 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:169-174</code></a>).</li>
+  <li>Receive one DP metadata payload for the step
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L176" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:176 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:176</code></a>).</li>
+  <li>Run <code>capture_model</code> for a warm-up or capture step, else <code>execute_model</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L182-L196" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:182-196 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:182-196</code></a>).</li>
+</ol>
+<p>The <a href="../concepts/ffn-runtime.html">The FFN runtime: a connector-driven server loop</a> page reads the loop and the per-layer forward in full. The
+<a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a> page reads the DP metadata payload.</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="start-order-and-collective-init" class="dd-title">Start order and collective init</h3></summary><div class="dd-body"><p>The README says the two servers may start in either order (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L258-L260" target="_blank" rel="noopener" title="README.md:258-260 at afd-plugin 7452d52"><code>README.md:258-260</code></a>). The order does not
+matter because the connector setup is a collective rendezvous. Every attention and FFN rank must call
+<code>init_afd_connector</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L124" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:124 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:124</code></a>); the first ranks wait at the
+rendezvous until the rest arrive (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L245-L262" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:245-262 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:245-262</code></a>). The FFN worker builds
+and initializes its connector inside <code>initialize_from_config</code>, then starts the loop
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L107-L113" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:107-113 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:107-113</code></a>).</p></div></details>
+
+<h2 id="what-can-go-wrong">What can go wrong<a class="h-anchor" href="#what-can-go-wrong" aria-label="Link to this section">#</a></h2>
+<aside class="callout callout-simplified"><p class="callout-title">Simplified</p><div class="callout-body"><p>This page shows the GPU (CUDA) role split. The NPU variant uses the same role idea with a
+different transport; see <a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a>. The page also folds the metadata provider and the
+DBO stages; the <a href="../concepts/attention-runtime.html">The attention runtime: a seam over Model Runner V2</a> and <a href="../concepts/ffn-runtime.html">The FFN runtime: a connector-driven server loop</a> pages give those.</p></div></aside>
+<ul>
+  <li><strong>A request sent to the FFN server.</strong> The FFN server has no API server, so there is
+      nothing to answer it. Send requests only to the attention API server
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L258-L260" target="_blank" rel="noopener" title="README.md:258-260 at afd-plugin 7452d52"><code>README.md:258-260</code></a>).</li>
+  <li><strong>The scheduler reaches the FFN worker.</strong> A scheduler-driven
+      <code>execute_model</code> on the FFN worker raises at once
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L122-L131" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:122-131 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:122-131</code></a>).</li>
+  <li><strong>A connector with no control plane on GPU.</strong> The GPU FFN loop needs a control-plane-driven
+      connector and raises for one that sets <code>control_plane = None</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L169-L174" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:169-174 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:169-174</code></a>).</li>
+</ul>
+<p><strong>Why it matters.</strong> The two servers do very different work. If you treat the FFN server like a
+normal vLLM server, nothing schedules its work and no token comes back.</p>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>Which three parts does the FFN server not have?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>No API server, no KV cache and no real scheduler (only a no-op stand-in). Its EngineCore returns after the executor is built
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L59-L68" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:59-68 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:59-68</code></a>), and the worker reports an empty KV cache spec
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L102-L105" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:102-105 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:102-105</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>Which server samples the next token?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The attention server. Its runner wraps native sampling, which runs every step
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L582-L594" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:582-594 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:582-594</code></a>). The FFN runner's
+      <code>sample_tokens</code> raises (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L405-L406" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:405-406 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:405-406</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>On the FFN role, what replaces the attention module of a decoder layer?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>A <code>PPMissingLayer</code>: the FFN role builds no attention
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L520" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:520 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:520</code></a>). It keeps the native experts instead
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L538-L559" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:538-559 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:538-559</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>The two servers can start in either order. Why is that safe?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Connector setup is a collective rendezvous. Every rank calls <code>init_afd_connector</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L124" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:124 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:124</code></a>) and the early ranks wait at
+      <code>tcp://host:port</code> for the rest (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L245-L262" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:245-262 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:245-262</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>What drives one FFN step, if not the scheduler?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The connector loop. It receives one DP metadata payload per step
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L176" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:176 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:176</code></a>), then calls <code>execute_model</code> or
+      <code>capture_model</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L182-L196" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:182-196 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:182-196</code></a>). The loop is a daemon
+      thread started after connector init (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L133-L158" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:133-158 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:133-158</code></a>).</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/topology.html">Topology and role ranks: the AFD world</a><span class="rel-sum">The P2P connector builds one world, [F0..A0..], from the role ranks. This page shows how the role rank, the subgroups and the DP-metadata routes come from the topology sizes.</span></li><li><a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a><span class="rel-sum">One base class sets the contract that every AFD connector follows. This page shows the lifecycle, the four data-path calls, the optional control plane, the config hook and the factory.</span></li><li><a href="../concepts/ffn-runtime.html">The FFN runtime: a connector-driven server loop</a><span class="rel-sum">The FFN side has no real scheduler (a no-op stand-in) and no KV cache. A daemon thread reads one control payload per step and drives the FFN model runner, which runs the FFN or experts for each layer and stage.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../concepts/compat-patches.html"><span class="pn-dir">← Previous</span><span class="pn-title">Compat patches: how AFD changes vLLM without editing it</span></a><a class="pn pn-next" href="../concepts/topology.html"><span class="pn-dir">Next →</span><span class="pn-title">Topology and role ranks: the AFD world</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#in-the-code">In the code</a></li><li class="toc-l3"><a href="#step-1-two-workers-two-runners">Step 1: Two workers, two runners</a></li><li class="toc-l3"><a href="#step-2-the-ffn-enginecore-returns-early">Step 2: The FFN EngineCore returns early</a></li><li class="toc-l3"><a href="#step-3-the-ffn-worker-has-no-kv-cache-and-does-not-sample">Step 3: The FFN worker has no KV cache and does not sample</a></li><li class="toc-l3"><a href="#step-4-each-role-builds-half-of-a-decoder-layer">Step 4: Each role builds half of a decoder layer</a></li><li class="toc-l3"><a href="#step-5-where-requests-go-and-the-start-order">Step 5: Where requests go, and the start order</a></li><li class="toc-l2"><a href="#deep-dive">Deep dive</a></li><li class="toc-l3"><a href="#what-each-side-owns-line-by-line">What each side owns, line by line</a></li><li class="toc-l3"><a href="#the-ffn-server-loop">The FFN server loop</a></li><li class="toc-l3"><a href="#start-order-and-collective-init">Start order and collective init</a></li><li class="toc-l2"><a href="#what-can-go-wrong">What can go wrong</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

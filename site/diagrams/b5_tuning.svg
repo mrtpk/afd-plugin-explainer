@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="716" viewBox="0 0 1100 716">
+<defs></defs>
+<rect width="1100" height="716" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">What you can tune in AFD</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Only knobs the repo exposes  ·  recipe values are examples to tune, not tuned defaults</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">A &gt;= F   ·   DBO recipe 2/12 vs vLLM 32/512   ·   capture 64</text>
+<rect x="20.0" y="112.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="138.0" r="13" fill="#111827"/>
+<text x="46.0" y="142.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="143.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Tune throughput</text>
+<text x="68.0" y="162.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The split, the overlap and the graph size.</text>
+<rect x="46.0" y="174.0" width="320.0" height="74.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="46.0" y="174.0" width="6.0" height="74.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="68.0" cy="191.0" r="10" fill="#2563eb"/>
+<text x="68.0" y="195.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="84.0" y="196.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Rank ratio A:F</text>
+<rect x="298.3" y="182.0" width="59.7" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="328.1" y="195.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">A &gt;= F</text>
+<text x="84.0" y="216.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">rule</text>
+<text x="118.0" y="216.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">A = DP x TP</text>
+<text x="84.0" y="233.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">src</text>
+<text x="118.0" y="233.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">topology.py:52</text>
+<rect x="382.0" y="174.0" width="320.0" height="74.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="382.0" y="174.0" width="6.0" height="74.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="404.0" cy="191.0" r="10" fill="#2563eb"/>
+<text x="404.0" y="195.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="420.0" y="196.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">DBO thresholds</text>
+<rect x="634.3" y="182.0" width="59.7" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="664.1" y="195.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2 / 12</text>
+<text x="420.0" y="216.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">vLLM</text>
+<text x="454.0" y="216.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">32 / 512 default</text>
+<text x="420.0" y="233.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">ex</text>
+<text x="454.0" y="233.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">dbo *_token_threshold</text>
+<rect x="718.0" y="174.0" width="320.0" height="74.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="718.0" y="174.0" width="6.0" height="74.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="740.0" cy="191.0" r="10" fill="#2563eb"/>
+<text x="740.0" y="195.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="756.0" y="196.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">CUDA graph size</text>
+<rect x="996.8" y="182.0" width="33.2" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="1013.4" y="195.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">64</text>
+<text x="756.0" y="216.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">flag</text>
+<text x="790.0" y="216.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">max-cudagraph-capture-size</text>
+<text x="756.0" y="233.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">mode</text>
+<text x="790.0" y="233.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FULL_DECODE_ONLY</text>
+<rect x="20.0" y="282.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="308.0" r="13" fill="#111827"/>
+<text x="46.0" y="312.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="313.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Tune reliability and placement</text>
+<text x="68.0" y="332.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Timeouts, the gate, and NPU capacity.</text>
+<rect x="46.0" y="344.0" width="320.0" height="74.0" rx="8" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<rect x="46.0" y="344.0" width="6.0" height="74.0" rx="3" fill="#d97706" fill-opacity="1.0" stroke="none"/>
+<circle cx="68.0" cy="361.0" r="10" fill="#d97706"/>
+<text x="68.0" y="365.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">4</text>
+<text x="84.0" y="366.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Group timeout</text>
+<rect x="304.9" y="352.0" width="53.1" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#d97706" stroke-width="1"/>
+<text x="331.4" y="365.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#d97706" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">120 s</text>
+<text x="84.0" y="386.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">key</text>
+<text x="118.0" y="386.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_process_group_timeout_s</text>
+<text x="84.0" y="403.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">src</text>
+<text x="118.0" y="403.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">config.py:70</text>
+<rect x="382.0" y="344.0" width="320.0" height="74.0" rx="8" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<rect x="382.0" y="344.0" width="6.0" height="74.0" rx="3" fill="#d97706" fill-opacity="1.0" stroke="none"/>
+<circle cx="404.0" cy="361.0" r="10" fill="#d97706"/>
+<text x="404.0" y="365.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">5</text>
+<text x="420.0" y="366.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Gate placement</text>
+<rect x="640.9" y="352.0" width="53.1" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#d97706" stroke-width="1"/>
+<text x="667.4" y="365.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#d97706" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">false</text>
+<text x="420.0" y="386.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">key</text>
+<text x="454.0" y="386.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">compute_gate_on_attention</text>
+<text x="420.0" y="403.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">src</text>
+<text x="454.0" y="403.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">config.py:66</text>
+<rect x="718.0" y="344.0" width="320.0" height="74.0" rx="8" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<rect x="718.0" y="344.0" width="6.0" height="74.0" rx="3" fill="#d97706" fill-opacity="1.0" stroke="none"/>
+<circle cx="740.0" cy="361.0" r="10" fill="#d97706"/>
+<text x="740.0" y="365.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">6</text>
+<text x="756.0" y="366.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">NPU CAM capacity</text>
+<rect x="996.8" y="352.0" width="33.2" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#d97706" stroke-width="1"/>
+<text x="1013.4" y="365.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#d97706" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">x1</text>
+<text x="756.0" y="386.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">env</text>
+<text x="790.0" y="386.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">BATCH_SIZE_FACTOR</text>
+<text x="756.0" y="403.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">src</text>
+<text x="790.0" y="403.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">validation.py:45</text>
+<rect x="20.0" y="452.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="478.0" r="13" fill="#111827"/>
+<text x="46.0" y="482.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="68.0" y="483.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Measure</text>
+<text x="68.0" y="502.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Profile, simulate routing, benchmark.</text>
+<rect x="46.0" y="514.0" width="320.0" height="74.0" rx="8" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.4"/>
+<rect x="46.0" y="514.0" width="6.0" height="74.0" rx="3" fill="#0d9488" fill-opacity="1.0" stroke="none"/>
+<circle cx="68.0" cy="531.0" r="10" fill="#0d9488"/>
+<text x="68.0" y="535.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">7</text>
+<text x="84.0" y="536.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Profiler</text>
+<rect x="298.3" y="522.0" width="59.7" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#0d9488" stroke-width="1"/>
+<text x="328.1" y="535.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#0d9488" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">opt-in</text>
+<text x="84.0" y="556.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">env</text>
+<text x="118.0" y="556.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">AFD_GPU_*_PROFILER_*</text>
+<text x="84.0" y="573.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">src</text>
+<text x="118.0" y="573.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">compat/profiler.py</text>
+<rect x="382.0" y="514.0" width="320.0" height="74.0" rx="8" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.4"/>
+<rect x="382.0" y="514.0" width="6.0" height="74.0" rx="3" fill="#0d9488" fill-opacity="1.0" stroke="none"/>
+<circle cx="404.0" cy="531.0" r="10" fill="#0d9488"/>
+<text x="404.0" y="535.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">8</text>
+<text x="420.0" y="536.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Routing simulator</text>
+<rect x="594.5" y="522.0" width="99.5" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#0d9488" stroke-width="1"/>
+<text x="644.3" y="535.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#0d9488" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">afd_balanced</text>
+<text x="420.0" y="556.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">env</text>
+<text x="454.0" y="556.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">VLLM_MOE_ROUTING_SIM...</text>
+<text x="420.0" y="573.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">src</text>
+<text x="454.0" y="573.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">routing_simulator.py</text>
+<rect x="718.0" y="514.0" width="320.0" height="74.0" rx="8" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.4"/>
+<rect x="718.0" y="514.0" width="6.0" height="74.0" rx="3" fill="#0d9488" fill-opacity="1.0" stroke="none"/>
+<circle cx="740.0" cy="531.0" r="10" fill="#0d9488"/>
+<text x="740.0" y="535.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">9</text>
+<text x="756.0" y="536.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Benchmark</text>
+<rect x="937.2" y="522.0" width="92.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#0d9488" stroke-width="1"/>
+<text x="983.6" y="535.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#0d9488" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">bench serve</text>
+<text x="756.0" y="556.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">tool</text>
+<text x="790.0" y="556.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">request_generator.sh</text>
+<text x="756.0" y="573.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">k8s</text>
+<text x="790.0" y="573.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">run-vllm-bench-k8s</text>
+<text x="30.0" y="637.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="626.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="637.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">throughput</text>
+<rect x="207.9" y="626.0" width="14.0" height="14.0" rx="3" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<text x="228.9" y="637.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">reliability / placement</text>
+<rect x="383.0" y="626.0" width="14.0" height="14.0" rx="3" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.4"/>
+<text x="404.0" y="637.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">measurement</text>
+<text x="30.0" y="666.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The recipe DBO thresholds (2/12) and capture size (64) are example values; the READMEs say to tune them.</text>
+<text x="30.0" y="684.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The routing simulator and the forced top-n change model outputs: use it only for benchmarks.</text>
+</svg>

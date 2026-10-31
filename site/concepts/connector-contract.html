@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The connector contract: the Attention/FFN transport · AFD Plugin Explained</title>
+<meta name="description" content="One base class sets the contract that every AFD connector follows. This page shows the lifecycle, the four data-path calls, the optional control plane, the config hook and the factory.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="concepts/connector-contract">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a class="current" aria-current="page" href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>AFD concepts</span><span class="sep">›</span><span>Connectors</span><span class="sep">›</span><span aria-current="page">The connector contract</span></nav>
+<h1 class="page-title">The connector contract: the Attention/FFN transport</h1>
+<div class="page-meta"><span class="level level-intermediate" title="Level">Intermediate</span><span class="meta-sec">AFD concepts</span><span class="meta-time">about 6 min read + 3 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a> <span class="level level-intermediate level-sm">Intermediate</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">A <a class="term" href="../reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">connector</a> moves hidden states between the <a class="term" href="../reference/glossary.html#term-attention-role" data-term="attention role" data-def="The side that runs attention and sends hidden states to the FFN side. The default role of a process.">attention role</a> and the <a class="term" href="../reference/glossary.html#term-ffn-role" data-term="FFN role" data-def="The side that runs the feed-forward and MoE experts. It receives hidden states, computes, and sends the result back.">FFN role</a>. One abstract base class sets its contract.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p><a class="term" href="../reference/glossary.html#term-afd" data-term="AFD" data-def="Attention-FFN Disaggregation. The attention part and the feed-forward (FFN/MoE) part of a model run in separate server processes and exchange hidden states.">AFD</a> splits a model into two server processes. The attention side computes attention and must hand
+its hidden states to the FFN side. The FFN side runs the feed-forward and MoE experts, then hands the result
+back. A connector owns this exchange.</p>
+<p>Every connector subclasses one abstract base class, <code>AFDConnectorBase</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L37" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:37 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:37</code></a>). The base class fixes three jobs: set up and release the
+transport, move hidden states each way, and apply the optional <a class="term" href="../reference/glossary.html#term-control-plane" data-term="control plane" data-def="The path that carries DP metadata (per-stage token counts) from the attention side to the FFN side. It is optional.">control plane</a>. Each
+connector picks its own transport, but the call names and the order stay the same.</p>
+<p><strong>An everyday comparison.</strong> Think of a courier contract. The sender hands over a parcel; the
+courier delivers it and brings back a reply. The comparison stops here: a connector also sets up and tears
+down its own transport, and it runs this exchange once per model layer.</p>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<figure class="diagram" id="fig-f1_connector_contract"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Three panels. Panel 1: four boxes in a cycle. The attention side calls send_attn_output (top left) and recv_ffn_output (top right), in blue. The FFN side calls recv_attn_output (bottom left) and send_ffn_output (bottom right), in emerald. A blue arrow carries hidden states down from send_attn_output to recv_attn_output; a dashed violet arrow carries the optional control plane; an emerald arrow carries the FFN output up from send_ffn_output to recv_ffn_output. Panel 2: the lifecycle, init_afd_connector then the data path many times then close. Panel 3: three connector boxes with device, sync or async, and control plane yes or none."><svg role="img" aria-label="Three panels. Panel 1: four boxes in a cycle. The attention side calls send_attn_output (top left) and recv_ffn_output (top right), in blue. The FFN side calls recv_attn_output (bottom left) and send_ffn_output (bottom right), in emerald. A blue arrow carries hidden states down from send_attn_output to recv_attn_output; a dashed violet arrow carries the optional control plane; an emerald arrow carries the FFN output up from send_ffn_output to recv_ffn_output. Panel 2: the lifecycle, init_afd_connector then the data path many times then close. Panel 3: three connector boxes with device, sync or async, and control plane yes or none." xmlns="http://www.w3.org/2000/svg" width="1100" height="808" viewBox="0 0 1100 808">
+<defs><marker id="dg-f1_connector_contract-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker><marker id="dg-f1_connector_contract-m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker><marker id="dg-f1_connector_contract-m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker><marker id="dg-f1_connector_contract-m3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#111827"/></marker></defs>
+<rect width="1100" height="808" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">The AFD connector contract</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">One base class. The attention side and the FFN side each make two data-path calls.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_plugin/connectors/base.py  ·  factory.py  ·  canvas 1100</text>
+<rect x="20.0" y="120.0" width="1060.0" height="250.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="146.0" r="13" fill="#111827"/>
+<text x="46.0" y="150.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="151.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Who calls what, in which order?</text>
+<text x="68.0" y="170.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The attention side sends then receives; the FFN side receives, computes, then sends.</text>
+<rect x="70.0" y="184.0" width="300.0" height="66.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="220.0" y="204.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">send_attn_output</text>
+<text x="220.0" y="222.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">attention side</text>
+<text x="220.0" y="237.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">base.py:145</text>
+<rect x="640.0" y="184.0" width="300.0" height="66.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="790.0" y="204.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">recv_ffn_output</text>
+<text x="790.0" y="222.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">attention side</text>
+<text x="790.0" y="237.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">base.py:173</text>
+<rect x="70.0" y="302.0" width="300.0" height="66.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="220.0" y="322.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">recv_attn_output</text>
+<text x="220.0" y="340.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">FFN side</text>
+<text x="220.0" y="355.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">base.py:206</text>
+<rect x="640.0" y="302.0" width="300.0" height="66.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="790.0" y="322.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">send_ffn_output</text>
+<text x="790.0" y="340.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">FFN side</text>
+<text x="790.0" y="355.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">base.py:229</text>
+<line x1="240.0" y1="250.0" x2="240.0" y2="300.0" stroke="#2563eb" stroke-width="1.6" marker-end="url(#dg-f1_connector_contract-m0)"/>
+<text x="250.0" y="279.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">hidden states</text>
+<line x1="175.0" y1="250.0" x2="175.0" y2="300.0" stroke="#7c3aed" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#dg-f1_connector_contract-m1)"/>
+<text x="80.0" y="269.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">control plane</text>
+<text x="80.0" y="284.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#7c3aed" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">(optional)</text>
+<line x1="370.0" y1="335.0" x2="638.0" y2="335.0" stroke="#059669" stroke-width="1.6" marker-end="url(#dg-f1_connector_contract-m2)"/>
+<text x="505.0" y="325.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">FFN compute</text>
+<line x1="790.0" y1="302.0" x2="790.0" y2="252.0" stroke="#059669" stroke-width="1.6" marker-end="url(#dg-f1_connector_contract-m2)"/>
+<text x="800.0" y="279.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN output</text>
+<rect x="20.0" y="392.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="418.0" r="13" fill="#111827"/>
+<text x="46.0" y="422.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="423.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">What is the lifecycle?</text>
+<text x="68.0" y="442.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The runtime initializes the connector once, uses the data path many times, then closes it.</text>
+<rect x="70.0" y="454.0" width="300.0" height="60.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="220.0" y="474.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">init_afd_connector</text>
+<text x="220.0" y="492.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">collective, once</text>
+<text x="220.0" y="507.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">base.py:124</text>
+<rect x="400.0" y="454.0" width="300.0" height="60.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="550.0" y="474.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">data path (per layer/stage)</text>
+<text x="550.0" y="492.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">send / recv calls</text>
+<text x="550.0" y="507.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">many times</text>
+<rect x="730.0" y="454.0" width="300.0" height="60.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="880.0" y="474.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">close</text>
+<text x="880.0" y="492.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">release resources</text>
+<text x="880.0" y="507.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">base.py:113</text>
+<line x1="370.0" y1="484.0" x2="398.0" y2="484.0" stroke="#111827" stroke-width="1.6" marker-end="url(#dg-f1_connector_contract-m3)"/>
+<line x1="700.0" y1="484.0" x2="728.0" y2="484.0" stroke="#111827" stroke-width="1.6" marker-end="url(#dg-f1_connector_contract-m3)"/>
+<text x="550.0" y="532.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#6b7280" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">is_initialized is true between init and close (base.py:135)</text>
+<rect x="20.0" y="564.0" width="1060.0" height="140.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="590.0" r="13" fill="#111827"/>
+<text x="46.0" y="594.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="68.0" y="595.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Which connector for which device?</text>
+<text x="68.0" y="614.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The factory registers three connectors by name (factory.py:88).</text>
+<rect x="40.0" y="624.0" width="328.0" height="58.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="204.0" y="644.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">P2pNcclAFDConnector</text>
+<text x="204.0" y="662.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">GPU (CUDA) · sync</text>
+<text x="204.0" y="676.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">control plane: yes</text>
+<rect x="386.0" y="624.0" width="328.0" height="58.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="550.0" y="644.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">CAMP2pAFDConnector</text>
+<text x="550.0" y="662.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">NPU (Ascend) · sync</text>
+<text x="550.0" y="676.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">control plane: yes</text>
+<rect x="732.0" y="624.0" width="328.0" height="58.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="896.0" y="644.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">CAMAsyncAFDConnector</text>
+<text x="896.0" y="662.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">NPU (Ascend) · async</text>
+<text x="896.0" y="676.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">control plane: none</text>
+<text x="30.0" y="733.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="722.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="733.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention side</text>
+<rect x="225.1" y="722.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="246.1" y="733.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN side</text>
+<rect x="321.4" y="722.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="342.4" y="733.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">control plane (DP metadata)</text>
+<text x="30.0" y="758.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Simplified: the data path repeats for every layer and every DBO stage; the diagram shows one pass.</text>
+<text x="30.0" y="776.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The attention side&#x27;s recv_ffn_output and the FFN side&#x27;s recv_attn_output both take a stage index.</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: the attention side sends then receives; the FFN side receives, computes, then sends. The control plane is optional.</figcaption><a class="diagram-open" href="../diagrams/f1_connector_contract.svg" target="_blank">Open full size ↗</a></div></figure>
+<p>Read panel 1 as a cycle. The blue calls run on the attention side, the emerald calls on the FFN side.
+The solid arrows are hidden-state tensors (the <a class="term" href="../reference/glossary.html#term-data-plane" data-term="data plane" data-def="The path that carries the hidden-state tensors between the two roles. It is the connector&#x27;s send and receive calls.">data plane</a>). The dashed violet arrow is
+the optional control plane. Panels 2 and 3 show the lifecycle and the three connectors.</p>
+
+<h2 id="in-the-code">In the code<a class="h-anchor" href="#in-the-code" aria-label="Link to this section">#</a></h2>
+
+<h3 id="step-1-one-base-class-three-jobs">Step 1: One base class, three jobs<a class="h-anchor" href="#step-1-one-base-class-three-jobs" aria-label="Link to this section">#</a></h3>
+<p>The base class docstring names the three jobs of every connector (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L37-L54" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:37-54 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:37-54</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L37-L54" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/connectors/base.py:37-54</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L37-L54" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">37</span><span class="ln">38</span><span class="ln">39</span><span class="ln">40</span><span class="ln">41</span><span class="ln">42</span><span class="ln">43</span><span class="ln">44</span><span class="ln">45</span><span class="ln">46</span><span class="ln">47</span><span class="ln">48</span><span class="ln">49</span><span class="ln">50</span><span class="ln">51</span><span class="ln">52</span><span class="ln">53</span><span class="ln">54</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">class AFDConnectorBase(ABC):
+    &quot;&quot;&quot;Base class for plugin-owned AFD Attention/FFN connectors.
+
+    An AFD connector owns the communication contract between the Attention
+    runtime and the FFN runtime. Implementations are responsible for three
+    kinds of work:
+
+    1. Initializing and releasing backend communication resources.
+    2. Moving hidden states between Attention and FFN ranks.
+    3. Applying DP metadata control-plane payloads so later tensor transfers
+       can use backend-specific shapes, buffers, or connector data.
+
+    Implementations may use very different transport mechanisms. For example,
+    the GPU P2P connector uses explicit point-to-point tensor transfers, while
+    the NPU CAMP2P connector carries additional backend state through its
+    ``AFDTransferState`` subclass on ``AFDTransferContext.states``. This base
+    class documents the common runtime contract shared by those implementations.
+    &quot;&quot;&quot;</code></pre></div></div></div><figcaption class="code-caption">The connector base class and its three responsibilities.</figcaption></figure>
+
+<h3 id="step-2-the-lifecycle">Step 2: The lifecycle<a class="h-anchor" href="#step-2-the-lifecycle" aria-label="Link to this section">#</a></h3>
+<p>The owning worker creates the connector, calls <code>init_afd_connector</code> once, uses the data path
+many times, then calls <code>close</code>. <code>is_initialized</code> is true between the two.
+<code>init_afd_connector</code> is a collective call: every attention and FFN rank must run it
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L124" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:124 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:124</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L113-L139" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/connectors/base.py:113-139</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L113-L139" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">113</span><span class="ln hl">114</span><span class="ln">115</span><span class="ln">116</span><span class="ln">117</span><span class="ln">118</span><span class="ln">119</span><span class="ln">120</span><span class="ln">121</span><span class="ln">122</span><span class="ln">123</span><span class="ln">124</span><span class="ln hl">125</span><span class="ln">126</span><span class="ln">127</span><span class="ln">128</span><span class="ln">129</span><span class="ln">130</span><span class="ln">131</span><span class="ln">132</span><span class="ln">133</span><span class="ln">134</span><span class="ln">135</span><span class="ln">136</span><span class="ln hl">137</span><span class="ln">138</span><span class="ln">139</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(1 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(12 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(24 * var(--code-lh))"></span><pre><code class="language-python">    @abstractmethod
+    def close(self) -&gt; None:
+        &quot;&quot;&quot;Release connector-owned communication resources.
+
+        Implementations should destroy process groups, communicators, cached
+        handles, and backend-specific state owned by the connector. The method
+        should be safe to call during worker shutdown and should leave
+        ``is_initialized`` false after successful cleanup.
+        &quot;&quot;&quot;
+        raise NotImplementedError
+
+    @abstractmethod
+    def init_afd_connector(self) -&gt; None:
+        &quot;&quot;&quot;Initialize backend communication resources.
+
+        This method is called once the owning runtime is ready to create AFD
+        communication state. Implementations typically create process groups,
+        register custom ops, initialize backend communicators, and precompute
+        topology-derived rank lists.
+        &quot;&quot;&quot;
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def is_initialized(self) -&gt; bool:
+        &quot;&quot;&quot;Return whether backend communication resources are initialized.&quot;&quot;&quot;
+        raise NotImplementedError</code></pre></div></div></div><figcaption class="code-caption">close, init_afd_connector and is_initialized.</figcaption></figure>
+
+<h3 id="step-3-the-attention-side-calls">Step 3: The attention-side calls<a class="h-anchor" href="#step-3-the-attention-side-calls" aria-label="Link to this section">#</a></h3>
+<aside class="callout callout-warning"><p class="callout-title">The tensor shape must match the metadata</p><div class="callout-body"><p>Before you read the send call: the leading dimension of the hidden-state tensor must equal
+<code>context.metadata.total_tokens</code>. If it does not, the call raises <code>ValueError</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L167-L170" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:167-170 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:167-170</code></a>).</p></div></aside>
+<p>The attention side calls <code>send_attn_output</code> to send its hidden states, then
+<code>recv_ffn_output</code> to get the FFN result back. <code>recv_ffn_output</code> takes a preallocated
+<code>ref_tensor</code>, because the backends cannot always allocate their own output
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L185-L192" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:185-192 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:185-192</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L145-L179" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/connectors/base.py:145-179</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L145-L179" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">145</span><span class="ln hl">146</span><span class="ln">147</span><span class="ln">148</span><span class="ln">149</span><span class="ln">150</span><span class="ln">151</span><span class="ln">152</span><span class="ln">153</span><span class="ln">154</span><span class="ln">155</span><span class="ln">156</span><span class="ln">157</span><span class="ln">158</span><span class="ln">159</span><span class="ln">160</span><span class="ln">161</span><span class="ln">162</span><span class="ln">163</span><span class="ln">164</span><span class="ln">165</span><span class="ln">166</span><span class="ln">167</span><span class="ln">168</span><span class="ln">169</span><span class="ln">170</span><span class="ln">171</span><span class="ln">172</span><span class="ln">173</span><span class="ln hl">174</span><span class="ln">175</span><span class="ln">176</span><span class="ln">177</span><span class="ln">178</span><span class="ln">179</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(1 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(29 * var(--code-lh))"></span><pre><code class="language-python">    @abstractmethod
+    def send_attn_output(
+        self,
+        hidden_states: torch.Tensor,
+        context: AFDTransferContext,
+        **kwargs: Any,
+    ) -&gt; None:
+        &quot;&quot;&quot;Send Attention hidden states to the FFN runtime.
+
+        This method is called on Attention-side ranks after an Attention block
+        produces hidden states for one layer/stage.
+
+        Args:
+            hidden_states: Tensor to send to the FFN side. The leading
+                dimension should match ``context.metadata.total_tokens`` unless
+                the backend explicitly supports a different compiled/captured
+                calling convention.
+            context: Per-transfer context describing layer, stage, and token
+                layout. Backends may also consume ``context.states``.
+            **kwargs: Optional backend-specific arguments.
+
+        Raises:
+            ValueError: If tensor shape does not match metadata.
+            RuntimeError: If the connector is not initialized or required
+                backend-specific metadata is missing.
+        &quot;&quot;&quot;
+        raise NotImplementedError
+
+    @abstractmethod
+    def recv_ffn_output(
+        self,
+        ref_tensor: torch.Tensor,
+        ubatch_idx: int = 0,
+        **kwargs: Any,
+    ) -&gt; torch.Tensor:</code></pre></div></div></div><figcaption class="code-caption">The two attention-side calls (signatures and the start of each docstring).</figcaption></figure>
+<aside class="callout callout-note"><p class="callout-title">The GPU connector uses vLLM&#x27;s NCCL wrapper</p><div class="callout-body"><p>The GPU connector,
+<code>P2pNcclAFDConnector</code>, implements these calls with vLLM's <code>PyNcclCommunicator</code>
+(<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/distributed/device_communicators/pynccl.py#L91" target="_blank" rel="noopener" title="vllm:vllm/distributed/device_communicators/pynccl.py:91 at vLLM ced6857"><code>vllm:vllm/distributed/device_communicators/pynccl.py:91</code></a>), wrapped in custom ops so the transfers
+stay usable under CUDA graph capture (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L36-L39" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:36-39 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:36-39</code></a>). See
+<a href="../code/p2p-py.html">connectors/gpu/p2p.py: the GPU P2P connector</a>.</p></div></aside>
+
+<h3 id="step-4-the-ffn-side-calls">Step 4: The FFN-side calls<a class="h-anchor" href="#step-4-the-ffn-side-calls" aria-label="Link to this section">#</a></h3>
+<p>The FFN side calls <code>recv_attn_output</code> to get the hidden states, runs the FFN compute, then
+calls <code>send_ffn_output</code> to send the result back. <code>recv_attn_output</code> returns both the
+tensor and the transfer context that the matching send needs
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L216-L227" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:216-227 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:216-227</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L206-L235" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/connectors/base.py:206-235</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L206-L235" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">206</span><span class="ln hl">207</span><span class="ln">208</span><span class="ln">209</span><span class="ln">210</span><span class="ln">211</span><span class="ln">212</span><span class="ln">213</span><span class="ln">214</span><span class="ln">215</span><span class="ln">216</span><span class="ln">217</span><span class="ln">218</span><span class="ln">219</span><span class="ln">220</span><span class="ln">221</span><span class="ln">222</span><span class="ln">223</span><span class="ln">224</span><span class="ln">225</span><span class="ln">226</span><span class="ln">227</span><span class="ln">228</span><span class="ln">229</span><span class="ln hl">230</span><span class="ln">231</span><span class="ln">232</span><span class="ln">233</span><span class="ln">234</span><span class="ln">235</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(1 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(24 * var(--code-lh))"></span><pre><code class="language-python">    @abstractmethod
+    def recv_attn_output(
+        self,
+        ubatch_idx: int = 0,
+        **kwargs: Any,
+    ) -&gt; AFDA2FTransferPayload:
+        &quot;&quot;&quot;Receive Attention hidden states on the FFN side.
+
+        This method is called by FFN-side execution before running the FFN
+        compute for a layer/stage. It returns both the hidden states and the
+        metadata needed by later FFN-side calls.
+
+        Args:
+            ubatch_idx: Microbatch/stage index to receive. Defaults to ``0``.
+            **kwargs: Optional backend-specific receive arguments.
+
+        Returns:
+            ``AFDA2FTransferPayload`` containing received hidden states and the
+            transfer context (metadata + backend-produced transfer state)
+            for the receive operation.
+        &quot;&quot;&quot;
+        raise NotImplementedError
+
+    @abstractmethod
+    def send_ffn_output(
+        self,
+        ffn_output: torch.Tensor,
+        context: AFDTransferContext,
+        **kwargs: Any,
+    ) -&gt; None:</code></pre></div></div></div><figcaption class="code-caption">The two FFN-side calls.</figcaption></figure>
+
+<h3 id="step-5-the-optional-control-plane">Step 5: The optional control plane<a class="h-anchor" href="#step-5-the-optional-control-plane" aria-label="Link to this section">#</a></h3>
+<p>The base class holds an optional <code>control_plane</code> attribute. When it is set, the per-stage token
+counts travel over the control plane, and the arrival of a payload drives each FFN step. When it is
+<code>None</code>, the connector has no control plane and the receive loop drives the FFN side
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L56-L60" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:56-60 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:56-60</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L56-L60" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/connectors/base.py:56-60</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L56-L60" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">56</span><span class="ln">57</span><span class="ln">58</span><span class="ln">59</span><span class="ln hl">60</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(4 * var(--code-lh))"></span><pre><code class="language-python">    # An optional DP metadata control plane. When set, FFN steps are driven by
+    # DP metadata received over the control plane. When ``None``, the connector
+    # has no control plane and FFN steps are driven directly by the connector
+    # receive loop.
+    control_plane: AFDControlPlane | None = None</code></pre></div></div></div><figcaption class="code-caption">The optional control-plane attribute.</figcaption></figure>
+<p>A control plane is itself an abstract class, <code>AFDControlPlane</code>, with three calls: apply a
+payload locally, send a payload, and receive one (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L258" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:258 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:258</code></a>). The
+<a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a> page covers it.</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L258-L266" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/connectors/base.py:258-266</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L258-L266" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln hl">258</span><span class="ln">259</span><span class="ln">260</span><span class="ln">261</span><span class="ln hl">262</span><span class="ln">263</span><span class="ln">264</span><span class="ln">265</span><span class="ln">266</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(0 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(4 * var(--code-lh))"></span><pre><code class="language-python">class AFDControlPlane(ABC):
+    &quot;&quot;&quot;DP metadata control plane&quot;&quot;&quot;
+
+    @abstractmethod
+    def update_state_from_dp_metadata(
+        self,
+        payload: AFDControlPayload,
+    ) -&gt; None:
+        &quot;&quot;&quot;Apply a DP metadata payload to local connector state.</code></pre></div></div></div><figcaption class="code-caption">The control-plane base class and its first call.</figcaption></figure>
+
+<h3 id="step-6-the-config-hook">Step 6: The config hook<a class="h-anchor" href="#step-6-the-config-hook" aria-label="Link to this section">#</a></h3>
+<p>Each connector parses its own options through <code>parse_extra_config</code>, a class method on the base
+class (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L64-L72" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:64-72 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:64-72</code></a>). The base <code>__init__</code> calls it and stores the
+result on <code>extra_info</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L105-L107" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:105-107 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:105-107</code></a>). The raw values come from
+<code>connector_extra_config</code> inside the AFD config
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L282-L286" target="_blank" rel="noopener" title="afd_plugin/config.py:282-286 at afd-plugin 7452d52">connector_extra_config_from_source</a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L64-L72" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/connectors/base.py:64-72</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L64-L72" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">64</span><span class="ln">65</span><span class="ln hl">66</span><span class="ln">67</span><span class="ln">68</span><span class="ln">69</span><span class="ln">70</span><span class="ln">71</span><span class="ln">72</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><pre><code class="language-python">    @classmethod
+    @abstractmethod
+    def parse_extra_config(
+        cls,
+        raw: Mapping[str, Any] | None,
+    ) -&gt; ConnectorExtraInfo:
+        &quot;&quot;&quot;Parse connector-owned config using this connector&#x27;s schema.&quot;&quot;&quot;
+
+        raise NotImplementedError</code></pre></div></div></div><figcaption class="code-caption">The per-connector config hook.</figcaption></figure>
+
+<h3 id="step-7-the-factory">Step 7: The factory<a class="h-anchor" href="#step-7-the-factory" aria-label="Link to this section">#</a></h3>
+<p>The factory maps a connector name to a class and builds the instance. <code>create_connector</code> reads
+the name from the AFD config, resolves the <a class="term" href="../reference/glossary.html#term-role-rank" data-term="role rank" data-def="The rank of a process inside its own role group. It comes from the DP, PCP and TP placement.">role rank</a>, and constructs the connector
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L49-L68" target="_blank" rel="noopener" title="afd_plugin/connectors/factory.py:49-68 at afd-plugin 7452d52"><code>afd_plugin/connectors/factory.py:49-68</code></a>). An unknown name raises
+<code>ValueError</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L58-L59" target="_blank" rel="noopener" title="afd_plugin/connectors/factory.py:58-59 at afd-plugin 7452d52"><code>afd_plugin/connectors/factory.py:58-59</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L49-L68" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/connectors/factory.py:49-68</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L49-L68" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">49</span><span class="ln">50</span><span class="ln">51</span><span class="ln">52</span><span class="ln">53</span><span class="ln">54</span><span class="ln">55</span><span class="ln">56</span><span class="ln hl">57</span><span class="ln hl">58</span><span class="ln">59</span><span class="ln hl">60</span><span class="ln hl">61</span><span class="ln">62</span><span class="ln">63</span><span class="ln">64</span><span class="ln">65</span><span class="ln">66</span><span class="ln">67</span><span class="ln">68</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(8 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(9 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(11 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(12 * var(--code-lh))"></span><pre><code class="language-python">    @classmethod
+    def create_connector(
+        cls,
+        rank: int,
+        local_rank: int,
+        vllm_config: VllmConfig,
+        afd_config: AFDConfig | None = None,
+    ) -&gt; AFDConnectorBase:
+        config = afd_config or parse_afd_config(vllm_config)
+        if config.connector not in cls._registry:
+            raise ValueError(f&quot;unsupported AFD connector type: {config.connector}&quot;)
+        connector_cls = cls._registry[config.connector]()
+        role_rank = resolve_role_rank(vllm_config, config)
+        return connector_cls(
+            rank,
+            local_rank,
+            vllm_config,
+            config,
+            role_rank,
+        )</code></pre></div></div></div><figcaption class="code-caption">create_connector: name to instance.</figcaption></figure>
+<p>Three connectors are registered at import time (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L88-L102" target="_blank" rel="noopener" title="afd_plugin/connectors/factory.py:88-102 at afd-plugin 7452d52"><code>afd_plugin/connectors/factory.py:88-102</code></a>). The
+default name is <code>"P2pNcclAFDConnector"</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L52" target="_blank" rel="noopener" title="afd_plugin/config.py:52 at afd-plugin 7452d52"><code>afd_plugin/config.py:52</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L88-L102" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/connectors/factory.py:88-102</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L88-L102" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">88</span><span class="ln">89</span><span class="ln">90</span><span class="ln">91</span><span class="ln">92</span><span class="ln">93</span><span class="ln">94</span><span class="ln">95</span><span class="ln">96</span><span class="ln">97</span><span class="ln">98</span><span class="ln">99</span><span class="ln">100</span><span class="ln">101</span><span class="ln">102</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">AFDConnectorFactory.register_connector(
+    &quot;P2pNcclAFDConnector&quot;,
+    &quot;afd_plugin.connectors.gpu.p2p&quot;,
+    &quot;P2pNcclAFDConnector&quot;,
+)
+AFDConnectorFactory.register_connector(
+    &quot;CAMP2pAFDConnector&quot;,
+    &quot;afd_plugin.connectors.npu.camp2p&quot;,
+    &quot;CAMP2pAFDConnector&quot;,
+)
+AFDConnectorFactory.register_connector(
+    &quot;CAMAsyncAFDConnector&quot;,
+    &quot;afd_plugin.connectors.npu.async_cam&quot;,
+    &quot;CAMAsyncAFDConnector&quot;,
+)</code></pre></div></div></div><figcaption class="code-caption">The three registered connectors.</figcaption></figure>
+
+<h2 id="deep-dive">Deep dive<a class="h-anchor" href="#deep-dive" aria-label="Link to this section">#</a></h2>
+<p>The blocks below give the full call order, a worked example with real shapes, and the differences between
+the three connectors.</p>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-full-call-order-side-by-side" class="dd-title">The full call order, side by side</h3></summary><div class="dd-body"><p>The control plane runs once per step, before the layer loop. The data path then runs once per layer and
+<a class="term" href="../reference/glossary.html#term-stage" data-term="stage" data-def="The DBO ubatch index of one transfer on the wire. A connector sends one transfer per layer and stage.">stage</a>. The data-plane calls are in bold.</p>
+<p><strong>Once per step (control plane, when the connector has one):</strong> the attention runner applies
+the DP metadata locally, then sends it to the FFN side
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_metadata.py#L115-L116" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_metadata.py:115-116 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_metadata.py:115-116</code></a>). Each FFN step waits for the payload, then
+applies it (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L176" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:176 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:176</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L194-L197" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:194-197 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:194-197</code></a>).</p>
+<p><strong>Then, for each layer and stage:</strong></p>
+<ol>
+  <li><strong>Attention side:</strong> the model produces hidden states for the layer.</li>
+  <li><strong>Attention side:</strong> <code>send_attn_output(hidden_states, context)</code> from the model
+      proxy (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L146" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:146 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:146</code></a>).</li>
+  <li><strong>FFN side:</strong> <code>recv_attn_output(ubatch_idx)</code> returns the hidden states and the
+      context (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L236" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:236 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:236</code></a>).</li>
+  <li><strong>FFN side:</strong> runs the FFN and MoE compute (not in the connector).</li>
+  <li><strong>FFN side:</strong> <code>send_ffn_output(ffn_output, context)</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L268" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:268 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:268</code></a>).</li>
+  <li><strong>Attention side:</strong> <code>recv_ffn_output(ref_tensor, ubatch_idx)</code> returns the
+      result, which continues through the rest of the layer
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L155" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:155 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:155</code></a>).</li>
+</ol>
+<p>The <a class="term" href="../reference/glossary.html#term-stage" data-term="stage" data-def="The DBO ubatch index of one transfer on the wire. A connector sends one transfer per layer and stage.">stage</a> is the <a class="term" href="../reference/glossary.html#term-dbo" data-term="DBO" data-def="Dual-batch overlap. The step is split into two microbatches so compute and communication overlap. AFD uses exactly two.">DBO</a> ubatch index. With DBO the connector runs two stages per
+layer. See <a href="../concepts/dbo.html">Dual-batch overlap (DBO): two stages per step</a>.</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="worked-example-hidden-state-shapes-for-deepseek-v2-lite-2a2f" class="dd-title">Worked example: hidden-state shapes for DeepSeek-V2-Lite, 2A2F</h3></summary><div class="dd-body"><p>Take a 2A2F topology: two attention ranks (A0, A1) and two FFN ranks (F0, F1). Each FFN rank owns one
+attention peer, so A0 maps to F0 and A1 maps to F1 (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L11-L20" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:11-20 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:11-20</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed/topology.py#L135-L136" target="_blank" rel="noopener" title="afd_plugin/distributed/topology.py:135-136 at afd-plugin 7452d52"><code>afd_plugin/distributed/topology.py:135-136</code></a>).</p>
+<p>The hidden size comes from the model config, <code>hf_text_config.hidden_size</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L195-L197" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:195-197 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:195-197</code></a>). For DeepSeek-V2-Lite this is <strong>2048</strong>.
+This value is <em>inferred</em> from the DeepSeek-V2-Lite checkpoint config; it is not stored in either
+repository.</p>
+<p>Take one decode step with 8 tokens on A0. The numbers:</p>
+<ul>
+  <li><strong>Tensor:</strong> <code>hidden_states</code> of shape <code>[8, 2048]</code>, in the model
+      dtype (bf16, inferred from the recipe).</li>
+  <li><strong>Metadata:</strong> <code>seq_lens = [8]</code>, so <code>total_tokens = 8</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L198-L200" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:198-200 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:198-200</code></a>). The send call checks
+      <code>shape[0] == 8</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L230-L231" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:230-231 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:230-231</code></a>).</li>
+  <li><strong>On the wire (A0 to F0):</strong> one tensor of <code>8 × 2048 × 2 bytes = 32,768 bytes</code>
+      per layer, per direction.</li>
+  <li><strong>FFN side:</strong> F0 receives <code>[8, 2048]</code>, runs the FFN, and sends back
+      <code>[8, 2048]</code>. A0 gets it through <code>recv_ffn_output</code>.</li>
+</ul>
+<p>When one FFN rank owns more than one attention peer, it concatenates the inputs. For 2A1F with 8 tokens
+each, F0 would receive two tensors, concatenate them to <code>[16, 2048]</code>, and split the output back by
+the recorded sequence lengths (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L21-L25" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:21-25 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:21-25</code></a>).</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-three-connectors-compared" class="dd-title">The three connectors, compared</h3></summary><div class="dd-body"><p>The factory registers three connectors (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L88-L102" target="_blank" rel="noopener" title="afd_plugin/connectors/factory.py:88-102 at afd-plugin 7452d52"><code>afd_plugin/connectors/factory.py:88-102</code></a>). They differ by
+device, by send/receive timing, and by whether they use a control plane.</p>
+<table>
+  <thead>
+    <tr><th>Connector</th><th>Device</th><th>Timing</th><th>Control plane</th><th>Transport</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>P2pNcclAFDConnector</code></td>
+      <td>GPU (CUDA)</td>
+      <td>sync</td>
+      <td>yes (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L222" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:222 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:222</code></a>)</td>
+      <td><a class="term" href="../reference/glossary.html#term-pynccl" data-term="PyNccl" data-def="vLLM&#x27;s thin NCCL wrapper, PyNcclCommunicator. The GPU P2P connector uses it to send and receive tensors.">PyNcclCommunicator</a> point-to-point</td>
+    </tr>
+    <tr>
+      <td><code>CAMP2pAFDConnector</code></td>
+      <td>NPU (Ascend)</td>
+      <td>sync (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/camp2p.py#L3-L8" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/camp2p.py:3-8 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/camp2p.py:3-8</code></a>)</td>
+      <td>yes (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/camp2p.py#L385" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/camp2p.py:385 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/camp2p.py:385</code></a>)</td>
+      <td><a class="term" href="../reference/glossary.html#term-cam" data-term="CAM" data-def="The Ascend NPU communication operators used by the NPU connectors. One connector is synchronous, the other asynchronous.">CAM</a> P2P operators, HCCL + Gloo</td>
+    </tr>
+    <tr>
+      <td><code>CAMAsyncAFDConnector</code></td>
+      <td>NPU (Ascend)</td>
+      <td>async</td>
+      <td>none (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L283" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:283 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:283</code></a>)</td>
+      <td>CAM dispatch/combine operators</td>
+    </tr>
+  </tbody>
+</table>
+<p>The config hook also differs. The GPU connector accepts no options, so it rejects a non-empty
+<code>connector_extra_config</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L150-L157" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:150-157 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:150-157</code></a>). The async NPU
+connector parses typed fields and rejects unknown ones
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L286-L291" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:286-291 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:286-291</code></a>). The NPU connectors are covered on the
+<a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a> page.</p></div></details>
+
+<h2 id="what-can-go-wrong">What can go wrong<a class="h-anchor" href="#what-can-go-wrong" aria-label="Link to this section">#</a></h2>
+<aside class="callout callout-simplified"><p class="callout-title">Simplified</p><div class="callout-body"><p>This page shows the contract, not a full transport. It leaves out the per-peer split and
+concatenation, the custom-op wrapping and the rank mapping. The <a href="../concepts/wire-data.html">Data on the wire: tensors per layer and stage</a> and
+<a href="../code/p2p-py.html">connectors/gpu/p2p.py: the GPU P2P connector</a> pages give those.</p></div></aside>
+<ul>
+  <li><strong>Shape mismatch.</strong> A hidden-state tensor whose leading dimension is not
+      <code>total_tokens</code> raises <code>ValueError</code> in the send call (skipped while
+      <code>torch.compile</code> traces) (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L347-L353" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:347-353 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:347-353</code></a>).</li>
+  <li><strong>Unknown connector name.</strong> A name that is not registered raises <code>ValueError</code>
+      in the factory (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L58-L59" target="_blank" rel="noopener" title="afd_plugin/connectors/factory.py:58-59 at afd-plugin 7452d52"><code>afd_plugin/connectors/factory.py:58-59</code></a>).</li>
+  <li><strong>Options for a connector that takes none.</strong> A non-empty
+      <code>connector_extra_config</code> for the GPU connector raises <code>ValueError</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L154-L157" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:154-157 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:154-157</code></a>).</li>
+  <li><strong>Wrong device.</strong> The GPU connector needs CUDA and NCCL. It has no automatic fallback to
+      another transport on NPU (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L46-L48" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:46-48 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:46-48</code></a>).</li>
+</ul>
+<p><strong>Why it matters.</strong> The two roles must agree on the contract, the shapes and the connector
+name, or the collective setup fails or the first transfer raises.</p>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>Which two calls does the attention side make, and in which order?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>First <code>send_attn_output</code>, then <code>recv_ffn_output</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L145" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:145 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:145</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L173" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:173 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:173</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>Which connector is the default?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p><code>P2pNcclAFDConnector</code>, the GPU connector. The default is set in the AFD config
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L52" target="_blank" rel="noopener" title="afd_plugin/config.py:52 at afd-plugin 7452d52"><code>afd_plugin/config.py:52</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>One connector sets <code>control_plane = None</code>. Which one, and what drives its FFN
+    steps then?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The async NPU connector, <code>CAMAsyncAFDConnector</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L283" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:283 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:283</code></a>). With no control plane, the connector receive
+      loop drives the FFN side (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L56-L60" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:56-60 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:56-60</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>Why does <code>recv_ffn_output</code> take a preallocated <code>ref_tensor</code>?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The backends cannot always allocate their own output tensor. The P2P connector also uses it as a
+      stable buffer for CUDA graph capture (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L185-L192" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:185-192 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:185-192</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>On DeepSeek-V2-Lite with 8 decode tokens, what tensor shape does the attention side send,
+    and which value checks it?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Shape <code>[8, 2048]</code>: 8 tokens by the hidden size 2048 (the 2048 is inferred from the
+      checkpoint). The metadata <code>total_tokens</code> is 8, and the send checks
+      <code>shape[0] == total_tokens</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L198-L200" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:198-200 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:198-200</code></a>,
+      <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L230-L231" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:230-231 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:230-231</code></a>).</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a><span class="rel-sum">Before each layer loop, the attention side sends per-stage token counts to the FFN side. This page shows what the control plane carries, both publish paths, the wire format and the receive side.</span></li><li><a href="../concepts/wire-data.html">Data on the wire: tensors per layer and stage</a><span class="rel-sum">The data plane moves hidden states between the two roles once per layer and stage. This page shows the tensors that cross, the transfer metadata, the fan-in and split, and the custom ops.</span></li><li><a href="../code/connectors-core.html">connectors/base.py, factory.py, metadata.py: the connector core</a><span class="rel-sum">Three files hold the connector contract, the factory and the shared metadata objects. This page maps the files and reads the metadata objects and the factory loader.</span></li><li><a href="../code/p2p-py.html">connectors/gpu/p2p.py: the GPU P2P connector</a><span class="rel-sum">The GPU connector moves hidden states with vLLM&#x27;s NCCL wrapper. This page maps the class layout, the collective init, the four data calls, the control plane and the custom ops.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../concepts/topology.html"><span class="pn-dir">← Previous</span><span class="pn-title">Topology and role ranks: the AFD world</span></a><a class="pn pn-next" href="../concepts/control-plane.html"><span class="pn-dir">Next →</span><span class="pn-title">The control plane: DP metadata once per step</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#in-the-code">In the code</a></li><li class="toc-l3"><a href="#step-1-one-base-class-three-jobs">Step 1: One base class, three jobs</a></li><li class="toc-l3"><a href="#step-2-the-lifecycle">Step 2: The lifecycle</a></li><li class="toc-l3"><a href="#step-3-the-attention-side-calls">Step 3: The attention-side calls</a></li><li class="toc-l3"><a href="#step-4-the-ffn-side-calls">Step 4: The FFN-side calls</a></li><li class="toc-l3"><a href="#step-5-the-optional-control-plane">Step 5: The optional control plane</a></li><li class="toc-l3"><a href="#step-6-the-config-hook">Step 6: The config hook</a></li><li class="toc-l3"><a href="#step-7-the-factory">Step 7: The factory</a></li><li class="toc-l2"><a href="#deep-dive">Deep dive</a></li><li class="toc-l3"><a href="#the-full-call-order-side-by-side">The full call order, side by side</a></li><li class="toc-l3"><a href="#worked-example-hidden-state-shapes-for-deepseek-v2-lite-2a2f">Worked example: hidden-state shapes for DeepSeek-V2-Lite, 2A2F</a></li><li class="toc-l3"><a href="#the-three-connectors-compared">The three connectors, compared</a></li><li class="toc-l2"><a href="#what-can-go-wrong">What can go wrong</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

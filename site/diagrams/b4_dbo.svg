@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="592" viewBox="0 0 1100 592">
+<defs><marker id="m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker></defs>
+<rect width="1100" height="592" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Dual-batch overlap (DBO)</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">One step is split into exactly two stages. While stage 0 waits on the FFN side, stage 1 computes attention.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">dbo.py  ·  deepseek_v2.py  ·  gpu_mrv2_ubatching.py  ·  canvas 1100</text>
+<rect x="20.0" y="124.0" width="1060.0" height="226.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="150.0" r="13" fill="#111827"/>
+<text x="46.0" y="154.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="155.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Two stages overlap on one layer</text>
+<text x="68.0" y="174.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The proxy sends stage 0, yields, then stage 1 runs; the FFN side answers each stage (deepseek_v2.py:146-158).</text>
+<text x="46.0" y="194.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">attention</text>
+<rect x="46.0" y="200.0" width="150.0" height="40.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="58.0" y="220.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">attn s0</text>
+<text x="58.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">compute</text>
+<rect x="206.0" y="200.0" width="120.0" height="40.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="218.0" y="220.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">send s0</text>
+<text x="218.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">:146</text>
+<rect x="336.0" y="200.0" width="150.0" height="40.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="348.0" y="220.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">attn s1</text>
+<text x="348.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">while s0 waits</text>
+<rect x="496.0" y="200.0" width="120.0" height="40.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="508.0" y="220.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">send s1</text>
+<text x="508.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">:146</text>
+<rect x="626.0" y="200.0" width="130.0" height="40.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="638.0" y="220.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">recv s0</text>
+<text x="638.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">:155</text>
+<rect x="766.0" y="200.0" width="130.0" height="40.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="778.0" y="220.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">recv s1</text>
+<text x="778.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">:155</text>
+<text x="326.0" y="264.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#7c3aed" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">DBO yield between send and recv (dbo.py)</text>
+<line x1="266.0" y1="240.0" x2="266.0" y2="252.0" stroke="#7c3aed" stroke-width="1.4" stroke-dasharray="3 3"/>
+<text x="46.0" y="286.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN</text>
+<rect x="206.0" y="292.0" width="150.0" height="40.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="218.0" y="312.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">ffn s0</text>
+<text x="218.0" y="326.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">recv/compute/send</text>
+<rect x="496.0" y="292.0" width="150.0" height="40.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="508.0" y="312.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">ffn s1</text>
+<text x="508.0" y="326.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">recv/compute/send</text>
+<line x1="266.0" y1="240.0" x2="266.0" y2="290.0" stroke="#059669" stroke-width="1.6" marker-end="url(#m0)"/>
+<line x1="556.0" y1="240.0" x2="556.0" y2="290.0" stroke="#059669" stroke-width="1.6" marker-end="url(#m0)"/>
+<line x1="356.0" y1="312.0" x2="686.0" y2="242.0" stroke="#059669" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#m0)"/>
+<rect x="20.0" y="370.0" width="1060.0" height="120.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="396.0" r="13" fill="#111827"/>
+<text x="46.0" y="400.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="401.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">DP1 DBO: scoped patches re-enable what native vLLM excludes</text>
+<text x="68.0" y="420.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Native vLLM builds no ubatch runner at DP1. The patch does, only inside AFD&#x27;s own calls (gpu_mrv2_ubatching.py).</text>
+<rect x="46.0" y="436.0" width="480.0" height="40.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="58.0" y="456.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">use_gpu_mrv2_ubatch_factory</text>
+<text x="58.0" y="470.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">scoped in initialize_kv_cache  (:263-271, :480)</text>
+<rect x="560.0" y="436.0" width="494.0" height="40.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="572.0" y="456.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">use_gpu_mrv2_dbo_dispatch</text>
+<text x="572.0" y="470.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">scoped in execute_model context  (:274-282, :342)</text>
+<text x="30.0" y="519.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="508.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="519.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention stage</text>
+<rect x="234.2" y="508.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="255.2" y="519.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN stage</text>
+<rect x="339.7" y="508.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="360.7" y="519.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">DBO yield / scoped patch</text>
+<text x="30.0" y="542.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Exactly two stages: enable_dbo sets num_ubatches = 2; the validator rejects any other count (validation.py:126-131).</text>
+<text x="30.0" y="560.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Times here are illustrative, not measured. Thresholds (--dbo-decode-token-threshold / --dbo-prefill-token-threshold) decide when a step splits.</text>
+</svg>

@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="808" viewBox="0 0 1100 808">
+<defs><marker id="m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker><marker id="m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker><marker id="m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker><marker id="m3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#111827"/></marker></defs>
+<rect width="1100" height="808" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">The AFD connector contract</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">One base class. The attention side and the FFN side each make two data-path calls.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_plugin/connectors/base.py  ·  factory.py  ·  canvas 1100</text>
+<rect x="20.0" y="120.0" width="1060.0" height="250.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="146.0" r="13" fill="#111827"/>
+<text x="46.0" y="150.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="151.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Who calls what, in which order?</text>
+<text x="68.0" y="170.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The attention side sends then receives; the FFN side receives, computes, then sends.</text>
+<rect x="70.0" y="184.0" width="300.0" height="66.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="220.0" y="204.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">send_attn_output</text>
+<text x="220.0" y="222.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">attention side</text>
+<text x="220.0" y="237.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">base.py:145</text>
+<rect x="640.0" y="184.0" width="300.0" height="66.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="790.0" y="204.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">recv_ffn_output</text>
+<text x="790.0" y="222.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">attention side</text>
+<text x="790.0" y="237.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">base.py:173</text>
+<rect x="70.0" y="302.0" width="300.0" height="66.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="220.0" y="322.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">recv_attn_output</text>
+<text x="220.0" y="340.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">FFN side</text>
+<text x="220.0" y="355.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">base.py:206</text>
+<rect x="640.0" y="302.0" width="300.0" height="66.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="790.0" y="322.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">send_ffn_output</text>
+<text x="790.0" y="340.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">FFN side</text>
+<text x="790.0" y="355.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">base.py:229</text>
+<line x1="240.0" y1="250.0" x2="240.0" y2="300.0" stroke="#2563eb" stroke-width="1.6" marker-end="url(#m0)"/>
+<text x="250.0" y="279.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">hidden states</text>
+<line x1="175.0" y1="250.0" x2="175.0" y2="300.0" stroke="#7c3aed" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#m1)"/>
+<text x="80.0" y="269.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">control plane</text>
+<text x="80.0" y="284.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#7c3aed" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">(optional)</text>
+<line x1="370.0" y1="335.0" x2="638.0" y2="335.0" stroke="#059669" stroke-width="1.6" marker-end="url(#m2)"/>
+<text x="505.0" y="325.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">FFN compute</text>
+<line x1="790.0" y1="302.0" x2="790.0" y2="252.0" stroke="#059669" stroke-width="1.6" marker-end="url(#m2)"/>
+<text x="800.0" y="279.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN output</text>
+<rect x="20.0" y="392.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="418.0" r="13" fill="#111827"/>
+<text x="46.0" y="422.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="423.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">What is the lifecycle?</text>
+<text x="68.0" y="442.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The runtime initializes the connector once, uses the data path many times, then closes it.</text>
+<rect x="70.0" y="454.0" width="300.0" height="60.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="220.0" y="474.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">init_afd_connector</text>
+<text x="220.0" y="492.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">collective, once</text>
+<text x="220.0" y="507.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">base.py:124</text>
+<rect x="400.0" y="454.0" width="300.0" height="60.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="550.0" y="474.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">data path (per layer/stage)</text>
+<text x="550.0" y="492.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">send / recv calls</text>
+<text x="550.0" y="507.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">many times</text>
+<rect x="730.0" y="454.0" width="300.0" height="60.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="880.0" y="474.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">close</text>
+<text x="880.0" y="492.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">release resources</text>
+<text x="880.0" y="507.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">base.py:113</text>
+<line x1="370.0" y1="484.0" x2="398.0" y2="484.0" stroke="#111827" stroke-width="1.6" marker-end="url(#m3)"/>
+<line x1="700.0" y1="484.0" x2="728.0" y2="484.0" stroke="#111827" stroke-width="1.6" marker-end="url(#m3)"/>
+<text x="550.0" y="532.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#6b7280" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">is_initialized is true between init and close (base.py:135)</text>
+<rect x="20.0" y="564.0" width="1060.0" height="140.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="590.0" r="13" fill="#111827"/>
+<text x="46.0" y="594.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="68.0" y="595.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Which connector for which device?</text>
+<text x="68.0" y="614.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The factory registers three connectors by name (factory.py:88).</text>
+<rect x="40.0" y="624.0" width="328.0" height="58.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="204.0" y="644.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">P2pNcclAFDConnector</text>
+<text x="204.0" y="662.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">GPU (CUDA) · sync</text>
+<text x="204.0" y="676.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">control plane: yes</text>
+<rect x="386.0" y="624.0" width="328.0" height="58.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="550.0" y="644.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">CAMP2pAFDConnector</text>
+<text x="550.0" y="662.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">NPU (Ascend) · sync</text>
+<text x="550.0" y="676.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">control plane: yes</text>
+<rect x="732.0" y="624.0" width="328.0" height="58.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="896.0" y="644.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">CAMAsyncAFDConnector</text>
+<text x="896.0" y="662.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">NPU (Ascend) · async</text>
+<text x="896.0" y="676.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">control plane: none</text>
+<text x="30.0" y="733.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="722.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="733.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention side</text>
+<rect x="225.1" y="722.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="246.1" y="733.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN side</text>
+<rect x="321.4" y="722.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="342.4" y="733.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">control plane (DP metadata)</text>
+<text x="30.0" y="758.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Simplified: the data path repeats for every layer and every DBO stage; the diagram shows one pass.</text>
+<text x="30.0" y="776.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The attention side&#x27;s recv_ffn_output and the FFN side&#x27;s recv_attn_output both take a stage index.</text>
+</svg>

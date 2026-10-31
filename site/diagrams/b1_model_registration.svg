@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="718" viewBox="0 0 1100 718">
+<defs><marker id="m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/></marker></defs>
+<rect width="1100" height="718" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Registering AFD model wrappers</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Each base architecture name is registered as AFD&lt;arch&gt;, as a lazy string, then swapped in at build time.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_plugin/__init__.py:96-214  ·  model_utils.py:16-46</text>
+<rect x="20.0" y="118.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="144.0" r="13" fill="#111827"/>
+<text x="46.0" y="148.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="149.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">At plugin load: register each AFD&lt;arch&gt; name</text>
+<text x="68.0" y="168.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The value is a &#x27;module:Class&#x27; string, so vLLM imports the class only when it is needed.</text>
+<rect x="60.0" y="188.0" width="430.0" height="60.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="72.0" y="208.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">_MODEL_REGISTRATIONS</text>
+<text x="72.0" y="226.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">arch -&gt; &quot;module:Class&quot;</text>
+<line x1="494.0" y1="218.0" x2="598.0" y2="218.0" stroke="#6b7280" stroke-width="2" marker-end="url(#m0)"/>
+<text x="546.0" y="208.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#6b7280" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">AFD + arch</text>
+<rect x="600.0" y="188.0" width="440.0" height="60.0" rx="8" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.5"/>
+<text x="612.0" y="208.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#0d9488" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">ModelRegistry.register_model</text>
+<text x="612.0" y="226.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">(&quot;AFD&quot;+arch, lazy string)</text>
+<rect x="20.0" y="288.0" width="1060.0" height="160.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="314.0" r="13" fill="#111827"/>
+<text x="46.0" y="318.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="319.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">At build time: find and swap the model identity</text>
+<text x="68.0" y="338.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The worker asks model_utils whether the model is AFD, then rewrites the architecture name.</text>
+<rect x="60.0" y="358.0" width="470.0" height="72.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="72.0" y="378.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">has_afd_model_registration</text>
+<text x="72.0" y="396.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">arch.removeprefix(&quot;AFD&quot;) in the map</text>
+<rect x="560.0" y="358.0" width="480.0" height="72.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="572.0" y="378.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">get_afd_model_config</text>
+<text x="572.0" y="396.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">deepcopy, architectures = [&quot;AFD&quot;+arch]</text>
+<text x="572.0" y="411.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">keeps hf_text_config is hf_config</text>
+<rect x="20.0" y="468.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="494.0" r="13" fill="#111827"/>
+<text x="46.0" y="498.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="68.0" y="499.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Three mappings to remember</text>
+<text x="68.0" y="518.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The README names families loosely; the code registers these exact strings.</text>
+<rect x="50.0" y="538.0" width="320.0" height="64.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="62.0" y="558.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">DeepseekV32ForCausalLM</text>
+<text x="62.0" y="576.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">-&gt; AFDDeepseekV3</text>
+<text x="62.0" y="591.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">reuses the V3 class</text>
+<rect x="390.0" y="538.0" width="320.0" height="64.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="402.0" y="558.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">DeepseekV4ForCausalLM</text>
+<text x="402.0" y="576.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">-&gt; NPU or GPU class</text>
+<text x="402.0" y="591.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">chosen by torch_npu</text>
+<rect x="730.0" y="538.0" width="320.0" height="64.0" rx="8" fill="#fdf2f8" fill-opacity="1.0" stroke="#db2777" stroke-width="1.5"/>
+<text x="742.0" y="558.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#db2777" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Qwen3_5MoeFor...Generation</text>
+<text x="742.0" y="576.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">-&gt; AFDQwen3_5...</text>
+<text x="742.0" y="591.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">CUDA execution only</text>
+<text x="30.0" y="647.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="636.0" width="14.0" height="14.0" rx="3" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<text x="118.3" y="647.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">map / base arch</text>
+<rect x="235.3" y="636.0" width="14.0" height="14.0" rx="3" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.4"/>
+<text x="256.3" y="647.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">register</text>
+<rect x="330.4" y="636.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="351.4" y="647.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">detect</text>
+<rect x="415.6" y="636.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="436.6" y="647.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">rewrite identity</text>
+<rect x="557.1" y="636.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="578.1" y="647.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">NPU</text>
+<rect x="627.2" y="636.0" width="14.0" height="14.0" rx="3" fill="#fdf2f8" fill-opacity="1.0" stroke="#db2777" stroke-width="1.4"/>
+<text x="648.2" y="647.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">CUDA only</text>
+<text x="30.0" y="670.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">deepcopy keeps aliasing, so hf_text_config is hf_config stays true; vLLM Ascend uses that identity to tell text models from multimodal (model_utils.py:39-43).</text>
+<text x="30.0" y="688.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">get_afd_model_config raises for Qwen3.5/3.6 when device_type is not cuda (model_utils.py:34-38).</text>
+</svg>

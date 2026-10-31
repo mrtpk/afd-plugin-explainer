@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CUDA graphs in AFD: FULL_DECODE_ONLY on both roles · AFD Plugin Explained</title>
+<meta name="description" content="AFD supports one CUDA graph mode, FULL_DECODE_ONLY. The attention side wraps native capture and replay to publish control; the FFN side keeps its own graph per token shape.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="concepts/cuda-graphs">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a class="current" aria-current="page" href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>AFD concepts</span><span class="sep">›</span><span>Execution</span><span class="sep">›</span><span aria-current="page">CUDA graphs</span></nav>
+<h1 class="page-title">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</h1>
+<div class="page-meta"><span class="level level-advanced" title="Level">Advanced</span><span class="meta-sec">AFD concepts</span><span class="meta-time">about 6 min read + 4 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../concepts/attention-runtime.html">The attention runtime: a seam over Model Runner V2</a> <span class="level level-advanced level-sm">Advanced</span></li><li><a href="../concepts/ffn-runtime.html">The FFN runtime: a connector-driven server loop</a> <span class="level level-advanced level-sm">Advanced</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">AFD runs CUDA graphs in one mode only, <a class="term" href="../reference/glossary.html#term-full-decode-only" data-term="FULL_DECODE_ONLY" data-def="The only CUDA graph mode that AFD supports on GPU. Graphs capture decode steps only; other batches run eager.">FULL_DECODE_ONLY</a>. Each role captures and replays its own graphs, and the two sides must agree on token shapes.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p>A CUDA graph records a fixed sequence of GPU work once, then replays it with almost no CPU cost. AFD splits
+one model across two processes, so each role records its own graph. The attention side and the FFN side capture
+and replay separately. They share nothing but the tensors that cross the <a class="term" href="../reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">connector</a>.</p>
+<p>AFD allows one graph mode: <a class="term" href="../reference/glossary.html#term-full-decode-only" data-term="FULL_DECODE_ONLY" data-def="The only CUDA graph mode that AFD supports on GPU. Graphs capture decode steps only; other batches run eager.">FULL_DECODE_ONLY</a>. In this mode the graph covers
+pure-decode steps, where every request adds one token. Prefill and mixed batches run eager (no graph). This is
+set in one small policy module (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L20-L21" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:20-21 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:20-21</code></a>).</p>
+<p><strong>An everyday comparison.</strong> Think of a stage play with two actors in separate rooms, linked by
+a hatch. Each actor rehearses their own lines until they are automatic (capture), then performs them fast
+(replay). The comparison stops here: the two actors must hand the exact same size of parcel through the hatch
+every time, or the fast performance breaks.</p>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<figure class="diagram" id="fig-b4_cuda_graphs"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Two panels. Panel 1, the attention side: three step cards left to right. Card 1, capture_model, warm-up then capture, sends DP metadata twice per descriptor. Card 2, the run_fullgraph hook, before each replay, sends a padded control payload once. Card 3, native replay, owned by vLLM, mode FULL_DECODE_ONLY. Panel 2, the FFN side: three boxes. Box 1, make_ffn_graph_key from DP metadata. Box 2, graph exists in the cache. Box 3, REPLAY calls graph.replay, else capture or eager. Below, a note that the capture path uses one torch.cuda.CUDAGraph in its own graph pool. A legend marks attention control, graph key, FFN graph, and native vLLM."><svg role="img" aria-label="Two panels. Panel 1, the attention side: three step cards left to right. Card 1, capture_model, warm-up then capture, sends DP metadata twice per descriptor. Card 2, the run_fullgraph hook, before each replay, sends a padded control payload once. Card 3, native replay, owned by vLLM, mode FULL_DECODE_ONLY. Panel 2, the FFN side: three boxes. Box 1, make_ffn_graph_key from DP metadata. Box 2, graph exists in the cache. Box 3, REPLAY calls graph.replay, else capture or eager. Below, a note that the capture path uses one torch.cuda.CUDAGraph in its own graph pool. A legend marks attention control, graph key, FFN graph, and native vLLM." xmlns="http://www.w3.org/2000/svg" width="1100" height="618" viewBox="0 0 1100 618">
+<defs><marker id="dg-b4_cuda_graphs-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker><marker id="dg-b4_cuda_graphs-m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/></marker><marker id="dg-b4_cuda_graphs-m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker><marker id="dg-b4_cuda_graphs-m3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker></defs>
+<rect width="1100" height="618" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">CUDA graphs in AFD</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Only FULL_DECODE_ONLY. The attention side and the FFN side capture and replay separately, but must agree on token shapes.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">cuda_graph.py  ·  attention_model_runner_v2.py  ·  ffn_model_runner.py  ·  canvas 1100</text>
+<rect x="20.0" y="124.0" width="1060.0" height="176.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="150.0" r="13" fill="#111827"/>
+<text x="46.0" y="154.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="155.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Attention side: wrap native capture and replay</text>
+<text x="68.0" y="174.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The AFD runner wraps native capture_model and the FULL replay hook to publish control before each forward.</text>
+<rect x="46.0" y="198.0" width="320.0" height="70.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="46.0" y="198.0" width="6.0" height="70.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="68.0" cy="215.0" r="10" fill="#2563eb"/>
+<text x="68.0" y="219.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="84.0" y="220.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">capture_model</text>
+<rect x="285.0" y="206.0" width="73.0" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="321.5" y="219.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">start-up</text>
+<text x="84.0" y="240.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">warm-up</text>
+<text x="118.0" y="240.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">then capture :509-553</text>
+<text x="84.0" y="257.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">sends</text>
+<text x="118.0" y="257.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">DP metadata x2/desc</text>
+<rect x="390.0" y="198.0" width="320.0" height="70.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="390.0" y="198.0" width="6.0" height="70.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="412.0" cy="215.0" r="10" fill="#2563eb"/>
+<text x="412.0" y="219.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="428.0" y="220.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">run_fullgraph hook</text>
+<rect x="629.0" y="206.0" width="73.0" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="665.5" y="219.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">per step</text>
+<text x="428.0" y="240.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">before</text>
+<text x="462.0" y="240.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">each replay :270-303</text>
+<text x="428.0" y="257.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">sends</text>
+<text x="462.0" y="257.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">padded control once</text>
+<rect x="734.0" y="198.0" width="320.0" height="70.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<rect x="734.0" y="198.0" width="6.0" height="70.0" rx="3" fill="#9ca3af" fill-opacity="1.0" stroke="none"/>
+<circle cx="756.0" cy="215.0" r="10" fill="#9ca3af"/>
+<text x="756.0" y="219.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="772.0" y="220.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">native replay</text>
+<rect x="999.5" y="206.0" width="46.5" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1"/>
+<text x="1022.8" y="219.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">vLLM</text>
+<text x="772.0" y="240.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">owns</text>
+<text x="806.0" y="240.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">the graph itself</text>
+<text x="772.0" y="257.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">mode</text>
+<text x="806.0" y="257.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FULL_DECODE_ONLY</text>
+<line x1="366.0" y1="233.0" x2="388.0" y2="233.0" stroke="#2563eb" stroke-width="1.6" marker-end="url(#dg-b4_cuda_graphs-m0)"/>
+<line x1="710.0" y1="233.0" x2="732.0" y2="233.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-b4_cuda_graphs-m1)"/>
+<rect x="20.0" y="320.0" width="1060.0" height="196.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="346.0" r="13" fill="#111827"/>
+<text x="46.0" y="350.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="351.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN side: one torch.cuda.CUDAGraph per graph key</text>
+<text x="68.0" y="370.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The server loop picks capture or replay from the control payload (ffn_worker.py:182-196).</text>
+<rect x="46.0" y="394.0" width="300.0" height="60.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="58.0" y="414.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">make_ffn_graph_key</text>
+<text x="58.0" y="432.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">from DP metadata</text>
+<text x="58.0" y="447.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">cuda_graph.py:104-133</text>
+<rect x="400.0" y="394.0" width="300.0" height="60.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="412.0" y="414.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">graph exists?</text>
+<text x="412.0" y="432.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">_cuda_graphs[key]</text>
+<text x="412.0" y="447.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">ffn_model_runner.py:166-174</text>
+<rect x="754.0" y="394.0" width="300.0" height="60.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="766.0" y="414.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">REPLAY</text>
+<text x="766.0" y="432.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">graph.replay()  :176</text>
+<text x="766.0" y="447.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">else capture / eager</text>
+<line x1="346.0" y1="424.0" x2="398.0" y2="424.0" stroke="#7c3aed" stroke-width="1.6" marker-end="url(#dg-b4_cuda_graphs-m2)"/>
+<line x1="700.0" y1="424.0" x2="752.0" y2="424.0" stroke="#059669" stroke-width="1.6" marker-end="url(#dg-b4_cuda_graphs-m3)"/>
+<rect x="46.0" y="486.0" width="1008.0" height="40.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="58.0" y="506.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">capture path</text>
+<text x="58.0" y="520.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">_dummy_run: one CUDAGraph(), own graph pool  (ffn_model_runner.py:316-351)</text>
+<text x="30.0" y="545.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="534.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="545.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention control</text>
+<rect x="244.2" y="534.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="265.2" y="545.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">graph key</text>
+<rect x="345.7" y="534.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="366.7" y="545.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN graph</text>
+<rect x="451.1" y="534.0" width="14.0" height="14.0" rx="3" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<text x="472.1" y="545.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">native vLLM</text>
+<text x="30.0" y="568.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Both sides must agree on shapes. update_state_from_dp_metadata preallocates FFN receive buffers while capturing (p2p.py:820-851).</text>
+<text x="30.0" y="586.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_p2p_* custom ops wrap the NCCL send/recv so the transfers stay capturable (p2p.py:979-1122). NPU uses ACL graphs (validation.py:233-239).</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: the attention side wraps native capture and replay to publish control. The FFN side keeps one CUDA graph per token shape, keyed by the DP metadata.</figcaption><a class="diagram-open" href="../diagrams/b4_cuda_graphs.svg" target="_blank">Open full size ↗</a></div></figure>
+<p>Read the top panel as the attention role and the bottom panel as the FFN role. The attention side does not
+own the graph, native vLLM does; AFD only publishes control around it. The FFN side owns its graphs in a plain
+dictionary, one per token shape.</p>
+
+<h2 id="in-the-code">In the code<a class="h-anchor" href="#in-the-code" aria-label="Link to this section">#</a></h2>
+
+<h3 id="step-1-one-supported-mode">Step 1: One supported mode<a class="h-anchor" href="#step-1-one-supported-mode" aria-label="Link to this section">#</a></h3>
+<p>The policy module lists the supported modes. The set holds one name
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L20-L21" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:20-21 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:20-21</code></a>). <code>validate_cuda_graph_mode</code> returns a disabled
+policy when <code>enforce_eager</code> is set, and raises for any mode that is not
+<code>FULL_DECODE_ONLY</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L42-L85" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:42-85 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:42-85</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L42-L66" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/cuda_graph.py:42-66</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L42-L66" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">42</span><span class="ln">43</span><span class="ln">44</span><span class="ln">45</span><span class="ln">46</span><span class="ln">47</span><span class="ln">48</span><span class="ln hl">49</span><span class="ln">50</span><span class="ln">51</span><span class="ln">52</span><span class="ln">53</span><span class="ln">54</span><span class="ln">55</span><span class="ln">56</span><span class="ln">57</span><span class="ln">58</span><span class="ln">59</span><span class="ln">60</span><span class="ln hl">61</span><span class="ln hl">62</span><span class="ln hl">63</span><span class="ln hl">64</span><span class="ln hl">65</span><span class="ln hl">66</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(7 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(19 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(20 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(21 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(22 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(23 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(24 * var(--code-lh))"></span><pre><code class="language-python">def validate_cuda_graph_mode(
+    vllm_config: VllmConfig,
+    *,
+    role: str | None = None,
+) -&gt; AFDCUDAGraphPolicy:
+    &quot;&quot;&quot;Return the CUDA graph policy or raise for unsupported AFD modes.&quot;&quot;&quot;
+
+    enforce_eager = bool(getattr(vllm_config.model_config, &quot;enforce_eager&quot;, False))
+    mode_name = cudagraph_mode_name(vllm_config)
+    graph_enabled = not enforce_eager
+
+    if not graph_enabled:
+        return AFDCUDAGraphPolicy(
+            enabled=False,
+            mode_name=mode_name,
+            allow_attention_full_decode_only=False,
+            enable_ffn_graph_cache=False,
+        )
+
+    if mode_name not in _SUPPORTED_GRAPH_MODES:
+        role_suffix = f&quot; for {role}&quot; if role else &quot;&quot;
+        raise RuntimeError(
+            &quot;AFD only supports CUDA graph mode &quot;
+            f&quot;{FULL_DECODE_ONLY}{role_suffix}; got {mode_name!r}.&quot;,
+        )</code></pre></div></div></div><figcaption class="code-caption">validate_cuda_graph_mode: eager disables graphs; any other mode raises.</figcaption></figure>
+<aside class="callout callout-note"><p class="callout-title">DBO and graphs need exactly two ubatches</p><div class="callout-body"><p>When ubatching is on, the policy allows a graph
+only with exactly two ubatches (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L71-L77" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:71-77 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:71-77</code></a>). See <a href="../concepts/dbo.html">Dual-batch overlap (DBO): two stages per step</a>.</p></div></aside>
+<p>On Ascend NPU, the counterpart is an <a class="term" href="../reference/glossary.html#term-acl-graph" data-term="ACL graph" data-def="The Ascend NPU form of a captured graph, the NPU counterpart of a CUDA graph. The NPU validator accepts the FULL and FULL_DECODE_ONLY modes.">ACL graph</a>; the NPU validator accepts the
+<code>FULL</code> and <code>FULL_DECODE_ONLY</code> modes (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L233-L239" target="_blank" rel="noopener" title="afd_plugin/validation.py:233-239 at afd-plugin 7452d52"><code>afd_plugin/validation.py:233-239</code></a>). The NPU
+runtime is covered on <a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a>.</p>
+
+<h3 id="step-2-the-attention-side-wraps-native-capture">Step 2: The attention side wraps native capture<a class="h-anchor" href="#step-2-the-attention-side-wraps-native-capture" aria-label="Link to this section">#</a></h3>
+<p>The AFD attention runner does not capture graphs itself. It wraps the native <code>capture_model</code> and
+publishes one warm-up payload and one capture payload for each FULL descriptor
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L509-L553" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:509-553 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:509-553</code></a>). An event tracker checks that native
+capture prepares inputs exactly twice per descriptor, in order
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L55-L97" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:55-97 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:55-97</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L536-L546" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/attention_model_runner_v2.py:536-546</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L536-L546" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">536</span><span class="ln">537</span><span class="ln hl">538</span><span class="ln">539</span><span class="ln">540</span><span class="ln">541</span><span class="ln">542</span><span class="ln">543</span><span class="ln hl">544</span><span class="ln">545</span><span class="ln">546</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(8 * var(--code-lh))"></span><pre><code class="language-python">        try:
+            with (
+                _use_afd_capture_input_preparation(self, event_tracker),
+                _use_afd_ubatch_preparation(self, event_tracker),
+            ):
+                with use_afd_metadata_provider(
+                    self.install_afd_metadata_on_forward_context,
+                ):
+                    result = super().capture_model(profile_only=profile_only)
+                event_tracker.assert_complete()
+            return result</code></pre></div></div></div><figcaption class="code-caption">capture_model: scope the AFD capture seam, then call native capture_model.</figcaption></figure>
+
+<h3 id="step-3-the-attention-side-publishes-control-before-each-replay">Step 3: The attention side publishes control before each replay<a class="h-anchor" href="#step-3-the-attention-side-publishes-control-before-each-replay" aria-label="Link to this section">#</a></h3>
+<p>Native FULL replay does not build a forward context, so the AFD metadata provider cannot run there. The
+runner wraps the graph manager's <code>run_fullgraph</code> and sends one padded control payload just before
+each native replay (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L270-L303" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:270-303 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:270-303</code></a>). This hook is used
+only in <code>FULL_DECODE_ONLY</code> mode, and only when a graph manager exists
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L323-L327" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:323-327 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:323-327</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L286-L303" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/attention_model_runner_v2.py:286-303</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L286-L303" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">286</span><span class="ln">287</span><span class="ln">288</span><span class="ln">289</span><span class="ln">290</span><span class="ln">291</span><span class="ln">292</span><span class="ln">293</span><span class="ln">294</span><span class="ln hl">295</span><span class="ln">296</span><span class="ln">297</span><span class="ln">298</span><span class="ln hl">299</span><span class="ln">300</span><span class="ln">301</span><span class="ln">302</span><span class="ln">303</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(9 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(13 * var(--code-lh))"></span><pre><code class="language-python">        try:
+            padded_tokens = int(desc.num_tokens)
+            metadata = runner.build_afd_metadata(None, real_tokens)
+            metadata.tokens_lens = [padded_tokens]
+            runner._afd_pending_metadata = metadata
+            runner._afd_suppress_metadata_send = True
+            runner._is_warmup = False
+            runner._afd_is_graph_capturing = False
+            runner._afd_is_graph_replaying = True
+            runner.send_dp_metadata(
+                runner.build_capture_dp_metadata(padded_tokens),
+                None,
+            )
+            result = original_run_fullgraph(desc)
+        finally:
+            runner._afd_is_graph_replaying = previous_is_graph_replaying
+        # ### PATCH END: publish one AFD pre-replay payload.
+        return result</code></pre></div></div></div><figcaption class="code-caption">run_fullgraph wrapper: publish one padded control payload, then run the native replay.</figcaption></figure>
+
+<h3 id="step-4-the-ffn-side-keys-one-graph-per-shape">Step 4: The FFN side keys one graph per shape<a class="h-anchor" href="#step-4-the-ffn-side-keys-one-graph-per-shape" aria-label="Link to this section">#</a></h3>
+<p>The FFN runner builds a hashable <a class="term" href="../reference/glossary.html#term-ffn-graph-key" data-term="FFN graph key" data-def="A hashable key built from the per-stage DP metadata. The FFN runner uses it to store and look up one captured CUDA graph per token shape.">FFN graph key</a> from the per-stage DP metadata, then
+looks up a stored graph (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L166-L174" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:166-174 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:166-174</code></a>). On a hit in replay mode it
+calls <code>graph.replay()</code> and returns (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L175-L177" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:175-177 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:175-177</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L166-L184" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/ffn_model_runner.py:166-184</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L166-L184" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln hl">166</span><span class="ln">167</span><span class="ln">168</span><span class="ln">169</span><span class="ln">170</span><span class="ln">171</span><span class="ln">172</span><span class="ln">173</span><span class="ln">174</span><span class="ln hl">175</span><span class="ln hl">176</span><span class="ln">177</span><span class="ln">178</span><span class="ln">179</span><span class="ln">180</span><span class="ln">181</span><span class="ln">182</span><span class="ln">183</span><span class="ln">184</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(0 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(9 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(10 * var(--code-lh))"></span><pre><code class="language-python">        graph_key = make_ffn_graph_key(dp_metadata_list)
+        cuda_graph_info = self._cuda_graphs.get(graph_key)
+        run_mode = graph_run_mode(
+            is_warmup=is_warmup,
+            is_graph_capturing=is_graph_capturing,
+            is_graph_replaying=is_graph_replaying,
+            graph_enabled=bool(self.use_cuda_graph),
+            graph_exists=cuda_graph_info is not None,
+        )
+        if run_mode is AFDGraphRunMode.REPLAY:
+            self._cuda_graphs[graph_key][&quot;graph&quot;].replay()
+            return None
+
+        self._ffn_forward(
+            dp_metadata_list=dp_metadata_list,
+            is_graph_capturing=is_graph_capturing,
+            is_warmup=is_warmup,
+        )
+        return None</code></pre></div></div></div><figcaption class="code-caption">execute_model: build the graph key, then replay the stored graph or run the forward.</figcaption></figure>
+<p>The run mode is chosen by a small helper. It returns <code>REPLAY</code> only when the graph is enabled and
+a graph for this key exists (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L136-L150" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:136-150 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:136-150</code></a>).</p>
+
+<h3 id="step-5-the-ffn-side-captures-its-own-graph">Step 5: The FFN side captures its own graph<a class="h-anchor" href="#step-5-the-ffn-side-captures-its-own-graph" aria-label="Link to this section">#</a></h3>
+<p>The FFN server loop reads the control payload, then calls <code>capture_model</code> for warm-up and capture
+steps, or <code>execute_model</code> otherwise (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L182-L196" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:182-196 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:182-196</code></a>). Capture
+runs <code>_dummy_run</code>, which records one <code>torch.cuda.CUDAGraph</code> into the runner's own graph
+pool and stores it under the key (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L316-L351" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:316-351 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:316-351</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L326-L351" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/ffn_model_runner.py:326-351</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L326-L351" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">326</span><span class="ln">327</span><span class="ln">328</span><span class="ln">329</span><span class="ln hl">330</span><span class="ln">331</span><span class="ln">332</span><span class="ln">333</span><span class="ln">334</span><span class="ln">335</span><span class="ln">336</span><span class="ln">337</span><span class="ln">338</span><span class="ln">339</span><span class="ln">340</span><span class="ln hl">341</span><span class="ln">342</span><span class="ln">343</span><span class="ln">344</span><span class="ln">345</span><span class="ln">346</span><span class="ln hl">347</span><span class="ln">348</span><span class="ln">349</span><span class="ln">350</span><span class="ln">351</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(4 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(15 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(21 * var(--code-lh))"></span><pre><code class="language-python">        if mode_name == &quot;FULL&quot;:
+            if self._graph_memory_pool is None:
+                self._graph_memory_pool = torch.cuda.graph_pool_handle()
+            graph_key = make_ffn_graph_key(dp_metadata_list)
+            cudagraph = torch.cuda.CUDAGraph()
+            # DP metadata receive/update is a control-plane side effect and must
+            # complete before CUDA graph capture starts.
+            cast(
+                AFDControlPlane, self.connector.control_plane
+            ).update_state_from_dp_metadata(
+                _make_dp_metadata_payload(
+                    dp_metadata_list,
+                    is_graph_capturing=is_attn_graph_capturing,
+                ),
+            )
+            with torch.cuda.graph(cudagraph, pool=self._graph_memory_pool):
+                output = self._ffn_forward(
+                    dp_metadata_list=dp_metadata_list,
+                    is_graph_capturing=is_attn_graph_capturing,
+                    update_connector_state=False,
+                )
+            self._cuda_graphs[graph_key] = {
+                &quot;graph&quot;: cudagraph,
+                &quot;input_hidden_states&quot;: output,
+                &quot;output&quot;: output,
+            }</code></pre></div></div></div><figcaption class="code-caption">_dummy_run: capture one CUDA graph per key, after the control-plane receive.</figcaption></figure>
+
+<h3 id="step-6-custom-ops-keep-the-transfers-capturable">Step 6: Custom ops keep the transfers capturable<a class="h-anchor" href="#step-6-custom-ops-keep-the-transfers-capturable" aria-label="Link to this section">#</a></h3>
+<p>The data path uses vLLM's <a class="term" href="../reference/glossary.html#term-pynccl" data-term="PyNccl" data-def="vLLM&#x27;s thin NCCL wrapper, PyNcclCommunicator. The GPU P2P connector uses it to send and receive tensors.">PyNcclCommunicator</a> send and receive, wrapped in four
+<a class="term" href="../reference/glossary.html#term-custom-op" data-term="custom op" data-def="A function registered as torch.ops.vllm.* so torch.compile and CUDA graphs can trace it. The P2P sends and receives are custom ops.">custom ops</a> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L979-L1122" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:979-1122 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:979-1122</code></a>). The wrapping keeps the
+transfers traceable by <code>torch.compile</code> and capturable by a CUDA graph
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L36-L42" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:36-42 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:36-42</code></a>).</p>
+
+<h2 id="deep-dive">Deep dive<a class="h-anchor" href="#deep-dive" aria-label="Link to this section">#</a></h2>
+<p>The blocks below give the capture handshake, the FFN graph cache, why the two sides must agree on shapes,
+and a worked example.</p>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-attention-capture-handshake-step-by-step" class="dd-title">The attention capture handshake, step by step</h3></summary><div class="dd-body"><p>Native vLLM prepares graph inputs once before each warm-up forward and once before each capture forward. AFD
+must publish control at that exact seam. The capture wrapper sets this up
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L509-L553" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:509-553 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:509-553</code></a>).</p>
+<ol>
+  <li><strong>Collect the FULL descriptors.</strong> The wrapper reads the manager's FULL capture descriptors
+    and mirrors the native profile-only truncation
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L511-L517" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:511-517 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:511-517</code></a>).</li>
+  <li><strong>Make an event tracker.</strong> It expects each descriptor twice: once for warm-up, once for
+    capture (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L62-L64" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:62-64 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:62-64</code></a>).</li>
+  <li><strong>Scope two input-preparation seams.</strong> One wraps the native capture input preparation; one
+    wraps the ubatch prepare path (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L537-L540" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:537-540 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:537-540</code></a>).</li>
+  <li><strong>Publish one event per forward.</strong> The non-ubatch seam sends the DP metadata before the
+    forward and marks the step as warm-up or capture
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L214-L227" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:214-227 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:214-227</code></a>).</li>
+  <li><strong>Check the count.</strong> After native capture, the tracker asserts it saw the exact expected
+    count, so capture order cannot drift (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L91-L97" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:91-97 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:91-97</code></a>).</li>
+</ol>
+<p>At run time, the <code>run_fullgraph</code> hook publishes one padded payload before each replay. For a DBO
+step with two stages, the prepare seam already sent the full two-stage payload, so the hook only asserts and
+delegates (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L275-L280" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:275-280 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:275-280</code></a>).</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-ffn-graph-key-and-the-graph-cache" class="dd-title">The FFN graph key and the graph cache</h3></summary><div class="dd-body"><p>The FFN runner holds its graphs in a plain dictionary, <code>_cuda_graphs</code>, keyed by the FFN graph key
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L97" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:97 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:97</code></a>). The key comes from
+<code>make_ffn_graph_key</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L104-L133" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:104-133 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:104-133</code></a>).</p>
+<p>The key is built from the per-stage token counts in the DP metadata. When the attention count is a whole
+multiple of the FFN count, the helper sums each FFN rank's group of attention counts, so the key matches what
+the FFN rank will actually receive (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L177-L199" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:177-199 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:177-199</code></a>).</p>
+<p>The run mode comes from a pure function:</p>
+<table>
+  <thead><tr><th>Condition</th><th>Mode</th></tr></thead>
+  <tbody>
+    <tr><td>is_warmup</td><td>WARMUP (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L144-L145" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:144-145 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:144-145</code></a>)</td></tr>
+    <tr><td>is_graph_capturing</td><td>CAPTURE (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L146-L147" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:146-147 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:146-147</code></a>)</td></tr>
+    <tr><td>replaying, enabled, and a graph exists for the key</td><td>REPLAY (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L148-L149" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:148-149 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:148-149</code></a>)</td></tr>
+    <tr><td>otherwise</td><td>EAGER (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L150" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:150 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:150</code></a>)</td></tr>
+  </tbody>
+</table>
+<p>The graph cache is on only when the policy enables it for the FFN role
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L94-L96" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:94-96 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:94-96</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L83" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:83 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:83</code></a>).</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="why-both-sides-must-agree-on-shapes" class="dd-title">Why both sides must agree on shapes</h3></summary><div class="dd-body"><p>A CUDA graph records fixed tensor addresses. A replay reuses them, so the FFN side must receive into stable
+buffers of the exact captured shape. The control plane prepares these.</p>
+<p>When a DP metadata payload arrives, <code>update_state_from_dp_metadata</code> computes the per-stage tensor
+metadata. On an FFN rank, and only when graphs are enabled, it preallocates receive buffers so capture and
+replay reuse stable allocations (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L820-L851" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:820-851 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:820-851</code></a>). Hidden-state receive
+buffers are cached only while capturing; eager steps allocate per receive
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L829-L840" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:829-840 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:829-840</code></a>).</p>
+<p>So the shape chain is: the attention side sends the token counts in the DP metadata; both sides build the
+same FFN graph key from those counts; the FFN side preallocates buffers for that shape. If the shapes do not
+match a captured key, the FFN side falls back to eager for that step
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L148-L150" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:148-150 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:148-150</code></a>). This is why <code>FULL_DECODE_ONLY</code> fits AFD:
+pure-decode steps have one token per request, so the shapes are stable and few.</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="worked-example-a-2a2f-decode-step-with-graphs-on" class="dd-title">Worked example: a 2A2F decode step with graphs on</h3></summary><div class="dd-body"><p>Take the graph recipe: 2A2F, DP1, TP2, <code>FULL_DECODE_ONLY</code>, capture size 64
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L26-L29" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-29 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-29</code></a>).</p>
+<ol>
+  <li><strong>Start-up.</strong> The attention runner calls native <code>capture_model</code>. For the size-64
+    descriptor it sends one warm-up payload, then one capture payload
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L509-L553" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:509-553 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:509-553</code></a>).</li>
+  <li><strong>FFN capture.</strong> The FFN loop receives the warm-up and capture payloads, and
+    <code>capture_model</code> records one graph for that key
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L182-L189" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:182-189 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:182-189</code></a>).</li>
+  <li><strong>Decode.</strong> A pure-decode step arrives. The attention side replays its native graph; the
+    <code>run_fullgraph</code> hook sends one padded payload first
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L295-L299" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:295-299 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:295-299</code></a>).</li>
+  <li><strong>FFN replay.</strong> The FFN side builds the same key, finds the stored graph, and calls
+    <code>graph.replay()</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L175-L177" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:175-177 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:175-177</code></a>).</li>
+  <li><strong>A prefill arrives.</strong> The token count differs, so no key matches; both sides run eager for
+    that step.</li>
+</ol></div></details>
+
+<h2 id="what-can-go-wrong">What can go wrong<a class="h-anchor" href="#what-can-go-wrong" aria-label="Link to this section">#</a></h2>
+<aside class="callout callout-simplified"><p class="callout-title">Simplified</p><div class="callout-body"><p>This page shows the graph policy and the two control seams. It does not show the native CUDA
+graph internals, which belong to vLLM. It cites the AFD wrappers only.</p></div></aside>
+<ul>
+  <li><strong>An unsupported graph mode.</strong> Any mode other than <code>FULL_DECODE_ONLY</code> raises at
+    config validation (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L61-L66" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:61-66 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:61-66</code></a>).</li>
+  <li><strong>Ubatching with the wrong count.</strong> A graph with ubatching needs exactly two ubatches, or
+    the policy raises (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L72-L77" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:72-77 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:72-77</code></a>).</li>
+  <li><strong>A shape that no captured key covers.</strong> The FFN side does not crash; it runs that step
+    eager, because the run mode falls back to <code>EAGER</code>
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L148-L150" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:148-150 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:148-150</code></a>).</li>
+  <li><strong>Capture order drift.</strong> If native capture prepares inputs the wrong number of times, the
+    event tracker raises, so a silent mismatch cannot happen
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L73-L88" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:73-88 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:73-88</code></a>).</li>
+</ul>
+<p><strong>Why it matters.</strong> A CUDA graph replays fixed addresses. The two roles must agree on the token
+shapes, or the FFN side cannot reuse a graph. AFD keeps the shapes stable by limiting graphs to pure-decode
+steps and keying each graph on the DP metadata.</p>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>Which CUDA graph mode does AFD support on GPU?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Only <code>FULL_DECODE_ONLY</code>. The supported-modes set holds one name
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L20-L21" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:20-21 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:20-21</code></a>), and any other mode raises
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L61-L66" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:61-66 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:61-66</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>Where does the FFN side store its captured graphs?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>In a plain dictionary, <code>_cuda_graphs</code>, keyed by the FFN graph key
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L97" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:97 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:97</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L104-L133" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:104-133 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:104-133</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>Native FULL replay does not build a forward context. How does the attention side still
+    publish control?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>It wraps the graph manager's <code>run_fullgraph</code> and sends one padded control payload just
+      before each native replay (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L270-L303" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:270-303 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:270-303</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>A prefill step arrives while graphs are on. What happens?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The token count does not match any captured key, so the run mode is <code>EAGER</code> and both
+      sides run that step without a graph (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L148-L150" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:148-150 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:148-150</code></a>). Graphs cover
+      pure-decode steps only.</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>Why can the FFN side reuse one captured graph across decode steps, and what prepares the
+    receive buffers?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Pure-decode steps have stable token shapes, so the FFN graph key repeats. When graphs are enabled,
+      <code>update_state_from_dp_metadata</code> preallocates receive buffers of the captured shape while
+      capturing, so replay reuses stable addresses
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L820-L851" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:820-851 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:820-851</code></a>).</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/dbo.html">Dual-batch overlap (DBO): two stages per step</a><span class="rel-sum">DBO splits one step into exactly two stages. While one stage waits on the FFN side, the other computes attention, so the two roles stay busy. AFD adds a yield op and scoped patches for DP1.</span></li><li><a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a><span class="rel-sum">Before each layer loop, the attention side sends per-stage token counts to the FFN side. This page shows what the control plane carries, both publish paths, the wire format and the receive side.</span></li><li><a href="../concepts/wire-data.html">Data on the wire: tensors per layer and stage</a><span class="rel-sum">The data plane moves hidden states between the two roles once per layer and stage. This page shows the tensors that cross, the transfer metadata, the fan-in and split, and the custom ops.</span></li><li><a href="../code/attention-worker.html">v1/worker: the attention worker and runner</a><span class="rel-sum">Three files run the attention role: the worker that swaps in the AFD runner, the runner that wraps native Model Runner V2, and the shared metadata mixin that publishes the control plane.</span></li><li><a href="../code/ffn-worker.html">v1/worker: the FFN worker and runner</a><span class="rel-sum">Three files run the FFN role: the worker that starts the daemon loop, the stand-alone connector-driven runner, and the CPU-safe token-count helpers that map attention counts to FFN ranks.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../concepts/ffn-runtime.html"><span class="pn-dir">← Previous</span><span class="pn-title">The FFN runtime: a connector-driven server loop</span></a><a class="pn pn-next" href="../concepts/dbo.html"><span class="pn-dir">Next →</span><span class="pn-title">Dual-batch overlap (DBO): two stages per step</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#in-the-code">In the code</a></li><li class="toc-l3"><a href="#step-1-one-supported-mode">Step 1: One supported mode</a></li><li class="toc-l3"><a href="#step-2-the-attention-side-wraps-native-capture">Step 2: The attention side wraps native capture</a></li><li class="toc-l3"><a href="#step-3-the-attention-side-publishes-control-before-each-replay">Step 3: The attention side publishes control before each replay</a></li><li class="toc-l3"><a href="#step-4-the-ffn-side-keys-one-graph-per-shape">Step 4: The FFN side keys one graph per shape</a></li><li class="toc-l3"><a href="#step-5-the-ffn-side-captures-its-own-graph">Step 5: The FFN side captures its own graph</a></li><li class="toc-l3"><a href="#step-6-custom-ops-keep-the-transfers-capturable">Step 6: Custom ops keep the transfers capturable</a></li><li class="toc-l2"><a href="#deep-dive">Deep dive</a></li><li class="toc-l3"><a href="#the-attention-capture-handshake-step-by-step">The attention capture handshake, step by step</a></li><li class="toc-l3"><a href="#the-ffn-graph-key-and-the-graph-cache">The FFN graph key and the graph cache</a></li><li class="toc-l3"><a href="#why-both-sides-must-agree-on-shapes">Why both sides must agree on shapes</a></li><li class="toc-l3"><a href="#worked-example-a-2a2f-decode-step-with-graphs-on">Worked example: a 2A2F decode step with graphs on</a></li><li class="toc-l2"><a href="#what-can-go-wrong">What can go wrong</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

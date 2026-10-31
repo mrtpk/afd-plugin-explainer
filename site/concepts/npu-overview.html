@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ascend NPU overview: the same contract, different transports · AFD Plugin Explained</title>
+<meta name="description" content="AFD on Ascend NPU keeps the same attention/FFN contract as GPU but uses two CAM connectors: CAMP2p (sync, with a control plane over HCCL and Gloo) and CAMAsync (async, no control plane, driven by its receive loop). This page maps the NPU workers, runners, model wrappers, patches and the operator loader, and points to the NPU docs.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="concepts/npu-overview">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a class="current" aria-current="page" href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>AFD concepts</span><span class="sep">›</span><span>Ascend NPU</span><span class="sep">›</span><span aria-current="page">Ascend NPU overview</span></nav>
+<h1 class="page-title">Ascend NPU overview: the same contract, different transports</h1>
+<div class="page-meta"><span class="level level-advanced" title="Level">Advanced</span><span class="meta-sec">AFD concepts</span><span class="meta-time">about 6 min read + 3 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a> <span class="level level-intermediate level-sm">Intermediate</span></li><li><a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a> <span class="level level-advanced level-sm">Advanced</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">AFD on Ascend NPU keeps the same <a class="term" href="../reference/glossary.html#term-attention-role" data-term="attention role" data-def="The side that runs attention and sends hidden states to the FFN side. The default role of a process.">attention</a>/<a class="term" href="../reference/glossary.html#term-ffn-role" data-term="FFN role" data-def="The side that runs the feed-forward and MoE experts. It receives hidden states, computes, and sends the result back.">FFN</a> split
+as GPU. Only the <a class="term" href="../reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">connector</a> transport changes.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p>The NPU path is the one place this site covers Ascend code. The attention/FFN contract is the same as on GPU
+(see <a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a>): the attention side sends hidden states, the FFN side runs the
+experts and sends the result back. What changes is the transport. The NPU has two connectors, both backed by
+Ascend CAM operators.</p>
+<ul>
+  <li><code>CAMP2pAFDConnector</code> &mdash; <strong>synchronous</strong>, with a
+    <a class="term" href="../reference/glossary.html#term-control-plane" data-term="control plane" data-def="The path that carries DP metadata (per-stage token counts) from the attention side to the FFN side. It is optional.">control plane</a>. <a class="term" href="../reference/glossary.html#term-hccl" data-term="HCCL" data-def="Huawei Collective Communication Library, the Ascend NPU collective transport. The CAMP2p connector carries hidden states over HCCL and DP metadata over a smaller Gloo group.">HCCL</a> carries the hidden states; a smaller Gloo group
+    carries the DP metadata (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/camp2p.py#L3-L8" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/camp2p.py:3-8 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/camp2p.py:3-8</code></a>).</li>
+  <li><code>CAMAsyncAFDConnector</code> &mdash; <strong>asynchronous</strong>, with
+    <code>control_plane = None</code>. The CAM dispatch/combine operators carry the routing metadata, so a
+    separate control plane is not needed (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L277-L283" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:277-283 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:277-283</code></a>).</li>
+</ul>
+<aside class="callout callout-simplified"><p class="callout-title">Simplified</p><div class="callout-body"><p>This page explains how the Python code selects, loads and drives the NPU operators and runners.
+It does not cover the CAM kernel internals or the vendored binaries, which are out of scope
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/bin" target="_blank" rel="noopener"><code>afd_plugin/connectors/npu/bin/</code></a>).</p></div></aside>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<figure class="diagram" id="fig-b5_npu_overview"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Three panels. Panel 1, the contract is unchanged: a blue attention-role box (send hidden states, receive FFN output) on the left, a neutral CAM arrow, and an emerald FFN-role box (receive, experts, send output) on the right. Panel 2, CAMP2pAFDConnector synchronous: an emerald data-plane box (CAMP2p custom ops over HCCL, one group per batch, camp2p.py line 418) and a violet control-plane box (CAMP2pAFDControlPlane at camp2p.py line 385, token counts once per step). Panel 3, CAMAsyncAFDConnector asynchronous: a neutral control_plane equals None box (async_cam.py line 283, no DP metadata path), a teal arrow to a recv_ffn_work_item box (layer index from CAM, async_ffn runner line 443), a teal arrow to an emerald compute-and-send box (per layer). A legend marks attention role, FFN role and data plane, control plane, and async receive loop."><svg role="img" aria-label="Three panels. Panel 1, the contract is unchanged: a blue attention-role box (send hidden states, receive FFN output) on the left, a neutral CAM arrow, and an emerald FFN-role box (receive, experts, send output) on the right. Panel 2, CAMP2pAFDConnector synchronous: an emerald data-plane box (CAMP2p custom ops over HCCL, one group per batch, camp2p.py line 418) and a violet control-plane box (CAMP2pAFDControlPlane at camp2p.py line 385, token counts once per step). Panel 3, CAMAsyncAFDConnector asynchronous: a neutral control_plane equals None box (async_cam.py line 283, no DP metadata path), a teal arrow to a recv_ffn_work_item box (layer index from CAM, async_ffn runner line 443), a teal arrow to an emerald compute-and-send box (per layer). A legend marks attention role, FFN role and data plane, control plane, and async receive loop." xmlns="http://www.w3.org/2000/svg" width="1100" height="746" viewBox="0 0 1100 746">
+<defs><marker id="dg-b5_npu_overview-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9ca3af"/></marker><marker id="dg-b5_npu_overview-m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0d9488"/></marker><marker id="dg-b5_npu_overview-m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker></defs>
+<rect width="1100" height="746" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Ascend NPU: same contract, two CAM transports</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Same attention/FFN split as GPU  ·  different connectors  ·  compiled Ascend extension loaded by the plugin</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">CAMP2pAFDConnector (sync)   ·   CAMAsyncAFDConnector (async)</text>
+<rect x="20.0" y="112.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="138.0" r="13" fill="#111827"/>
+<text x="46.0" y="142.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="143.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">The AFD contract is unchanged</text>
+<text x="68.0" y="162.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The attention role sends hidden states; the FFN role computes experts and sends the result back.</text>
+<rect x="46.0" y="182.0" width="430.0" height="62.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="58.0" y="202.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Attention role (NPU)</text>
+<text x="58.0" y="220.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">send hidden states -&gt; recv FFN output</text>
+<line x1="476.0" y1="213.0" x2="612.0" y2="213.0" stroke="#9ca3af" stroke-width="1.6" marker-end="url(#dg-b5_npu_overview-m0)"/>
+<text x="544.0" y="203.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">CAM</text>
+<rect x="614.0" y="182.0" width="440.0" height="62.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="626.0" y="202.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN role (NPU)</text>
+<text x="626.0" y="220.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">recv -&gt; experts -&gt; send output</text>
+<rect x="20.0" y="282.0" width="1060.0" height="162.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="308.0" r="13" fill="#111827"/>
+<text x="46.0" y="312.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="313.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">CAMP2pAFDConnector: synchronous, with a control plane</text>
+<text x="68.0" y="332.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">HCCL carries the hidden states; a smaller Gloo group carries DP metadata once per step.</text>
+<rect x="46.0" y="352.0" width="460.0" height="70.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="58.0" y="372.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Data plane (HCCL)</text>
+<text x="58.0" y="390.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">CAMP2p custom ops over HCCL</text>
+<text x="58.0" y="405.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">camp2p.py:418  ·  one group per batch</text>
+<rect x="560.0" y="352.0" width="494.0" height="70.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="572.0" y="372.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Control plane (Gloo)</text>
+<text x="572.0" y="390.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">CAMP2pAFDControlPlane  ·  camp2p.py:385</text>
+<text x="572.0" y="405.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">token counts, once per step</text>
+<rect x="20.0" y="464.0" width="1060.0" height="168.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="490.0" r="13" fill="#111827"/>
+<text x="46.0" y="494.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="68.0" y="495.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">CAMAsyncAFDConnector: asynchronous, no control plane</text>
+<text x="68.0" y="514.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">CAM dispatch/combine carry the routing metadata, so control_plane is None and the receive loop drives FFN.</text>
+<rect x="46.0" y="534.0" width="320.0" height="74.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="58.0" y="554.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">control_plane = None</text>
+<text x="58.0" y="572.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">async_cam.py:283</text>
+<text x="58.0" y="587.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">no DP metadata path</text>
+<line x1="366.0" y1="571.0" x2="462.0" y2="571.0" stroke="#0d9488" stroke-width="1.6" marker-end="url(#dg-b5_npu_overview-m1)"/>
+<rect x="464.0" y="534.0" width="300.0" height="74.0" rx="8" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.5"/>
+<text x="476.0" y="554.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#0d9488" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">recv_ffn_work_item</text>
+<text x="476.0" y="572.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">layer_idx from CAM</text>
+<text x="476.0" y="587.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">async_ffn_...:443</text>
+<line x1="764.0" y1="571.0" x2="860.0" y2="571.0" stroke="#059669" stroke-width="1.6" marker-end="url(#dg-b5_npu_overview-m2)"/>
+<rect x="862.0" y="534.0" width="192.0" height="74.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="874.0" y="554.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">compute + send</text>
+<text x="874.0" y="572.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">per layer</text>
+<text x="30.0" y="667.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="656.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="667.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention role</text>
+<rect x="225.1" y="656.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="246.1" y="667.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN role / data plane</text>
+<rect x="393.1" y="656.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="414.1" y="667.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">control plane</text>
+<rect x="514.5" y="656.0" width="14.0" height="14.0" rx="3" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.4"/>
+<text x="535.5" y="667.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">async receive loop</text>
+<text x="30.0" y="696.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Out of scope: the CAM kernel internals. The plugin loads its compiled extension afd_plugin._C_ascend (built by setup.py) and asserts torch.ops.afd_ascend (ops.py:73-91).</text>
+<text x="30.0" y="714.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The async receive loop reads each layer index from CAM metadata, so no separate control plane is needed.</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: the attention/FFN contract is the same as GPU. CAMP2p is synchronous with a Gloo control plane; CAMAsync is asynchronous, with no control plane, driven by its receive loop.</figcaption><a class="diagram-open" href="../diagrams/b5_npu_overview.svg" target="_blank">Open full size ↗</a></div></figure>
+<p>Read the panels top to bottom. Panel 1 is the shared contract. Panel 2 is the synchronous connector, which
+keeps a control plane. Panel 3 is the asynchronous connector, where the receive loop itself drives each FFN
+layer.</p>
+
+<h2 id="in-the-code">In the code<a class="h-anchor" href="#in-the-code" aria-label="Link to this section">#</a></h2>
+
+<h3 id="step-1-camp2p-the-synchronous-connector-with-a-control-plane">Step 1: CAMP2p, the synchronous connector with a control plane<a class="h-anchor" href="#step-1-camp2p-the-synchronous-connector-with-a-control-plane" aria-label="Link to this section">#</a></h3>
+<p>The synchronous connector builds its own HCCL groups for the hidden states
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/camp2p.py#L418-L431" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/camp2p.py:418-431 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/camp2p.py:418-431</code></a>) and a smaller Gloo group for the
+DP metadata (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/camp2p.py#L460-L468" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/camp2p.py:460-468 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/camp2p.py:460-468</code></a>). It sets a control plane,
+<code>CAMP2pAFDControlPlane</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/camp2p.py#L385" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/camp2p.py:385 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/camp2p.py:385</code></a>), so the DP metadata
+travels once per step, the same timing as the GPU connector. See <a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a>.</p>
+
+<h3 id="step-2-camasync-has-no-control-plane-its-receive-loop-drives-the-ffn-side">Step 2: CAMAsync has no control plane; its receive loop drives the FFN side<a class="h-anchor" href="#step-2-camasync-has-no-control-plane-its-receive-loop-drives-the-ffn-side" aria-label="Link to this section">#</a></h3>
+<p>The asynchronous connector sets <code>control_plane = None</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L283" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:283 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:283</code></a>). The CAM dispatch/combine operators own both the data
+motion and its routing metadata, so there is no separate DP metadata path
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L277-L282" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:277-282 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:277-282</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L277-L283" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/connectors/npu/async_cam.py:277-283</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L277-L283" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">277</span><span class="ln">278</span><span class="ln">279</span><span class="ln">280</span><span class="ln">281</span><span class="ln">282</span><span class="ln hl">283</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><pre><code class="language-python">    second. CAM dispatch/combine operators own both the collective data motion
+    and its routing metadata, so this connector has no DP metadata control
+    plane (``control_plane`` stays ``None``) and FFN work is triggered directly
+    by the connector receive loop.
+    &quot;&quot;&quot;
+
+    control_plane = None</code></pre></div></div></div><figcaption class="code-caption">The async connector: no control plane; FFN work is triggered by the receive loop.</figcaption></figure>
+<p>So what drives the FFN side? The NPU async FFN runner loops over the layers and, for each one, calls
+<code>recv_ffn_work_item</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/npu/async_ffn_model_runner.py#L442-L446" target="_blank" rel="noopener" title="afd_plugin/v1/worker/npu/async_ffn_model_runner.py:442-446 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/npu/async_ffn_model_runner.py:442-446</code></a>). Each
+work item carries its own layer index, read from the CAM metadata of the dispatch-receive, not from a
+control-plane payload (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L497-L541" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:497-541 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:497-541</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/npu/async_ffn_model_runner.py#L441-L475" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/npu/async_ffn_model_runner.py:441-475</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/npu/async_ffn_model_runner.py#L441-L475" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">441</span><span class="ln">442</span><span class="ln hl">443</span><span class="ln">444</span><span class="ln">445</span><span class="ln">446</span><span class="ln">447</span><span class="ln">448</span><span class="ln">449</span><span class="ln">450</span><span class="ln">451</span><span class="ln">452</span><span class="ln">453</span><span class="ln">454</span><span class="ln">455</span><span class="ln hl">456</span><span class="ln">457</span><span class="ln">458</span><span class="ln">459</span><span class="ln">460</span><span class="ln">461</span><span class="ln">462</span><span class="ln">463</span><span class="ln">464</span><span class="ln">465</span><span class="ln">466</span><span class="ln">467</span><span class="ln">468</span><span class="ln">469</span><span class="ln">470</span><span class="ln">471</span><span class="ln">472</span><span class="ln hl">473</span><span class="ln">474</span><span class="ln">475</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(15 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(32 * var(--code-lh))"></span><pre><code class="language-python">
+        for _ in self.layer_ids[:1] if single else self.layer_ids:
+            work_item = connector.recv_ffn_work_item(
+                stage_idx=stage_idx,
+                max_num_tokens=self.max_num_tokens,
+            )
+            hidden_states = work_item.hidden_states
+            metadata = work_item.context.metadata
+            legacy_states = work_item.context.states
+            if not isinstance(legacy_states, AFDAsyncTransferState):
+                raise RuntimeError(
+                    &quot;CAM async FFN work item requires AFDAsyncTransferState&quot;,
+                )
+            layer_idx = work_item.layer_idx
+            num_tokens = work_item.num_tokens
+            afd_metadata = AFDForwardContextMetadata(
+                tokens_start_loc=[0],
+                requests_start_loc=[0],
+                stage_idx=stage_idx,
+                connector=self.connector,
+                tokens_lens=[num_tokens],
+                num_stages=1,
+                tokens_unpadded_lens=[num_tokens],
+            )
+
+            with ascend_forward_context(
+                vllm_config=self.vllm_config,
+                afd_metadata=afd_metadata,
+                model_instance=self.model,
+                num_tokens=num_tokens,
+                skip_mc2_mask=self.afd_config.compute_gate_on_attention,
+            ) as forward_context:
+                forward_context.dp_metadata = None
+                forward_context.additional_kwargs[&quot;afd_metadata&quot;] = metadata
+                _set_moe_layer_index(forward_context, layer_idx)</code></pre></div></div></div><figcaption class="code-caption">The connector-driven FFN loop: recv_ffn_work_item gives the layer index; dp_metadata stays None.</figcaption></figure>
+<p>The forward context sets <code>dp_metadata = None</code> for each work item
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/npu/async_ffn_model_runner.py#L473" target="_blank" rel="noopener" title="afd_plugin/v1/worker/npu/async_ffn_model_runner.py:473 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/npu/async_ffn_model_runner.py:473</code></a>). The connector receive is the clock: when a
+dispatch arrives, the runner computes that layer and sends the result back. This is the mechanism the
+<a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a> page names in one line.</p>
+
+<h3 id="step-3-the-operator-loader">Step 3: The operator loader<a class="h-anchor" href="#step-3-the-operator-loader" aria-label="Link to this section">#</a></h3>
+<p>Both connectors need the plugin's Ascend operators. The loader
+<code>ensure_cam_p2p_ops_available</code> sets the custom op-API environment, imports
+<code>afd_plugin._C_ascend</code>, and asserts the <code>torch.ops.afd_ascend</code> namespace
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/npu/ops.py#L73-L91" target="_blank" rel="noopener" title="afd_plugin/compat/npu/ops.py:73-91 at afd-plugin 7452d52"><code>afd_plugin/compat/npu/ops.py:73-91</code></a>). <code>ensure_afd_ascend_ops_loaded</code> is a backward-compatible
+alias for it (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/npu/ops.py#L94-L97" target="_blank" rel="noopener" title="afd_plugin/compat/npu/ops.py:94-97 at afd-plugin 7452d52"><code>afd_plugin/compat/npu/ops.py:94-97</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/npu/ops.py#L73-L91" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/compat/npu/ops.py:73-91</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/npu/ops.py#L73-L91" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">73</span><span class="ln">74</span><span class="ln">75</span><span class="ln">76</span><span class="ln">77</span><span class="ln">78</span><span class="ln">79</span><span class="ln">80</span><span class="ln hl">81</span><span class="ln">82</span><span class="ln">83</span><span class="ln">84</span><span class="ln hl">85</span><span class="ln">86</span><span class="ln">87</span><span class="ln">88</span><span class="ln">89</span><span class="ln">90</span><span class="ln hl">91</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(8 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(12 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(18 * var(--code-lh))"></span><pre><code class="language-python">@lru_cache(maxsize=1)
+def ensure_cam_p2p_ops_available() -&gt; None:
+    &quot;&quot;&quot;Import the custom operators used by ``CAMP2pAFDConnector``.
+
+    The extension is optional at package import time.  It is built by default
+    in an Ascend environment unless ``AFD_BUILD_ASCEND_OPS=0`` is set.
+    &quot;&quot;&quot;
+
+    _ensure_afd_custom_opp_env()
+    try:
+        import torch
+
+        import afd_plugin._C_ascend  # noqa: F401
+    except ImportError as exc:
+        raise RuntimeError(
+            &quot;CAMP2P Ascend custom ops are not available. Build the package with &quot;
+            &quot;Ascend ops enabled in a torch-npu/CANN environment.&quot;,
+        ) from exc
+    _assert_afd_namespace_registered(torch)</code></pre></div></div></div><figcaption class="code-caption">The loader imports the built extension and checks the operator namespace. No kernel code here.</figcaption></figure>
+<p>The async connector needs four more operators, so it calls
+<code>ensure_cam_async_ops_available</code>, which checks the four
+<code>afd_async_*</code> ops (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/npu/ops.py#L107-L119" target="_blank" rel="noopener" title="afd_plugin/compat/npu/ops.py:107-119 at afd-plugin 7452d52"><code>afd_plugin/compat/npu/ops.py:107-119</code></a>). The extension
+<code>afd_plugin._C_ascend</code> is built from <code>csrc/npu/pybind</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/setup.py#L116-L120" target="_blank" rel="noopener" title="setup.py:116-120 at afd-plugin 7452d52"><code>setup.py:116-120</code></a>), gated on <code>AFD_BUILD_ASCEND_OPS</code> or an Ascend platform
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/setup.py#L43-L54" target="_blank" rel="noopener" title="setup.py:43-54 at afd-plugin 7452d52"><code>setup.py:43-54</code></a>) and the <code>SOC_VERSION</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/setup.py#L67" target="_blank" rel="noopener" title="setup.py:67 at afd-plugin 7452d52"><code>setup.py:67</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/setup.py#L88" target="_blank" rel="noopener" title="setup.py:88 at afd-plugin 7452d52"><code>setup.py:88</code></a>). See
+<a href="../reference/env-vars.html">Environment variables reference</a>.</p>
+<aside class="callout callout-note"><p class="callout-title">The vendored binaries</p><div class="callout-body"><p>The folder <code>connectors/npu/bin/</code> holds a prebuilt CAM
+installer (<code>.run</code>) and a wheel (<code>.whl</code>), stored with Git LFS
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/bin" target="_blank" rel="noopener"><code>afd_plugin/connectors/npu/bin/</code></a>). The plugin's Python loads the CMake-built
+<code>afd_plugin._C_ascend</code>; it does not import the <code>bin/</code> artifacts directly. The async docs
+note that the source build needs no external CAM wheel
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/docs/npu/CAM_ASYNC_CONNECTOR_USER_GUIDE.md#L277" target="_blank" rel="noopener" title="docs/npu/CAM_ASYNC_CONNECTOR_USER_GUIDE.md:277 at afd-plugin 7452d52"><code>docs/npu/CAM_ASYNC_CONNECTOR_USER_GUIDE.md:277</code></a>).</p></div></aside>
+
+<h3 id="step-4-async-data-parallel-patches-gated-to-npu">Step 4: Async data-parallel patches, gated to NPU<a class="h-anchor" href="#step-4-async-data-parallel-patches-gated-to-npu" aria-label="Link to this section">#</a></h3>
+<p>The async path needs two extra patches. They install only when the role is attention and
+<code>async_dp</code> is on (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/npu/runtime.py#L44-L53" target="_blank" rel="noopener" title="afd_plugin/compat/npu/runtime.py:44-53 at afd-plugin 7452d52"><code>afd_plugin/compat/npu/runtime.py:44-53</code></a>), and the whole NPU patch set
+installs only when the device is <code>npu</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L199-L209" target="_blank" rel="noopener" title="afd_plugin/__init__.py:199-209 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:199-209</code></a>). On GPU,
+<code>async_dp</code> must be false. See <a href="../concepts/compat-patches.html">Compat patches: how AFD changes vLLM without editing it</a>.</p>
+<ul>
+  <li><code>async_dp_engine</code> &mdash; swaps the attention engine entry point to a plain
+    <code>EngineCoreProc</code> for async DP (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/async_dp_engine.py#L117-L120" target="_blank" rel="noopener" title="afd_plugin/compat/patches/async_dp_engine.py:117-120 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/async_dp_engine.py:117-120</code></a>;
+    installed and gated at <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/async_dp_engine.py#L414-L432" target="_blank" rel="noopener" title="afd_plugin/compat/patches/async_dp_engine.py:414-432 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/async_dp_engine.py:414-432</code></a>).</li>
+  <li><code>async_dp_forward_context</code> &mdash; skips the DP metadata only for the async path, and rebinds the
+    symbol in the importing modules (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/async_dp_forward_context.py#L88-L127" target="_blank" rel="noopener" title="afd_plugin/compat/patches/async_dp_forward_context.py:88-127 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/async_dp_forward_context.py:88-127</code></a>,
+    <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/async_dp_forward_context.py#L207-L212" target="_blank" rel="noopener" title="afd_plugin/compat/patches/async_dp_forward_context.py:207-212 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/async_dp_forward_context.py:207-212</code></a>).</li>
+</ul>
+
+<h2 id="deep-dive">Deep dive<a class="h-anchor" href="#deep-dive" aria-label="Link to this section">#</a></h2>
+
+<details class="deepdive" open><summary><span class="dd-label">Deep dive</span><h3 id="npu-workers-and-runners" class="dd-title">NPU workers and runners</h3></summary><div class="dd-body"><p>The NPU runtime classes live under <code>afd_plugin/v1/worker/npu/</code>. vLLM-Ascend loads them by their
+explicit class paths, chosen by the worker-selection code (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L34-L41" target="_blank" rel="noopener" title="afd_plugin/validation.py:34-41 at afd-plugin 7452d52"><code>afd_plugin/validation.py:34-41</code></a>).</p>
+<table>
+  <thead><tr><th>File</th><th>Class</th><th>Role</th><th>Source</th></tr></thead>
+  <tbody>
+    <tr><td><code>attention_worker.py</code></td><td><code>AFDNPUAttentionWorker</code></td>
+      <td>Builds the AFD-aware vLLM-Ascend attention runner.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/npu/attention_worker.py#L30" target="_blank" rel="noopener" title="afd_plugin/v1/worker/npu/attention_worker.py:30 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/npu/attention_worker.py:30</code></a></td></tr>
+    <tr><td><code>attention_model_runner_v2.py</code></td><td><code>AFDNPUAttentionModelRunnerV2</code></td>
+      <td>A thin AFD seam over the native Ascend Model Runner V2.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/npu/attention_model_runner_v2.py#L208" target="_blank" rel="noopener" title="afd_plugin/v1/worker/npu/attention_model_runner_v2.py:208 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/npu/attention_model_runner_v2.py:208</code></a></td></tr>
+    <tr><td><code>ffn_worker.py</code></td><td><code>AFDNPUFFNWorker</code></td>
+      <td>Owns a connector-driven NPU daemon loop.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/npu/ffn_worker.py#L67" target="_blank" rel="noopener" title="afd_plugin/v1/worker/npu/ffn_worker.py:67 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/npu/ffn_worker.py:67</code></a></td></tr>
+    <tr><td><code>ffn_model_runner.py</code></td><td><code>AFDNPUFFNModelRunner</code></td>
+      <td>The synchronous CAMP2p FFN runner.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/npu/ffn_model_runner.py#L56" target="_blank" rel="noopener" title="afd_plugin/v1/worker/npu/ffn_model_runner.py:56 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/npu/ffn_model_runner.py:56</code></a></td></tr>
+    <tr><td><code>async_ffn_model_runner.py</code></td><td><code>AsyncNPUFFNModelRunner</code></td>
+      <td>The async CAM FFN runtime, driven by the connector receive loop.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/npu/async_ffn_model_runner.py#L73" target="_blank" rel="noopener" title="afd_plugin/v1/worker/npu/async_ffn_model_runner.py:73 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/npu/async_ffn_model_runner.py:73</code></a></td></tr>
+    <tr><td><code>async_ffn_two_stream.py</code></td><td><code>AsyncFFNTwoStream</code></td>
+      <td>Two-slot async receive/compute with FIFO send.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/npu/async_ffn_two_stream.py#L41" target="_blank" rel="noopener" title="afd_plugin/v1/worker/npu/async_ffn_two_stream.py:41 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/npu/async_ffn_two_stream.py:41</code></a></td></tr>
+    <tr><td><code>ubatch_runner.py</code></td><td><code>NPUUBatchRunner</code></td>
+      <td>Ascend inputs and contexts for native Model Runner V2 microbatching.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/npu/ubatch_runner.py#L67" target="_blank" rel="noopener" title="afd_plugin/v1/worker/npu/ubatch_runner.py:67 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/npu/ubatch_runner.py:67</code></a></td></tr>
+    <tr><td><code>mla_graph.py</code></td><td>helpers</td>
+      <td>Graph-local MLA parameter helpers for Ascend ubatch execution.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/npu/mla_graph.py#L23" target="_blank" rel="noopener" title="afd_plugin/v1/worker/npu/mla_graph.py:23 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/npu/mla_graph.py:23</code></a></td></tr>
+  </tbody>
+</table></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="npu-model-wrappers-and-ascend-patches" class="dd-title">NPU model wrappers and Ascend patches</h3></summary><div class="dd-body"><p>Two NPU model wrappers matter for the overview.</p>
+<ul>
+  <li><code>GateOnlyRemoteMoE</code> &mdash; an attention-side MoE module that computes the gate locally and sends
+    only the experts to the FFN role (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L197-L199" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:197-199 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:197-199</code></a>). It is
+    the NPU branch when the gate is on the attention side.</li>
+  <li><code>npu/deepseek_v4.py</code> &mdash; the DeepSeek-V4 AFD wrapper for the Ascend native implementation,
+    with its own decoder layer and remote-MoE classes
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/npu/deepseek_v4.py#L649" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/npu/deepseek_v4.py:649 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/npu/deepseek_v4.py:649</code></a>). The model table maps
+    <code>DeepseekV4ForCausalLM</code> to this NPU wrapper only when <code>torch_npu</code> is importable
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L109-L113" target="_blank" rel="noopener" title="afd_plugin/__init__.py:109-113 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:109-113</code></a>).</li>
+</ul>
+<p>The Ascend compat patches live under <code>afd_plugin/compat/patches/npu/</code>. They install only on an
+NPU device (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L199-L209" target="_blank" rel="noopener" title="afd_plugin/__init__.py:199-209 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:199-209</code></a>).</p>
+<table>
+  <thead><tr><th>Patch</th><th>What it does</th><th>Source</th></tr></thead>
+  <tbody>
+    <tr><td><code>ascend_config.py</code></td><td>Keeps AFD settings out of Ascend's strict config namespace.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/npu/ascend_config.py#L3" target="_blank" rel="noopener" title="afd_plugin/compat/patches/npu/ascend_config.py:3 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/npu/ascend_config.py:3</code></a></td></tr>
+    <tr><td><code>ascend_platform.py</code></td><td>Patches vLLM-Ascend platform config for AFD-owned DBO.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/npu/ascend_platform.py#L3" target="_blank" rel="noopener" title="afd_plugin/compat/patches/npu/ascend_platform.py:3 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/npu/ascend_platform.py:3</code></a></td></tr>
+    <tr><td><code>mla_graph.py</code></td><td>Routes Ascend MLA graph parameters through AFD forward contexts.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/npu/mla_graph.py#L3" target="_blank" rel="noopener" title="afd_plugin/compat/patches/npu/mla_graph.py:3 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/npu/mla_graph.py:3</code></a></td></tr>
+    <tr><td><code>mrv2_ubatching.py</code></td><td>Scoped Ascend seams for the native UBatchRunner.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/npu/mrv2_ubatching.py#L3-L8" target="_blank" rel="noopener" title="afd_plugin/compat/patches/npu/mrv2_ubatching.py:3-8 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/npu/mrv2_ubatching.py:3-8</code></a></td></tr>
+  </tbody>
+</table></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-npu-recipes-and-what-they-report" class="dd-title">The NPU recipes and what they report</h3></summary><div class="dd-body"><p>The recipe index lists both NPU connectors as "integrated v0.30 hardware validation pending"; the measured
+numbers come from older runtimes (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/README.md#L36-L38" target="_blank" rel="noopener" title="recipe/README.md:36-38 at afd-plugin 7452d52"><code>recipe/README.md:36-38</code></a>).</p>
+<ul>
+  <li><strong>CAMP2p (sync).</strong> The DeepSeek-V3.2 recipe targets vLLM-Ascend <code>v0.19.1rc1</code> and
+    compares EP64 with 48A16F and 64A16F AFD deployments
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md#L1-L11" target="_blank" rel="noopener" title="recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md:1-11 at afd-plugin 7452d52"><code>recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md:1-11</code></a>,
+    <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md#L28-L33" target="_blank" rel="noopener" title="recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md:28-33 at afd-plugin 7452d52"><code>recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md:28-33</code></a>).</li>
+  <li><strong>CAMAsync (async).</strong> The v0.26 accuracy recipe runs the full DeepSeek-V3.2 (61 layers) with
+    DP2/TP8 attention and EP16 FFN; the index reports a <code>0.9522</code> strict match for that token split
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/README.md#L38" target="_blank" rel="noopener" title="recipe/README.md:38 at afd-plugin 7452d52"><code>recipe/README.md:38</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/npu/CAMAsyncAFDConnector/deepseek_v3_2/v0_26_accuracy/README.md#L1-L10" target="_blank" rel="noopener" title="recipe/npu/CAMAsyncAFDConnector/deepseek_v3_2/v0_26_accuracy/README.md:1-10 at afd-plugin 7452d52"><code>recipe/npu/CAMAsyncAFDConnector/deepseek_v3_2/v0_26_accuracy/README.md:1-10</code></a>).</li>
+</ul>
+<p>The NPU recipes also include result images, described with their own captions on the
+<a href="../concepts/tuning.html">Tuning: the knobs the repo exposes</a> page. This page does not restate those numbers as current results.</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="where-to-read-more-the-npu-docs" class="dd-title">Where to read more: the NPU docs</h3></summary><div class="dd-body"><p>The <code>docs/npu/</code> folder documents the NPU path in depth. These are hints; this page cites the
+code.</p>
+<table>
+  <thead><tr><th>Document</th><th>Topic</th></tr></thead>
+  <tbody>
+    <tr><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/docs/npu/CAM_P2P_CONNECTOR_USER_GUIDE.md" target="_blank" rel="noopener">CAM_P2P_CONNECTOR_USER_GUIDE.md</a></td>
+      <td>The CAMP2p connector contract and rank mapping.</td></tr>
+    <tr><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/docs/npu/CAM_ASYNC_CONNECTOR_USER_GUIDE.md" target="_blank" rel="noopener">CAM_ASYNC_CONNECTOR_USER_GUIDE.md</a></td>
+      <td>The CAMAsync connector, rank derivation and native-DBO distinction.</td></tr>
+    <tr><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/docs/npu/CAM_ASYNC_ROUTED_OPS.md" target="_blank" rel="noopener">CAM_ASYNC_ROUTED_OPS.md</a></td>
+      <td>The routed-only async operators.</td></tr>
+    <tr><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/docs/npu/ASYNC_FFN_RUNTIME.md" target="_blank" rel="noopener">ASYNC_FFN_RUNTIME.md</a></td>
+      <td>The async CAM FFN eager/FULL runtime.</td></tr>
+    <tr><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/docs/npu/LAYERED_W2_MDL_VALIDATION.md" target="_blank" rel="noopener">LAYERED_W2_MDL_VALIDATION.md</a></td>
+      <td>The layered W13/W2 graph validation.</td></tr>
+    <tr><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/docs/npu/TESTING.md" target="_blank" rel="noopener">TESTING.md</a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/docs/npu/TROUBLESHOOTING.md" target="_blank" rel="noopener">TROUBLESHOOTING.md</a></td>
+      <td>NPU validation and troubleshooting.</td></tr>
+  </tbody>
+</table></div></details>
+
+<h2 id="what-can-go-wrong">What can go wrong<a class="h-anchor" href="#what-can-go-wrong" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li><strong>Operators not built.</strong> The loader raises when <code>afd_plugin._C_ascend</code> is missing;
+    build with Ascend ops enabled (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/npu/ops.py#L86-L90" target="_blank" rel="noopener" title="afd_plugin/compat/npu/ops.py:86-90 at afd-plugin 7452d52"><code>afd_plugin/compat/npu/ops.py:86-90</code></a>).</li>
+  <li><strong>Async ops missing.</strong> The async connector raises when any of the four
+    <code>afd_async_*</code> operators is absent (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/npu/ops.py#L115-L119" target="_blank" rel="noopener" title="afd_plugin/compat/npu/ops.py:115-119 at afd-plugin 7452d52"><code>afd_plugin/compat/npu/ops.py:115-119</code></a>).</li>
+  <li><strong>async_dp on GPU.</strong> The async-DP patches are NPU-only and gated at run time; on GPU
+    <code>async_dp</code> must be false (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/npu/runtime.py#L44-L53" target="_blank" rel="noopener" title="afd_plugin/compat/npu/runtime.py:44-53 at afd-plugin 7452d52"><code>afd_plugin/compat/npu/runtime.py:44-53</code></a>).</li>
+  <li><strong>Expecting a control plane with the async connector.</strong> The async connector has none; the
+    receive loop drives the FFN side (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L283" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:283 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:283</code></a>).</li>
+</ul>
+<p><strong>Why it matters.</strong> The NPU keeps the AFD contract but changes the transport and the driving
+mechanism. The async connector folds the control plane into the data operators, so the FFN side follows the
+receive loop, not a metadata step.</p>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>Which NPU connector has a control plane, and which does not?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p><code>CAMP2pAFDConnector</code> has one, <code>CAMP2pAFDControlPlane</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/camp2p.py#L385" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/camp2p.py:385 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/camp2p.py:385</code></a>). <code>CAMAsyncAFDConnector</code> sets
+      <code>control_plane = None</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L283" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:283 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:283</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>What two collective libraries does CAMP2p use, and for what?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>HCCL for the hidden states, and a smaller Gloo group for the DP metadata
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/camp2p.py#L418-L431" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/camp2p.py:418-431 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/camp2p.py:418-431</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/camp2p.py#L460-L468" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/camp2p.py:460-468 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/camp2p.py:460-468</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>How does the async FFN side know which layer to compute without a control plane?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The runner calls <code>recv_ffn_work_item</code> in a loop; each item carries its layer index, read
+      from the CAM dispatch metadata (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/npu/async_ffn_model_runner.py#L442-L446" target="_blank" rel="noopener" title="afd_plugin/v1/worker/npu/async_ffn_model_runner.py:442-446 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/npu/async_ffn_model_runner.py:442-446</code></a>,
+      <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L497-L541" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:497-541 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:497-541</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>How does the plugin load the Ascend operators, and what does it not load?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>It imports the CMake-built <code>afd_plugin._C_ascend</code> and asserts the
+      <code>torch.ops.afd_ascend</code> namespace (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/npu/ops.py#L73-L91" target="_blank" rel="noopener" title="afd_plugin/compat/npu/ops.py:73-91 at afd-plugin 7452d52"><code>afd_plugin/compat/npu/ops.py:73-91</code></a>). It does not
+      import the vendored <code>bin/</code> artifacts, and the kernel internals are out of scope.</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>When do the async-DP patches install, and why can they not run on GPU?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Only when the role is attention and <code>async_dp</code> is on
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/npu/runtime.py#L44-L53" target="_blank" rel="noopener" title="afd_plugin/compat/npu/runtime.py:44-53 at afd-plugin 7452d52"><code>afd_plugin/compat/npu/runtime.py:44-53</code></a>), and only when the device is <code>npu</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L199-L209" target="_blank" rel="noopener" title="afd_plugin/__init__.py:199-209 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:199-209</code></a>). On GPU <code>async_dp</code> must be false, so the gate never
+      opens.</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a><span class="rel-sum">AFD runs the attention part and the FFN part as two server processes. This page shows what each role owns, and why the FFN side has no real scheduler, no KV cache and no sampler.</span></li><li><a href="../concepts/compat-patches.html">Compat patches: how AFD changes vLLM without editing it</a><span class="rel-sum">AFD edits no vLLM source. It imports patch modules that replace vLLM functions in place, behind a version gate. This page covers the discipline, the gates, and what each GPU patch changes.</span></li><li><a href="../reference/env-vars.html">Environment variables reference</a><span class="rel-sum">Every environment variable that afd-plugin reads or sets, generated from the source, with defaults and read sites. A hand section lists the vLLM variables that AFD depends on.</span></li><li><a href="../reference/recipes.html">Recipes reference</a><span class="rel-sum">Every recipe script under recipe/, generated from the source, with hardware, connector, model, topology, role, DP/TP, mode, DBO thresholds and ports. Hand notes cover the parts the parser cannot read.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../concepts/tuning.html"><span class="pn-dir">← Previous</span><span class="pn-title">Tuning: the knobs the repo exposes</span></a><a class="pn pn-next" href="../tours/start-up.html"><span class="pn-dir">Next →</span><span class="pn-title">Tour: Start-up</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#in-the-code">In the code</a></li><li class="toc-l3"><a href="#step-1-camp2p-the-synchronous-connector-with-a-control-plane">Step 1: CAMP2p, the synchronous connector with a control plane</a></li><li class="toc-l3"><a href="#step-2-camasync-has-no-control-plane-its-receive-loop-drives-the-ffn-side">Step 2: CAMAsync has no control plane; its receive loop drives the FFN side</a></li><li class="toc-l3"><a href="#step-3-the-operator-loader">Step 3: The operator loader</a></li><li class="toc-l3"><a href="#step-4-async-data-parallel-patches-gated-to-npu">Step 4: Async data-parallel patches, gated to NPU</a></li><li class="toc-l2"><a href="#deep-dive">Deep dive</a></li><li class="toc-l3"><a href="#npu-workers-and-runners">NPU workers and runners</a></li><li class="toc-l3"><a href="#npu-model-wrappers-and-ascend-patches">NPU model wrappers and Ascend patches</a></li><li class="toc-l3"><a href="#the-npu-recipes-and-what-they-report">The NPU recipes and what they report</a></li><li class="toc-l3"><a href="#where-to-read-more-the-npu-docs">Where to read more: the NPU docs</a></li><li class="toc-l2"><a href="#what-can-go-wrong">What can go wrong</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference: compat patches · AFD Plugin Explained</title>
+<meta name="description" content="Every AFD compat patch, its vLLM target at the pinned commit, how and when it installs, what it changes, and the page that explains it. Hand-checked, one row per replaced function.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="reference/compat-patches">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a class="current" aria-current="page" href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>Reference</span><span class="sep">›</span><span aria-current="page">Compat patches</span></nav>
+<h1 class="page-title">Reference: compat patches</h1>
+<div class="page-meta"><span class="level level-advanced" title="Level">Advanced</span><span class="meta-sec">Reference</span><span class="meta-time">about 5 min read</span></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">This table lists every <a class="term" href="../reference/glossary.html#term-patch" data-term="patch" data-def="A compat module that replaces a vLLM function at load time. The plugin applies a small set of patches.">patch</a> in <code>afd_plugin/compat/patches/</code>, its vLLM target at the pinned commit, its install mechanism, when it is active, and what it changes.</p></div>
+
+<h2 id="how-to-read-this-table">How to read this table<a class="h-anchor" href="#how-to-read-this-table" aria-label="Link to this section">#</a></h2>
+<p>Each row is one replaced function. The <strong>vLLM target</strong> is the function the patch stands in for,
+at the pinned vLLM commit (ced6857). The <strong>install</strong> column says where and how
+AFD installs the patch and what gates it. The <strong>active when</strong> column says which configs the patch
+actually changes; the others see native behavior. Every GPU patch is behind the
+<a class="term" href="../reference/glossary.html#term-version-gate" data-term="version gate" data-def="A check that decides whether a patch installs. is_target_vllm_compatible allows the target vLLM release and any dev build; on a mismatch, no patch installs.">version gate</a> <code>is_target_vllm_compatible</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/vllm.py#L53-L68" target="_blank" rel="noopener" title="afd_plugin/compat/vllm.py:53-68 at afd-plugin 7452d52"><code>afd_plugin/compat/vllm.py:53-68</code></a>). The concept page is <a href="../concepts/compat-patches.html">Compat patches: how AFD changes vLLM without editing it</a>.</p>
+
+<h2 id="gpu-patches">GPU patches<a class="h-anchor" href="#gpu-patches" aria-label="Link to this section">#</a></h2>
+
+<h3 id="config-validation-config-validation-py">config_validation (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/config_validation.py#L1" target="_blank" rel="noopener" title="afd_plugin/compat/patches/config_validation.py:1 at afd-plugin 7452d52">config_validation.py</a>)<a class="h-anchor" href="#config-validation-config-validation-py" aria-label="Link to this section">#</a></h3>
+<table>
+  <thead>
+    <tr><th>vLLM target</th><th>Install</th><th>Active when</th><th>Effect</th><th>Page</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>EngineArgs.create_engine_config</code> (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/engine/arg_utils.py#L2040" target="_blank" rel="noopener" title="vllm:vllm/engine/arg_utils.py:2040 at vLLM ced6857"><code>vllm:vllm/engine/arg_utils.py:2040</code></a>)</td>
+      <td>import time, gated; original saved once (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/config_validation.py#L235-L261" target="_blank" rel="noopener" title="afd_plugin/compat/patches/config_validation.py:235-261 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/config_validation.py:235-261</code></a>)</td>
+      <td>an AFD config is present</td>
+      <td>rewrites <code>worker_cls</code> to the AFD role worker when it was <code>"auto"</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/config_validation.py#L92-L93" target="_blank" rel="noopener" title="afd_plugin/compat/patches/config_validation.py:92-93 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/config_validation.py:92-93</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/config_validation.py#L179-L197" target="_blank" rel="noopener" title="afd_plugin/compat/patches/config_validation.py:179-197 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/config_validation.py:179-197</code></a>); relaxes one ubatch backend check (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/config_validation.py#L200-L214" target="_blank" rel="noopener" title="afd_plugin/compat/patches/config_validation.py:200-214 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/config_validation.py:200-214</code></a>)</td>
+      <td><a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a></td>
+    </tr>
+    <tr>
+      <td><code>VllmConfig.__post_init__</code> (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/vllm.py#L1254" target="_blank" rel="noopener" title="vllm:vllm/config/vllm.py:1254 at vLLM ced6857"><code>vllm:vllm/config/vllm.py:1254</code></a>)</td>
+      <td>import time, gated (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/config_validation.py#L243-L260" target="_blank" rel="noopener" title="afd_plugin/compat/patches/config_validation.py:243-260 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/config_validation.py:243-260</code></a>)</td>
+      <td>AFD config with ubatching, on config revalidation</td>
+      <td>presents a validation-safe all2all backend during revalidation, then restores it (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/config_validation.py#L128-L157" target="_blank" rel="noopener" title="afd_plugin/compat/patches/config_validation.py:128-157 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/config_validation.py:128-157</code></a>)</td>
+      <td><a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="engine-core-engine-core-py">engine_core (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L1" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:1 at afd-plugin 7452d52">engine_core.py</a>)<a class="h-anchor" href="#engine-core-engine-core-py" aria-label="Link to this section">#</a></h3>
+<table>
+  <thead>
+    <tr><th>vLLM target</th><th>Install</th><th>Active when</th><th>Effect</th><th>Page</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>EngineCore.__init__</code> (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/engine/core.py#L108" target="_blank" rel="noopener" title="vllm:vllm/v1/engine/core.py:108 at vLLM ced6857"><code>vllm:vllm/v1/engine/core.py:108</code></a>)</td>
+      <td>import time, gated (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L722-L727" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:722-727 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:722-727</code></a>)</td>
+      <td>role is <code>ffn</code></td>
+      <td>returns after the executor is built; no real scheduler (a no-op stand-in), no KV cache (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L56-L68" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:56-68 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:56-68</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L599-L623" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:599-623 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:599-623</code></a>)</td>
+      <td><a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a></td>
+    </tr>
+    <tr>
+      <td><code>EngineCore._initialize_kv_caches</code> (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/engine/core.py#L254" target="_blank" rel="noopener" title="vllm:vllm/v1/engine/core.py:254 at vLLM ced6857"><code>vllm:vllm/v1/engine/core.py:254</code></a>)</td>
+      <td>import time, gated (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L724" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:724 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:724</code></a>)</td>
+      <td>role is <code>ffn</code>, late-loaded path</td>
+      <td>returns a minimal KV cache config and sets zero blocks for FFN daemons (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L257-L264" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:257-264 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:257-264</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L635-L647" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:635-647 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:635-647</code></a>)</td>
+      <td><a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a></td>
+    </tr>
+    <tr>
+      <td><code>EngineCore.shutdown</code> (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/engine/core.py#L756" target="_blank" rel="noopener" title="vllm:vllm/v1/engine/core.py:756 at vLLM ced6857"><code>vllm:vllm/v1/engine/core.py:756</code></a>)</td>
+      <td>import time, gated (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L725" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:725 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:725</code></a>)</td>
+      <td>role is <code>ffn</code></td>
+      <td>stops the FFN worker loop before tearing down the executor (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L216-L228" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:216-228 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:216-228</code></a>)</td>
+      <td><a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a></td>
+    </tr>
+    <tr>
+      <td><code>EngineCoreProc.run_busy_loop</code> (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/engine/core.py#L1403" target="_blank" rel="noopener" title="vllm:vllm/v1/engine/core.py:1403 at vLLM ced6857"><code>vllm:vllm/v1/engine/core.py:1403</code></a>)</td>
+      <td>import time, gated (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L726" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:726 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:726</code></a>)</td>
+      <td>FFN engine</td>
+      <td>runs the connector loop: <code>collective_rpc("start_ffn_server_loop")</code>, then polls worker errors (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L411-L419" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:411-419 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:411-419</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L650-L662" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:650-662 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:650-662</code></a>)</td>
+      <td><a href="../concepts/ffn-runtime.html">The FFN runtime: a connector-driven server loop</a></td>
+    </tr>
+    <tr>
+      <td><code>DPEngineCoreProc.run_busy_loop</code> (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/engine/core.py#L2181" target="_blank" rel="noopener" title="vllm:vllm/v1/engine/core.py:2181 at vLLM ced6857"><code>vllm:vllm/v1/engine/core.py:2181</code></a>)</td>
+      <td>import time, gated (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L727" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:727 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:727</code></a>)</td>
+      <td>FFN engine (DP path)</td>
+      <td>same connector loop for the DP engine process (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L416-L419" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:416-419 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:416-419</code></a>)</td>
+      <td><a href="../concepts/ffn-runtime.html">The FFN runtime: a connector-driven server loop</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="gpu-mrv2-ubatching-gpu-mrv2-ubatching-py">gpu_mrv2_ubatching (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L1" target="_blank" rel="noopener" title="afd_plugin/compat/patches/gpu_mrv2_ubatching.py:1 at afd-plugin 7452d52">gpu_mrv2_ubatching.py</a>)<a class="h-anchor" href="#gpu-mrv2-ubatching-gpu-mrv2-ubatching-py" aria-label="Link to this section">#</a></h3>
+<table>
+  <thead>
+    <tr><th>vLLM target</th><th>Install</th><th>Active when</th><th>Effect</th><th>Page</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>maybe_build_ubatch_runner</code> (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/gpu/ubatch_utils.py#L538" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/gpu/ubatch_utils.py:538 at vLLM ced6857"><code>vllm:vllm/v1/worker/gpu/ubatch_utils.py:538</code></a>)</td>
+      <td>scoped: <code>use_gpu_mrv2_ubatch_factory</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L263-L271" target="_blank" rel="noopener" title="afd_plugin/compat/patches/gpu_mrv2_ubatching.py:263-271 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/gpu_mrv2_ubatching.py:263-271</code></a>)</td>
+      <td>inside AFD <code>initialize_kv_cache</code>, DP size 1 (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L479-L486" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:479-486 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:479-486</code></a>)</td>
+      <td>builds the ubatch runner at DP1 and binds DP1 child metadata (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L47-L73" target="_blank" rel="noopener" title="afd_plugin/compat/patches/gpu_mrv2_ubatching.py:47-73 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/gpu_mrv2_ubatching.py:47-73</code></a>)</td>
+      <td><a href="../concepts/dbo.html">Dual-batch overlap (DBO): two stages per step</a></td>
+    </tr>
+    <tr>
+      <td><code>dispatch_cg_and_sync_dp</code> (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/gpu/dp_utils.py#L214" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/gpu/dp_utils.py:214 at vLLM ced6857"><code>vllm:vllm/v1/worker/gpu/dp_utils.py:214</code></a>)</td>
+      <td>scoped: <code>use_gpu_mrv2_dbo_dispatch</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L274-L282" target="_blank" rel="noopener" title="afd_plugin/compat/patches/gpu_mrv2_ubatching.py:274-282 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/gpu_mrv2_ubatching.py:274-282</code></a>)</td>
+      <td>inside one AFD <code>execute_model</code> call (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L340-L349" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:340-349 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:340-349</code></a>)</td>
+      <td>applies the DBO threshold and ubatch descriptor at DP1 with no DP handshake (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L194-L226" target="_blank" rel="noopener" title="afd_plugin/compat/patches/gpu_mrv2_ubatching.py:194-226 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/gpu_mrv2_ubatching.py:194-226</code></a>)</td>
+      <td><a href="../concepts/dbo.html">Dual-batch overlap (DBO): two stages per step</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="npu-gated-patches">NPU-gated patches<a class="h-anchor" href="#npu-gated-patches" aria-label="Link to this section">#</a></h2>
+<p>These two modules install at import time but only change behavior for async-DP configs, which are
+<a class="term" href="../reference/glossary.html#term-async-dp" data-term="async_dp" data-def="An AFD config flag. It is NPU-only: it turns on the async data-parallel patches, is gated at run time, and must be false on GPU.">NPU only</a>. On GPU, <code>async_dp</code> must be false, so they run as transparent
+re-implementations (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L303-L308" target="_blank" rel="noopener" title="afd_plugin/config.py:303-308 at afd-plugin 7452d52"><code>afd_plugin/config.py:303-308</code></a>).</p>
+
+<h3 id="async-dp-engine-async-dp-engine-py">async_dp_engine (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/async_dp_engine.py#L1" target="_blank" rel="noopener" title="afd_plugin/compat/patches/async_dp_engine.py:1 at afd-plugin 7452d52">async_dp_engine.py</a>)<a class="h-anchor" href="#async-dp-engine-async-dp-engine-py" aria-label="Link to this section">#</a></h3>
+<table>
+  <thead>
+    <tr><th>vLLM target</th><th>Install</th><th>Active when</th><th>Effect</th><th>Page</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>EngineCoreProc.run_engine_core</code> (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/engine/core.py#L1283" target="_blank" rel="noopener" title="vllm:vllm/v1/engine/core.py:1283 at vLLM ced6857"><code>vllm:vllm/v1/engine/core.py:1283</code></a>)</td>
+      <td>import time, gated (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/async_dp_engine.py#L424-L432" target="_blank" rel="noopener" title="afd_plugin/compat/patches/async_dp_engine.py:424-432 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/async_dp_engine.py:424-432</code></a>)</td>
+      <td>NPU async attention config</td>
+      <td>selects <code>EngineCoreProc</code> instead of <code>DPEngineCoreProc</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/async_dp_engine.py#L117-L120" target="_blank" rel="noopener" title="afd_plugin/compat/patches/async_dp_engine.py:117-120 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/async_dp_engine.py:117-120</code></a>)</td>
+      <td><a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a></td>
+    </tr>
+    <tr>
+      <td><code>launch_core_engines</code> (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/engine/utils.py#L1104" target="_blank" rel="noopener" title="vllm:vllm/v1/engine/utils.py:1104 at vLLM ced6857"><code>vllm:vllm/v1/engine/utils.py:1104</code></a>)</td>
+      <td>import time, gated (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/async_dp_engine.py#L428-L429" target="_blank" rel="noopener" title="afd_plugin/compat/patches/async_dp_engine.py:428-429 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/async_dp_engine.py:428-429</code></a>)</td>
+      <td>NPU async config</td>
+      <td>disables DP wave coordination on the coordinator (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/async_dp_engine.py#L248-L252" target="_blank" rel="noopener" title="afd_plugin/compat/patches/async_dp_engine.py:248-252 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/async_dp_engine.py:248-252</code></a>)</td>
+      <td><a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a></td>
+    </tr>
+    <tr>
+      <td><code>DPAsyncMPClient.add_request_async</code> (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/engine/core_client.py#L1486" target="_blank" rel="noopener" title="vllm:vllm/v1/engine/core_client.py:1486 at vLLM ced6857"><code>vllm:vllm/v1/engine/core_client.py:1486</code></a>)</td>
+      <td>import time, gated (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/async_dp_engine.py#L430" target="_blank" rel="noopener" title="afd_plugin/compat/patches/async_dp_engine.py:430 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/async_dp_engine.py:430</code></a>)</td>
+      <td>NPU async config</td>
+      <td>skips the <code>FIRST_REQ</code> wakeup for async configs (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/async_dp_engine.py#L389-L401" target="_blank" rel="noopener" title="afd_plugin/compat/patches/async_dp_engine.py:389-401 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/async_dp_engine.py:389-401</code></a>)</td>
+      <td><a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="async-dp-forward-context-async-dp-forward-context-py">async_dp_forward_context (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/async_dp_forward_context.py#L1" target="_blank" rel="noopener" title="afd_plugin/compat/patches/async_dp_forward_context.py:1 at afd-plugin 7452d52">async_dp_forward_context.py</a>)<a class="h-anchor" href="#async-dp-forward-context-async-dp-forward-context-py" aria-label="Link to this section">#</a></h3>
+<table>
+  <thead>
+    <tr><th>vLLM target</th><th>Install</th><th>Active when</th><th>Effect</th><th>Page</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>set_forward_context</code> (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/forward_context.py#L269" target="_blank" rel="noopener" title="vllm:vllm/forward_context.py:269 at vLLM ced6857"><code>vllm:vllm/forward_context.py:269</code></a>)</td>
+      <td>import time, gated; also rebinds the symbol in importing modules (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/async_dp_forward_context.py#L207-L212" target="_blank" rel="noopener" title="afd_plugin/compat/patches/async_dp_forward_context.py:207-212 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/async_dp_forward_context.py:207-212</code></a>)</td>
+      <td>NPU async-DP config</td>
+      <td>skips native DP metadata construction only for async configs (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/async_dp_forward_context.py#L88-L127" target="_blank" rel="noopener" title="afd_plugin/compat/patches/async_dp_forward_context.py:88-127 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/async_dp_forward_context.py:88-127</code></a>)</td>
+      <td><a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="npu-device-patches">NPU device patches<a class="h-anchor" href="#npu-device-patches" aria-label="Link to this section">#</a></h2>
+<p>These install only when the device is NPU (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L204-L209" target="_blank" rel="noopener" title="afd_plugin/__init__.py:204-209 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:204-209</code></a>). Their upstream targets are
+in vLLM-Ascend, which is not one of the two pinned repositories, so the row cites the AFD module. They are
+covered on <a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a>.</p>
+<table>
+  <thead>
+    <tr><th>AFD module</th><th>Upstream (external)</th><th>Effect</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/npu/ascend_config.py#L1" target="_blank" rel="noopener" title="afd_plugin/compat/patches/npu/ascend_config.py:1 at afd-plugin 7452d52">npu/ascend_config.py</a></td>
+      <td>vLLM-Ascend <code>ascend_config</code></td>
+      <td>keeps AFD settings outside the strict Ascend config namespace (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/npu/ascend_config.py#L3" target="_blank" rel="noopener" title="afd_plugin/compat/patches/npu/ascend_config.py:3 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/npu/ascend_config.py:3</code></a>)</td>
+    </tr>
+    <tr>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/npu/ascend_platform.py#L1" target="_blank" rel="noopener" title="afd_plugin/compat/patches/npu/ascend_platform.py:1 at afd-plugin 7452d52">npu/ascend_platform.py</a></td>
+      <td>vLLM-Ascend <code>platform.py</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/npu/ascend_platform.py#L5" target="_blank" rel="noopener" title="afd_plugin/compat/patches/npu/ascend_platform.py:5 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/npu/ascend_platform.py:5</code></a>)</td>
+      <td>patches Ascend platform config normalization for AFD DBO (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/npu/ascend_platform.py#L3" target="_blank" rel="noopener" title="afd_plugin/compat/patches/npu/ascend_platform.py:3 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/npu/ascend_platform.py:3</code></a>)</td>
+    </tr>
+    <tr>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/npu/mla_graph.py#L1" target="_blank" rel="noopener" title="afd_plugin/compat/patches/npu/mla_graph.py:1 at afd-plugin 7452d52">npu/mla_graph.py</a></td>
+      <td>vLLM-Ascend <code>attention/mla_v1.py</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/npu/mla_graph.py#L5" target="_blank" rel="noopener" title="afd_plugin/compat/patches/npu/mla_graph.py:5 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/npu/mla_graph.py:5</code></a>)</td>
+      <td>routes Ascend MLA <a class="term" href="../reference/glossary.html#term-acl-graph" data-term="ACL graph" data-def="The Ascend NPU form of a captured graph, the NPU counterpart of a CUDA graph. The NPU validator accepts the FULL and FULL_DECODE_ONLY modes.">ACL graph</a> parameters through AFD forward contexts (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/npu/mla_graph.py#L3" target="_blank" rel="noopener" title="afd_plugin/compat/patches/npu/mla_graph.py:3 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/npu/mla_graph.py:3</code></a>)</td>
+    </tr>
+    <tr>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/npu/mrv2_ubatching.py#L1" target="_blank" rel="noopener" title="afd_plugin/compat/patches/npu/mrv2_ubatching.py:1 at afd-plugin 7452d52">npu/mrv2_ubatching.py</a></td>
+      <td>vLLM native ubatch runner (Ascend baseline) (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/npu/mrv2_ubatching.py#L3-L4" target="_blank" rel="noopener" title="afd_plugin/compat/patches/npu/mrv2_ubatching.py:3-4 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/npu/mrv2_ubatching.py:3-4</code></a>)</td>
+      <td>scopes Ascend seams for the native ubatch runner (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/npu/mrv2_ubatching.py#L3-L8" target="_blank" rel="noopener" title="afd_plugin/compat/patches/npu/mrv2_ubatching.py:3-8 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/npu/mrv2_ubatching.py:3-8</code></a>)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="what-is-not-patched">What is not patched<a class="h-anchor" href="#what-is-not-patched" aria-label="Link to this section">#</a></h2>
+<p>AFD does not patch the API server, the scheduler, the sampler or the attention and KV kernels. The attention
+runner wraps native methods instead of replacing them (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L569-L595" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:569-595 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:569-595</code></a>),
+and sampling stays native (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/gpu/model_runner.py#L2048-L2050" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050 at vLLM ced6857"><code>vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050</code></a>).</p>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/compat-patches.html">Compat patches: how AFD changes vLLM without editing it</a><span class="rel-sum">AFD edits no vLLM source. It imports patch modules that replace vLLM functions in place, behind a version gate. This page covers the discipline, the gates, and what each GPU patch changes.</span></li><li><a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a><span class="rel-sum">AFD chooses a role-specific worker class by rewriting parallel_config.worker_cls, but only when the user left it as &quot;auto&quot;. This page shows the rewrite, the platform-to-worker table, the native resolution, the runner swap and the compatibility check.</span></li><li><a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a><span class="rel-sum">AFD runs the attention part and the FFN part as two server processes. This page shows what each role owns, and why the FFN side has no real scheduler, no KV cache and no sampler.</span></li><li><a href="../concepts/dbo.html">Dual-batch overlap (DBO): two stages per step</a><span class="rel-sum">DBO splits one step into exactly two stages. While one stage waits on the FFN side, the other computes attention, so the two roles stay busy. AFD adds a yield op and scoped patches for DP1.</span></li><li><a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a><span class="rel-sum">AFD on Ascend NPU keeps the same attention/FFN contract as GPU but uses two CAM connectors: CAMP2p (sync, with a control plane over HCCL and Gloo) and CAMAsync (async, no control plane, driven by its receive loop). This page maps the NPU workers, runners, model wrappers, patches and the operator loader, and points to the NPU docs.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../reference/recipes.html"><span class="pn-dir">← Previous</span><span class="pn-title">Recipes reference</span></a><a class="pn pn-next" href="../reference/faq.html"><span class="pn-dir">Next →</span><span class="pn-title">FAQ</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#how-to-read-this-table">How to read this table</a></li><li class="toc-l2"><a href="#gpu-patches">GPU patches</a></li><li class="toc-l3"><a href="#config-validation-config-validation-py">config_validation (config_validation.py)</a></li><li class="toc-l3"><a href="#engine-core-engine-core-py">engine_core (engine_core.py)</a></li><li class="toc-l3"><a href="#gpu-mrv2-ubatching-gpu-mrv2-ubatching-py">gpu_mrv2_ubatching (gpu_mrv2_ubatching.py)</a></li><li class="toc-l2"><a href="#npu-gated-patches">NPU-gated patches</a></li><li class="toc-l3"><a href="#async-dp-engine-async-dp-engine-py">async_dp_engine (async_dp_engine.py)</a></li><li class="toc-l3"><a href="#async-dp-forward-context-async-dp-forward-context-py">async_dp_forward_context (async_dp_forward_context.py)</a></li><li class="toc-l2"><a href="#npu-device-patches">NPU device patches</a></li><li class="toc-l2"><a href="#what-is-not-patched">What is not patched</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+
+</body>
+</html>

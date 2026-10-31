@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AFD configuration: additional_config[&quot;afd&quot;] · AFD Plugin Explained</title>
+<meta name="description" content="AFD reads one key, additional_config[&quot;afd&quot;]. This page shows its schema, the compatibility aliases, how values are normalized and coerced, the validation rules, and the rule that AFD is active only when the key is present.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="concepts/afd-config">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a class="current" aria-current="page" href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>AFD concepts</span><span class="sep">›</span><span>Plugin boundary</span><span class="sep">›</span><span aria-current="page">AFD configuration</span></nav>
+<h1 class="page-title">AFD configuration: additional_config[&quot;afd&quot;]</h1>
+<div class="page-meta"><span class="level level-intermediate" title="Level">Intermediate</span><span class="meta-sec">AFD concepts</span><span class="meta-time">about 5 min read + 2 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a> <span class="level level-intermediate level-sm">Intermediate</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">AFD reads one key, <a class="term" href="../reference/glossary.html#term-additional-config" data-term="additional_config" data-def="A vLLM config field. The plugin reads its &quot;afd&quot; key for the role, the connector, the topology sizes and the host/port.">additional_config["afd"]</a>. The plugin renames aliases, coerces types, builds <a class="term" href="../reference/glossary.html#term-afd-config" data-term="AFDConfig" data-def="The plugin&#x27;s own configuration object. It holds the role, the connector name, the topology sizes and the rendezvous host/port.">AFDConfig</a>, then validates it.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p>vLLM has one open config field for out-of-tree code, <code>additional_config</code>
+(<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/vllm.py#L434" target="_blank" rel="noopener" title="vllm:vllm/config/vllm.py:434 at vLLM ced6857"><code>vllm:vllm/config/vllm.py:434</code></a>). afd-plugin reads one key inside it,
+<code>"afd"</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L20" target="_blank" rel="noopener" title="afd_plugin/config.py:20 at afd-plugin 7452d52"><code>afd_plugin/config.py:20</code></a>). The value is a mapping of AFD
+settings: the role, the connector, the topology sizes and the rendezvous host and port.</p>
+<p>The plugin does not use the raw mapping directly. It renames old <code>afd_*</code>
+aliases to short names, coerces the types, builds a frozen dataclass, and validates the
+result. One flag decides whether AFD runs at all: AFD is active only when the
+<code>"afd"</code> key is present.</p>
+<p><strong>An everyday comparison.</strong> Think of a form with a few fields and some old
+field names kept for compatibility. A clerk renames the old names, checks each value, and
+files one clean record. The comparison stops here: a missing form here does not mean an
+error, it means AFD stays off.</p>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<figure class="diagram" id="fig-b1_afd_config"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Two panels. Panel 1 is a five-step pipeline: read the &#x27;afd&#x27; key; normalize by applying aliases and pulling out the extra config; coerce types and reject bool or float as int; build the frozen AFDConfig dataclass; validate the values. Panel 2 shows two branches: with the &#x27;afd&#x27; key present, parse and validate give an AFDConfig; with the key absent, parse returns None and AFD stays off."><svg role="img" aria-label="Two panels. Panel 1 is a five-step pipeline: read the &#x27;afd&#x27; key; normalize by applying aliases and pulling out the extra config; coerce types and reject bool or float as int; build the frozen AFDConfig dataclass; validate the values. Panel 2 shows two branches: with the &#x27;afd&#x27; key present, parse and validate give an AFDConfig; with the key absent, parse returns None and AFD stays off." xmlns="http://www.w3.org/2000/svg" width="1100" height="810" viewBox="0 0 1100 810">
+<defs></defs>
+<rect width="1100" height="810" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">From a dict to a validated AFDConfig</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The plugin reads one key, renames aliases, coerces types, builds the dataclass, then validates it.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_plugin/config.py:120-350  ·  config_utils.py:35-54</text>
+<rect x="20.0" y="120.0" width="1060.0" height="420.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="146.0" r="13" fill="#111827"/>
+<text x="46.0" y="150.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="151.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">The parse pipeline</text>
+<text x="68.0" y="170.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">One function, afd_config_from_mapping, runs these steps in order (config.py:179-194).</text>
+<rect x="60.0" y="178.0" width="980.0" height="58.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<rect x="60.0" y="178.0" width="6.0" height="58.0" rx="3" fill="#9ca3af" fill-opacity="1.0" stroke="none"/>
+<circle cx="82.0" cy="195.0" r="10" fill="#9ca3af"/>
+<text x="82.0" y="199.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="98.0" y="200.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Read the &#x27;afd&#x27; key</text>
+<rect x="899.4" y="186.0" width="132.6" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1"/>
+<text x="965.7" y="199.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">config.py:227-234</text>
+<text x="98.0" y="220.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">in</text>
+<text x="140.0" y="220.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">additional_config[&quot;afd&quot;] mapping</text>
+<rect x="60.0" y="252.0" width="980.0" height="58.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="60.0" y="252.0" width="6.0" height="58.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="82.0" cy="269.0" r="10" fill="#2563eb"/>
+<text x="82.0" y="273.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="98.0" y="274.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Normalize: apply aliases, pull out extra config</text>
+<rect x="899.4" y="260.0" width="132.6" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="965.7" y="273.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">config.py:120-146</text>
+<text x="98.0" y="294.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">map</text>
+<text x="140.0" y="294.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_connector-&gt;connector, async-&gt;async_dp, ...</text>
+<rect x="60.0" y="326.0" width="980.0" height="58.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="60.0" y="326.0" width="6.0" height="58.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="82.0" cy="343.0" r="10" fill="#2563eb"/>
+<text x="82.0" y="347.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="98.0" y="348.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Coerce types (reject bool/float as int)</text>
+<rect x="899.4" y="334.0" width="132.6" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="965.7" y="347.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">config.py:147-174</text>
+<text x="98.0" y="368.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">int</text>
+<text x="140.0" y="368.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">port, num_attention_ranks, num_ffn_ranks</text>
+<rect x="60.0" y="400.0" width="980.0" height="58.0" rx="8" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.4"/>
+<rect x="60.0" y="400.0" width="6.0" height="58.0" rx="3" fill="#0d9488" fill-opacity="1.0" stroke="none"/>
+<circle cx="82.0" cy="417.0" r="10" fill="#0d9488"/>
+<text x="82.0" y="421.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">4</text>
+<text x="98.0" y="422.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Build the frozen dataclass</text>
+<rect x="925.9" y="408.0" width="106.1" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#0d9488" stroke-width="1"/>
+<text x="979.0" y="421.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#0d9488" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">config.py:190</text>
+<text x="98.0" y="442.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">new</text>
+<text x="140.0" y="442.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">AFDConfig(**normalized, connector_extra_config)</text>
+<rect x="60.0" y="474.0" width="980.0" height="58.0" rx="8" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<rect x="60.0" y="474.0" width="6.0" height="58.0" rx="3" fill="#d97706" fill-opacity="1.0" stroke="none"/>
+<circle cx="82.0" cy="491.0" r="10" fill="#d97706"/>
+<text x="82.0" y="495.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">5</text>
+<text x="98.0" y="496.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Validate values</text>
+<rect x="899.4" y="482.0" width="132.6" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#d97706" stroke-width="1"/>
+<text x="965.7" y="495.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#d97706" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">config.py:311-350</text>
+<text x="98.0" y="516.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">check</text>
+<text x="140.0" y="516.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">role, connector, host, port, rank counts</text>
+<rect x="20.0" y="560.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="586.0" r="13" fill="#111827"/>
+<text x="46.0" y="590.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="591.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">AFD is active only when the &#x27;afd&#x27; key is present</text>
+<text x="68.0" y="610.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">No key means parse returns None, and AFD stays off (config.py:244-292).</text>
+<rect x="70.0" y="630.0" width="430.0" height="60.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="82.0" y="650.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">&#x27;afd&#x27; key present</text>
+<text x="82.0" y="668.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">parse + validate  -&gt;  AFDConfig</text>
+<rect x="600.0" y="630.0" width="430.0" height="60.0" rx="8" fill="#fdf2f8" fill-opacity="1.0" stroke="#db2777" stroke-width="1.5"/>
+<text x="612.0" y="650.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#db2777" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">&#x27;afd&#x27; key absent</text>
+<text x="612.0" y="668.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">parse returns None  -&gt;  AFD off</text>
+<text x="30.0" y="739.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="728.0" width="14.0" height="14.0" rx="3" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<text x="118.3" y="739.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">input</text>
+<rect x="173.4" y="728.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="194.4" y="739.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">transform</text>
+<rect x="281.5" y="728.0" width="14.0" height="14.0" rx="3" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.4"/>
+<text x="302.5" y="739.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">build</text>
+<rect x="354.7" y="728.0" width="14.0" height="14.0" rx="3" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<text x="375.7" y="739.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">validate</text>
+<text x="30.0" y="762.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">coerce_extra_int rejects bool and float, so 1.0 or True for an int field raises (config_utils.py:35-45).</text>
+<text x="30.0" y="780.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">connector_extra_config is kept aside and parsed later by each connector.</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: one function runs the parse pipeline (panel 1); the presence of the 'afd' key decides whether AFD is active (panel 2).</figcaption><a class="diagram-open" href="../diagrams/b1_afd_config.svg" target="_blank">Open full size ↗</a></div></figure>
+<p>Read panel 1 left to top-down as the pipeline inside <code>afd_config_from_mapping</code>.
+Read panel 2 as the on/off rule. The full key tables are on the <a href="../reference/afd-config.html">AFD config reference: the additional_config[&quot;afd&quot;] keys</a>
+page; this page explains the rules behind them.</p>
+
+<h2 id="in-the-code">In the code<a class="h-anchor" href="#in-the-code" aria-label="Link to this section">#</a></h2>
+
+<h3 id="step-1-the-schema">Step 1: The schema<a class="h-anchor" href="#step-1-the-schema" aria-label="Link to this section">#</a></h3>
+<p><code>AFDConfig</code> is a frozen dataclass. Its fields and defaults are the schema
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L42-L73" target="_blank" rel="noopener" title="afd_plugin/config.py:42-73 at afd-plugin 7452d52"><code>afd_plugin/config.py:42-73</code></a>). The table lists them; the full reference is on the
+<a href="../reference/afd-config.html">AFD config reference: the additional_config[&quot;afd&quot;] keys</a> page.</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L51-L73" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/config.py:51-73</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L51-L73" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">51</span><span class="ln">52</span><span class="ln">53</span><span class="ln">54</span><span class="ln">55</span><span class="ln">56</span><span class="ln">57</span><span class="ln">58</span><span class="ln">59</span><span class="ln">60</span><span class="ln">61</span><span class="ln">62</span><span class="ln">63</span><span class="ln">64</span><span class="ln">65</span><span class="ln">66</span><span class="ln">67</span><span class="ln">68</span><span class="ln">69</span><span class="ln">70</span><span class="ln">71</span><span class="ln">72</span><span class="ln">73</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">    # Connector implementation name used to create the backend data path.
+    connector: str = &quot;P2pNcclAFDConnector&quot;
+    # Whether AFD owns async data-parallel runtime patches for this process.
+    async_dp: bool = False
+    # Role owned by this process: Attention sends hidden states; FFN receives.
+    role: AFDRole = &quot;attention&quot;
+    # Port used by the AFD connector rendezvous/control path.
+    port: int = 1239
+    # Host used by the AFD connector rendezvous/control path.
+    host: str = &quot;127.0.0.1&quot;
+    # Number of AFD Attention ranks participating in this topology.
+    num_attention_ranks: int = 1
+    # Number of AFD FFN ranks participating in this topology.
+    num_ffn_ranks: int = 1
+    # Whether Attention computes MoE gate outputs before sending to FFN.
+    compute_gate_on_attention: bool = False
+    # Timeout, in seconds, for the AFD world process group rendezvous.
+    # The right value depends on rank count, placement, and model size, so
+    # it is left to the caller (deployment tooling) rather than derived here.
+    afd_process_group_timeout_s: int = 120
+    connector_extra_config: dict[str, Any] = field(
+        default_factory=dict, repr=False, hash=False
+    )</code></pre></div></div></div><figcaption class="code-caption">The AFDConfig fields and their defaults.</figcaption></figure>
+<table>
+  <thead><tr><th>Field</th><th>Default</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>connector</code></td><td><code>"P2pNcclAFDConnector"</code></td><td>Connector name (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L52" target="_blank" rel="noopener" title="afd_plugin/config.py:52 at afd-plugin 7452d52"><code>afd_plugin/config.py:52</code></a>).</td></tr>
+    <tr><td><code>async_dp</code></td><td><code>False</code></td><td>NPU-only async DP (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L54" target="_blank" rel="noopener" title="afd_plugin/config.py:54 at afd-plugin 7452d52"><code>afd_plugin/config.py:54</code></a>).</td></tr>
+    <tr><td><code>role</code></td><td><code>"attention"</code></td><td>Role of this process (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L56" target="_blank" rel="noopener" title="afd_plugin/config.py:56 at afd-plugin 7452d52"><code>afd_plugin/config.py:56</code></a>).</td></tr>
+    <tr><td><code>port</code>, <code>host</code></td><td><code>1239</code>, <code>"127.0.0.1"</code></td><td>Rendezvous (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L58-L60" target="_blank" rel="noopener" title="afd_plugin/config.py:58-60 at afd-plugin 7452d52"><code>afd_plugin/config.py:58-60</code></a>).</td></tr>
+    <tr><td><code>num_attention_ranks</code>, <code>num_ffn_ranks</code></td><td><code>1</code>, <code>1</code></td><td>Topology sizes (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L62-L64" target="_blank" rel="noopener" title="afd_plugin/config.py:62-64 at afd-plugin 7452d52"><code>afd_plugin/config.py:62-64</code></a>).</td></tr>
+    <tr><td><code>compute_gate_on_attention</code></td><td><code>False</code></td><td>MoE gate placement (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L66" target="_blank" rel="noopener" title="afd_plugin/config.py:66 at afd-plugin 7452d52"><code>afd_plugin/config.py:66</code></a>).</td></tr>
+    <tr><td><code>afd_process_group_timeout_s</code></td><td><code>120</code></td><td>Rendezvous timeout (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L70" target="_blank" rel="noopener" title="afd_plugin/config.py:70 at afd-plugin 7452d52"><code>afd_plugin/config.py:70</code></a>).</td></tr>
+    <tr><td><code>connector_extra_config</code></td><td><code>{}</code></td><td>Per-connector options (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L71-L73" target="_blank" rel="noopener" title="afd_plugin/config.py:71-73 at afd-plugin 7452d52"><code>afd_plugin/config.py:71-73</code></a>).</td></tr>
+  </tbody>
+</table>
+
+<h3 id="step-2-aliases">Step 2: Aliases<a class="h-anchor" href="#step-2-aliases" aria-label="Link to this section">#</a></h3>
+<p>Five old <code>afd_*</code> names stay valid as read-only aliases. Normalization renames
+each to its short name (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L32-L38" target="_blank" rel="noopener" title="afd_plugin/config.py:32-38 at afd-plugin 7452d52"><code>afd_plugin/config.py:32-38</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L32-L38" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/config.py:32-38</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L32-L38" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">32</span><span class="ln">33</span><span class="ln">34</span><span class="ln">35</span><span class="ln">36</span><span class="ln">37</span><span class="ln">38</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">_ALIASES: Final[dict[str, str]] = {
+    &quot;afd_connector&quot;: &quot;connector&quot;,
+    &quot;afd_role&quot;: &quot;role&quot;,
+    &quot;afd_port&quot;: &quot;port&quot;,
+    &quot;afd_host&quot;: &quot;host&quot;,
+    &quot;async&quot;: &quot;async_dp&quot;,
+}</code></pre></div></div></div><figcaption class="code-caption">The alias map: afd_connector, afd_role, afd_port, afd_host, async.</figcaption></figure>
+<p>So the recipe may write <code>"afd_role"</code> or <code>"role"</code>; both reach the
+<code>role</code> field (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L128" target="_blank" rel="noopener" title="afd_plugin/config.py:128 at afd-plugin 7452d52"><code>afd_plugin/config.py:128</code></a>).</p>
+
+<h3 id="step-3-normalization-and-coercion">Step 3: Normalization and coercion<a class="h-anchor" href="#step-3-normalization-and-coercion" aria-label="Link to this section">#</a></h3>
+<p><code>_normalize_mapping</code> renames the aliases, splits out
+<code>connector_extra_config</code>, rejects an unknown field, and coerces the typed fields
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L120-L176" target="_blank" rel="noopener" title="afd_plugin/config.py:120-176 at afd-plugin 7452d52"><code>afd_plugin/config.py:120-176</code></a>). The integer fields use <code>coerce_extra_int</code>,
+which rejects a bool or a float instead of truncating it
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config_utils.py#L35-L45" target="_blank" rel="noopener" title="afd_plugin/config_utils.py:35-45 at afd-plugin 7452d52"><code>afd_plugin/config_utils.py:35-45</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L147-L174" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/config.py:147-174</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L147-L174" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">147</span><span class="ln">148</span><span class="ln">149</span><span class="ln">150</span><span class="ln">151</span><span class="ln">152</span><span class="ln">153</span><span class="ln">154</span><span class="ln">155</span><span class="ln">156</span><span class="ln">157</span><span class="ln">158</span><span class="ln hl">159</span><span class="ln">160</span><span class="ln">161</span><span class="ln">162</span><span class="ln">163</span><span class="ln">164</span><span class="ln hl">165</span><span class="ln">166</span><span class="ln">167</span><span class="ln">168</span><span class="ln">169</span><span class="ln">170</span><span class="ln hl">171</span><span class="ln">172</span><span class="ln">173</span><span class="ln">174</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(12 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(18 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(24 * var(--code-lh))"></span><pre><code class="language-python">    if &quot;async_dp&quot; in normalized:
+        normalized[&quot;async_dp&quot;] = _coerce_bool(
+            normalized[&quot;async_dp&quot;],
+            field_name=&quot;async&quot;,
+        )
+
+    for field_name in (
+        &quot;port&quot;,
+        &quot;num_attention_ranks&quot;,
+        &quot;num_ffn_ranks&quot;,
+    ):
+        if field_name in normalized:
+            normalized[field_name] = _coerce_int(
+                normalized[field_name],
+                field_name=field_name,
+            )
+
+    if &quot;afd_process_group_timeout_s&quot; in normalized:
+        normalized[&quot;afd_process_group_timeout_s&quot;] = _coerce_positive_int(
+            normalized[&quot;afd_process_group_timeout_s&quot;],
+            field_name=&quot;afd_process_group_timeout_s&quot;,
+        )
+
+    if &quot;compute_gate_on_attention&quot; in normalized:
+        normalized[&quot;compute_gate_on_attention&quot;] = _coerce_bool(
+            normalized[&quot;compute_gate_on_attention&quot;],
+            field_name=&quot;compute_gate_on_attention&quot;,
+        )</code></pre></div></div></div><figcaption class="code-caption">Coerce async_dp, the integer fields and the positive-int timeout.</figcaption></figure>
+
+<h3 id="step-4-the-validation-rules">Step 4: The validation rules<a class="h-anchor" href="#step-4-the-validation-rules" aria-label="Link to this section">#</a></h3>
+<p><code>validate_afd_config</code> checks the built config without importing vLLM or CUDA
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L311-L350" target="_blank" rel="noopener" title="afd_plugin/config.py:311-350 at afd-plugin 7452d52"><code>afd_plugin/config.py:311-350</code></a>). The rules:</p>
+<ul>
+  <li>the role is <code>"attention"</code> or <code>"ffn"</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L318-L321" target="_blank" rel="noopener" title="afd_plugin/config.py:318-321 at afd-plugin 7452d52"><code>afd_plugin/config.py:318-321</code></a>);</li>
+  <li>the connector name is one of the three supported names (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L326-L330" target="_blank" rel="noopener" title="afd_plugin/config.py:326-330 at afd-plugin 7452d52"><code>afd_plugin/config.py:326-330</code></a>);</li>
+  <li><code>async_dp</code> needs the async connector (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L331-L334" target="_blank" rel="noopener" title="afd_plugin/config.py:331-334 at afd-plugin 7452d52"><code>afd_plugin/config.py:331-334</code></a>);</li>
+  <li>the host is non-empty and the port is in <code>1..65535</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L339-L342" target="_blank" rel="noopener" title="afd_plugin/config.py:339-342 at afd-plugin 7452d52"><code>afd_plugin/config.py:339-342</code></a>);</li>
+  <li>both rank counts are positive (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L343-L350" target="_blank" rel="noopener" title="afd_plugin/config.py:343-350 at afd-plugin 7452d52"><code>afd_plugin/config.py:343-350</code></a>).</li>
+</ul>
+
+<h3 id="step-5-afd-is-active-only-when-the-key-is-present">Step 5: AFD is active only when the key is present<a class="h-anchor" href="#step-5-afd-is-active-only-when-the-key-is-present" aria-label="Link to this section">#</a></h3>
+<p><code>is_afd_active</code> parses the optional config and returns true only when a present
+<code>"afd"</code> key passes validation (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L289-L292" target="_blank" rel="noopener" title="afd_plugin/config.py:289-292 at afd-plugin 7452d52"><code>afd_plugin/config.py:289-292</code></a>). When the key
+is absent, <code>parse_optional_afd_config</code> returns <code>None</code> and AFD stays off
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L244-L259" target="_blank" rel="noopener" title="afd_plugin/config.py:244-259 at afd-plugin 7452d52"><code>afd_plugin/config.py:244-259</code></a>).</p>
+
+<h3 id="step-6-per-connector-options">Step 6: Per-connector options<a class="h-anchor" href="#step-6-per-connector-options" aria-label="Link to this section">#</a></h3>
+<p>Options that belong to one connector go under <code>connector_extra_config</code>, not next
+to the AFD fields. Normalization keeps this sub-mapping aside
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L129-L133" target="_blank" rel="noopener" title="afd_plugin/config.py:129-133 at afd-plugin 7452d52"><code>afd_plugin/config.py:129-133</code></a>). Each connector parses its own keys later, through
+<code>parse_extra_config</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L64-L72" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:64-72 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:64-72</code></a>). The
+<a href="../reference/afd-config.html">AFD config reference: the additional_config[&quot;afd&quot;] keys</a> page lists each connector's keys.</p>
+
+<h2 id="deep-dive">Deep dive<a class="h-anchor" href="#deep-dive" aria-label="Link to this section">#</a></h2>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="trace-one-recipe-value-end-to-end-num-attention-ranks-2" class="dd-title">Trace one recipe value end to end: num_attention_ranks = 2</h3></summary><div class="dd-body"><p>The <code>2a2f</code> recipe sets <code>num_attention_ranks</code> to 2 in the attention
+server's config (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh#L17" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh:17 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh:17</code></a>).
+Follow that value:</p>
+<ol>
+  <li><strong>Read.</strong> The plugin reads <code>additional_config["afd"]</code>, which holds
+      the mapping (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L227-L234" target="_blank" rel="noopener" title="afd_plugin/config.py:227-234 at afd-plugin 7452d52"><code>afd_plugin/config.py:227-234</code></a>).</li>
+  <li><strong>Normalize.</strong> <code>num_attention_ranks</code> is not an alias and is a valid
+      field, so it is kept (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L127-L145" target="_blank" rel="noopener" title="afd_plugin/config.py:127-145 at afd-plugin 7452d52"><code>afd_plugin/config.py:127-145</code></a>).</li>
+  <li><strong>Coerce.</strong> It is in the integer list, so <code>coerce_extra_int(2)</code>
+      returns <code>2</code>; a float or a bool would raise
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L153-L162" target="_blank" rel="noopener" title="afd_plugin/config.py:153-162 at afd-plugin 7452d52"><code>afd_plugin/config.py:153-162</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config_utils.py#L35-L45" target="_blank" rel="noopener" title="afd_plugin/config_utils.py:35-45 at afd-plugin 7452d52"><code>afd_plugin/config_utils.py:35-45</code></a>).</li>
+  <li><strong>Build.</strong> The value becomes <code>AFDConfig.num_attention_ranks</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L190" target="_blank" rel="noopener" title="afd_plugin/config.py:190 at afd-plugin 7452d52"><code>afd_plugin/config.py:190</code></a>).</li>
+  <li><strong>Validate.</strong> The rank count must be positive
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L343-L346" target="_blank" rel="noopener" title="afd_plugin/config.py:343-346 at afd-plugin 7452d52"><code>afd_plugin/config.py:343-346</code></a>).</li>
+  <li><strong>Use.</strong> At device init, the runtime check needs the attention rank count to
+      equal data-parallel size times tensor-parallel size. This recipe runs DP1 TP2, so the value
+      must be 2 (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L107-L117" target="_blank" rel="noopener" title="afd_plugin/validation.py:107-117 at afd-plugin 7452d52"><code>afd_plugin/validation.py:107-117</code></a>).</li>
+</ol>
+<p>So a field default of <code>1</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L62" target="_blank" rel="noopener" title="afd_plugin/config.py:62 at afd-plugin 7452d52"><code>afd_plugin/config.py:62</code></a>) is only the start; the
+final value comes from the recipe, and a runtime rule ties it to the parallel sizes.</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="async-dp-is-npu-only-and-false-on-gpu" class="dd-title">async_dp is NPU-only, and false on GPU</h3></summary><div class="dd-body"><p><a class="term" href="../reference/glossary.html#term-async-dp" data-term="async_dp" data-def="An AFD config flag. It is NPU-only: it turns on the async data-parallel patches, is gated at run time, and must be false on GPU.">async_dp</a> turns on AFD's async data-parallel patches. It is read by
+<code>is_afd_async_dp</code>, which returns true only when the flag is set <em>and</em> the
+connector is the async CAM connector (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L295-L308" target="_blank" rel="noopener" title="afd_plugin/config.py:295-308 at afd-plugin 7452d52"><code>afd_plugin/config.py:295-308</code></a>). That connector is
+NPU-only, so the flag has no effect on GPU.</p>
+<ul>
+  <li><strong>Validation.</strong> <code>async_dp</code> without the async connector raises
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L331-L334" target="_blank" rel="noopener" title="afd_plugin/config.py:331-334 at afd-plugin 7452d52"><code>afd_plugin/config.py:331-334</code></a>).</li>
+  <li><strong>GPU runtime.</strong> The GPU runner check needs the synchronous
+      <code>P2pNcclAFDConnector</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L94-L97" target="_blank" rel="noopener" title="afd_plugin/validation.py:94-97 at afd-plugin 7452d52"><code>afd_plugin/validation.py:94-97</code></a>). So the async
+      connector, and therefore <code>async_dp</code>, cannot be active on GPU.</li>
+  <li><strong>Where it takes effect.</strong> On NPU, <code>is_afd_async_dp</code> selects the
+      async-DP patches from the flag and the connector (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L303-L308" target="_blank" rel="noopener" title="afd_plugin/config.py:303-308 at afd-plugin 7452d52"><code>afd_plugin/config.py:303-308</code></a>).
+      Those patches are NPU code; see <a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a>.</li>
+</ul></div></details>
+
+<h2 id="what-can-go-wrong">What can go wrong<a class="h-anchor" href="#what-can-go-wrong" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li><strong>Unknown field.</strong> A key that is not a field and not an alias raises
+      <code>ValueError</code>; the message points to <code>connector_extra_config</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L134-L139" target="_blank" rel="noopener" title="afd_plugin/config.py:134-139 at afd-plugin 7452d52"><code>afd_plugin/config.py:134-139</code></a>).</li>
+  <li><strong>Alias and canonical together.</strong> Passing both <code>afd_role</code> and
+      <code>role</code> raises a duplicate-field error (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L140-L144" target="_blank" rel="noopener" title="afd_plugin/config.py:140-144 at afd-plugin 7452d52"><code>afd_plugin/config.py:140-144</code></a>).</li>
+  <li><strong>Wrong type for an integer.</strong> A float or a bool for <code>port</code> or a
+      rank count raises <code>TypeError</code>, not a silent truncation
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config_utils.py#L38-L39" target="_blank" rel="noopener" title="afd_plugin/config_utils.py:38-39 at afd-plugin 7452d52"><code>afd_plugin/config_utils.py:38-39</code></a>).</li>
+  <li><strong>async_dp on GPU.</strong> It fails validation unless the connector is the async CAM
+      connector, which GPU does not use (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L331-L334" target="_blank" rel="noopener" title="afd_plugin/config.py:331-334 at afd-plugin 7452d52"><code>afd_plugin/config.py:331-334</code></a>).</li>
+</ul>
+<p><strong>Why it matters.</strong> Both roles parse the same schema. A typo or a wrong type
+stops start-up with a clear error, instead of a silent mismatch between the two servers.</p>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>What makes AFD active?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The presence of the <code>"afd"</code> key in <code>additional_config</code>. Without
+      it, parse returns <code>None</code> and AFD stays off
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L244-L259" target="_blank" rel="noopener" title="afd_plugin/config.py:244-259 at afd-plugin 7452d52"><code>afd_plugin/config.py:244-259</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L289-L292" target="_blank" rel="noopener" title="afd_plugin/config.py:289-292 at afd-plugin 7452d52"><code>afd_plugin/config.py:289-292</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>Where do connector-specific options go?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Under <code>connector_extra_config</code>, not next to the AFD fields. Each connector
+      parses its own keys (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L71-L73" target="_blank" rel="noopener" title="afd_plugin/config.py:71-73 at afd-plugin 7452d52"><code>afd_plugin/config.py:71-73</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L64-L72" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:64-72 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:64-72</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>A recipe passes <code>"port": 6269.0</code>. What happens?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>It raises <code>TypeError</code>. <code>coerce_extra_int</code> rejects a float instead
+      of truncating it (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config_utils.py#L38-L39" target="_blank" rel="noopener" title="afd_plugin/config_utils.py:38-39 at afd-plugin 7452d52"><code>afd_plugin/config_utils.py:38-39</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>On what platform does <code>async_dp</code> have an effect?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>NPU only. It needs the async CAM connector (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L295-L308" target="_blank" rel="noopener" title="afd_plugin/config.py:295-308 at afd-plugin 7452d52"><code>afd_plugin/config.py:295-308</code></a>),
+      which GPU does not use (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L94-L97" target="_blank" rel="noopener" title="afd_plugin/validation.py:94-97 at afd-plugin 7452d52"><code>afd_plugin/validation.py:94-97</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>The field default for <code>num_attention_ranks</code> is 1, but the 2a2f recipe
+    runs with 2. What final rule ties the value to the deployment?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>At device init, the attention rank count must equal data-parallel size times
+      tensor-parallel size. With DP1 TP2 the value must be 2
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L107-L117" target="_blank" rel="noopener" title="afd_plugin/validation.py:107-117 at afd-plugin 7452d52"><code>afd_plugin/validation.py:107-117</code></a>). The default is only the start; the recipe sets
+      the real value (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh#L17" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh:17 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh:17</code></a>).</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a><span class="rel-sum">AFD chooses a role-specific worker class by rewriting parallel_config.worker_cls, but only when the user left it as &quot;auto&quot;. This page shows the rewrite, the platform-to-worker table, the native resolution, the runner swap and the compatibility check.</span></li><li><a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a><span class="rel-sum">AFD runs the attention part and the FFN part as two server processes. This page shows what each role owns, and why the FFN side has no real scheduler, no KV cache and no sampler.</span></li><li><a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a><span class="rel-sum">One base class sets the contract that every AFD connector follows. This page shows the lifecycle, the four data-path calls, the optional control plane, the config hook and the factory.</span></li><li><a href="../reference/afd-config.html">AFD config reference: the additional_config[&quot;afd&quot;] keys</a><span class="rel-sum">Every key of --additional-config &quot;afd&quot;, with its alias, type, default and validation, plus the connector_extra_config keys per connector and a worked example from a real recipe.</span></li><li><a href="../code/config-py.html">afd_plugin/config.py: the AFD config schema and parser</a><span class="rel-sum">config.py defines AFDConfig and the functions that parse and validate additional_config[&quot;afd&quot;]. config_utils.py holds the type coercers; envs.py holds two diagnostic environment flags. This page reads the three files.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../concepts/plugin-entry-point.html"><span class="pn-dir">← Previous</span><span class="pn-title">The plugin entry point: register_afd</span></a><a class="pn pn-next" href="../concepts/worker-selection.html"><span class="pn-dir">Next →</span><span class="pn-title">Worker selection: choosing the role worker</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#in-the-code">In the code</a></li><li class="toc-l3"><a href="#step-1-the-schema">Step 1: The schema</a></li><li class="toc-l3"><a href="#step-2-aliases">Step 2: Aliases</a></li><li class="toc-l3"><a href="#step-3-normalization-and-coercion">Step 3: Normalization and coercion</a></li><li class="toc-l3"><a href="#step-4-the-validation-rules">Step 4: The validation rules</a></li><li class="toc-l3"><a href="#step-5-afd-is-active-only-when-the-key-is-present">Step 5: AFD is active only when the key is present</a></li><li class="toc-l3"><a href="#step-6-per-connector-options">Step 6: Per-connector options</a></li><li class="toc-l2"><a href="#deep-dive">Deep dive</a></li><li class="toc-l3"><a href="#trace-one-recipe-value-end-to-end-num-attention-ranks-2">Trace one recipe value end to end: num_attention_ranks = 2</a></li><li class="toc-l3"><a href="#async-dp-is-npu-only-and-false-on-gpu">async_dp is NPU-only, and false on GPU</a></li><li class="toc-l2"><a href="#what-can-go-wrong">What can go wrong</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tuning: the knobs the repo exposes · AFD Plugin Explained</title>
+<meta name="description" content="What afd-plugin lets you tune, and only what its code and READMEs state: the A:F rank ratio, DBO thresholds, CUDA graph capture, the group timeout, gate placement, the NPU CAM capacity, the profiler, the routing simulator and the benchmark tools. Every number is cited.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="concepts/tuning">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a class="current" aria-current="page" href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>AFD concepts</span><span class="sep">›</span><span>Deploy and tune</span><span class="sep">›</span><span aria-current="page">Tuning</span></nav>
+<h1 class="page-title">Tuning: the knobs the repo exposes</h1>
+<div class="page-meta"><span class="level level-advanced" title="Level">Advanced</span><span class="meta-sec">AFD concepts</span><span class="meta-time">about 5 min read + 2 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../concepts/deployment-topologies.html">Deployment topologies: how to place the roles</a> <span class="level level-intermediate level-sm">Intermediate</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">AFD exposes a small set of knobs. This page lists each one, where the code reads it, and the only
+numbers the repository states for it.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p>Tuning AFD means three things: shape the split and the overlap for throughput, set the timeouts and gate for
+reliable startup, and measure with the profiler and benchmark tools. The repository gives example values for
+some knobs and says to tune them for the workload. This page uses only numbers the code or the READMEs
+state.</p>
+<p><strong>An everyday comparison.</strong> Think of the knobs on an audio mixer. Each one changes one thing,
+and the factory marks are a starting point, not the final mix. The comparison stops at the meters: here the
+meters are the profiler and the benchmark, not your ear.</p>
+<aside class="callout callout-warning"><p class="callout-title">No invented speedups</p><div class="callout-body"><p>This page does not claim a speedup for any setting. The recipe
+values (DBO <code>2/12</code>, capture size <code>64</code>) are example values the READMEs say to tune
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md#L140-L143" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:140-143 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:140-143</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md#L154-L157" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:154-157 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:154-157</code></a>).</p></div></aside>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<figure class="diagram" id="fig-b5_tuning"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Three panels of knob cards. Panel 1, tune throughput: a rank-ratio card (rule A equals DP times TP, source topology.py line 52, tag A greater than or equal to F), a DBO-thresholds card (vLLM default 32 slash 512, recipe dbo token-threshold flags, tag 2 slash 12), and a CUDA-graph-size card (flag max-cudagraph-capture-size, mode FULL_DECODE_ONLY, tag 64). Panel 2, tune reliability and placement: a group-timeout card (key afd_process_group_timeout_s, source config.py line 70, tag 120 seconds), a gate-placement card (key compute_gate_on_attention, source config.py line 66, tag false), and an NPU CAM-capacity card (env BATCH_SIZE_FACTOR, source validation.py line 45, tag times 1). Panel 3, measure: a profiler card (env AFD_GPU underscore star PROFILER, source compat/profiler.py, tag opt-in), a routing-simulator card (env VLLM_MOE_ROUTING_SIMULATION_STRATEGY, source routing_simulator.py, tag afd_balanced), and a benchmark card (tool request_generator.sh, k8s run-vllm-bench-k8s, tag bench serve). A legend marks throughput, reliability, and measurement."><svg role="img" aria-label="Three panels of knob cards. Panel 1, tune throughput: a rank-ratio card (rule A equals DP times TP, source topology.py line 52, tag A greater than or equal to F), a DBO-thresholds card (vLLM default 32 slash 512, recipe dbo token-threshold flags, tag 2 slash 12), and a CUDA-graph-size card (flag max-cudagraph-capture-size, mode FULL_DECODE_ONLY, tag 64). Panel 2, tune reliability and placement: a group-timeout card (key afd_process_group_timeout_s, source config.py line 70, tag 120 seconds), a gate-placement card (key compute_gate_on_attention, source config.py line 66, tag false), and an NPU CAM-capacity card (env BATCH_SIZE_FACTOR, source validation.py line 45, tag times 1). Panel 3, measure: a profiler card (env AFD_GPU underscore star PROFILER, source compat/profiler.py, tag opt-in), a routing-simulator card (env VLLM_MOE_ROUTING_SIMULATION_STRATEGY, source routing_simulator.py, tag afd_balanced), and a benchmark card (tool request_generator.sh, k8s run-vllm-bench-k8s, tag bench serve). A legend marks throughput, reliability, and measurement." xmlns="http://www.w3.org/2000/svg" width="1100" height="716" viewBox="0 0 1100 716">
+<defs></defs>
+<rect width="1100" height="716" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">What you can tune in AFD</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Only knobs the repo exposes  ·  recipe values are examples to tune, not tuned defaults</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">A &gt;= F   ·   DBO recipe 2/12 vs vLLM 32/512   ·   capture 64</text>
+<rect x="20.0" y="112.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="138.0" r="13" fill="#111827"/>
+<text x="46.0" y="142.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="143.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Tune throughput</text>
+<text x="68.0" y="162.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The split, the overlap and the graph size.</text>
+<rect x="46.0" y="174.0" width="320.0" height="74.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="46.0" y="174.0" width="6.0" height="74.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="68.0" cy="191.0" r="10" fill="#2563eb"/>
+<text x="68.0" y="195.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="84.0" y="196.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Rank ratio A:F</text>
+<rect x="298.3" y="182.0" width="59.7" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="328.1" y="195.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">A &gt;= F</text>
+<text x="84.0" y="216.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">rule</text>
+<text x="118.0" y="216.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">A = DP x TP</text>
+<text x="84.0" y="233.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">src</text>
+<text x="118.0" y="233.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">topology.py:52</text>
+<rect x="382.0" y="174.0" width="320.0" height="74.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="382.0" y="174.0" width="6.0" height="74.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="404.0" cy="191.0" r="10" fill="#2563eb"/>
+<text x="404.0" y="195.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="420.0" y="196.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">DBO thresholds</text>
+<rect x="634.3" y="182.0" width="59.7" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="664.1" y="195.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2 / 12</text>
+<text x="420.0" y="216.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">vLLM</text>
+<text x="454.0" y="216.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">32 / 512 default</text>
+<text x="420.0" y="233.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">ex</text>
+<text x="454.0" y="233.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">dbo *_token_threshold</text>
+<rect x="718.0" y="174.0" width="320.0" height="74.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="718.0" y="174.0" width="6.0" height="74.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="740.0" cy="191.0" r="10" fill="#2563eb"/>
+<text x="740.0" y="195.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="756.0" y="196.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">CUDA graph size</text>
+<rect x="996.8" y="182.0" width="33.2" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="1013.4" y="195.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">64</text>
+<text x="756.0" y="216.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">flag</text>
+<text x="790.0" y="216.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">max-cudagraph-capture-size</text>
+<text x="756.0" y="233.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">mode</text>
+<text x="790.0" y="233.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FULL_DECODE_ONLY</text>
+<rect x="20.0" y="282.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="308.0" r="13" fill="#111827"/>
+<text x="46.0" y="312.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="313.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Tune reliability and placement</text>
+<text x="68.0" y="332.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Timeouts, the gate, and NPU capacity.</text>
+<rect x="46.0" y="344.0" width="320.0" height="74.0" rx="8" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<rect x="46.0" y="344.0" width="6.0" height="74.0" rx="3" fill="#d97706" fill-opacity="1.0" stroke="none"/>
+<circle cx="68.0" cy="361.0" r="10" fill="#d97706"/>
+<text x="68.0" y="365.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">4</text>
+<text x="84.0" y="366.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Group timeout</text>
+<rect x="304.9" y="352.0" width="53.1" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#d97706" stroke-width="1"/>
+<text x="331.4" y="365.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#d97706" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">120 s</text>
+<text x="84.0" y="386.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">key</text>
+<text x="118.0" y="386.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_process_group_timeout_s</text>
+<text x="84.0" y="403.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">src</text>
+<text x="118.0" y="403.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">config.py:70</text>
+<rect x="382.0" y="344.0" width="320.0" height="74.0" rx="8" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<rect x="382.0" y="344.0" width="6.0" height="74.0" rx="3" fill="#d97706" fill-opacity="1.0" stroke="none"/>
+<circle cx="404.0" cy="361.0" r="10" fill="#d97706"/>
+<text x="404.0" y="365.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">5</text>
+<text x="420.0" y="366.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Gate placement</text>
+<rect x="640.9" y="352.0" width="53.1" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#d97706" stroke-width="1"/>
+<text x="667.4" y="365.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#d97706" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">false</text>
+<text x="420.0" y="386.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">key</text>
+<text x="454.0" y="386.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">compute_gate_on_attention</text>
+<text x="420.0" y="403.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">src</text>
+<text x="454.0" y="403.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">config.py:66</text>
+<rect x="718.0" y="344.0" width="320.0" height="74.0" rx="8" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<rect x="718.0" y="344.0" width="6.0" height="74.0" rx="3" fill="#d97706" fill-opacity="1.0" stroke="none"/>
+<circle cx="740.0" cy="361.0" r="10" fill="#d97706"/>
+<text x="740.0" y="365.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">6</text>
+<text x="756.0" y="366.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">NPU CAM capacity</text>
+<rect x="996.8" y="352.0" width="33.2" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#d97706" stroke-width="1"/>
+<text x="1013.4" y="365.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#d97706" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">x1</text>
+<text x="756.0" y="386.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">env</text>
+<text x="790.0" y="386.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">BATCH_SIZE_FACTOR</text>
+<text x="756.0" y="403.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">src</text>
+<text x="790.0" y="403.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">validation.py:45</text>
+<rect x="20.0" y="452.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="478.0" r="13" fill="#111827"/>
+<text x="46.0" y="482.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="68.0" y="483.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Measure</text>
+<text x="68.0" y="502.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Profile, simulate routing, benchmark.</text>
+<rect x="46.0" y="514.0" width="320.0" height="74.0" rx="8" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.4"/>
+<rect x="46.0" y="514.0" width="6.0" height="74.0" rx="3" fill="#0d9488" fill-opacity="1.0" stroke="none"/>
+<circle cx="68.0" cy="531.0" r="10" fill="#0d9488"/>
+<text x="68.0" y="535.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">7</text>
+<text x="84.0" y="536.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Profiler</text>
+<rect x="298.3" y="522.0" width="59.7" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#0d9488" stroke-width="1"/>
+<text x="328.1" y="535.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#0d9488" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">opt-in</text>
+<text x="84.0" y="556.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">env</text>
+<text x="118.0" y="556.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">AFD_GPU_*_PROFILER_*</text>
+<text x="84.0" y="573.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">src</text>
+<text x="118.0" y="573.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">compat/profiler.py</text>
+<rect x="382.0" y="514.0" width="320.0" height="74.0" rx="8" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.4"/>
+<rect x="382.0" y="514.0" width="6.0" height="74.0" rx="3" fill="#0d9488" fill-opacity="1.0" stroke="none"/>
+<circle cx="404.0" cy="531.0" r="10" fill="#0d9488"/>
+<text x="404.0" y="535.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">8</text>
+<text x="420.0" y="536.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Routing simulator</text>
+<rect x="594.5" y="522.0" width="99.5" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#0d9488" stroke-width="1"/>
+<text x="644.3" y="535.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#0d9488" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">afd_balanced</text>
+<text x="420.0" y="556.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">env</text>
+<text x="454.0" y="556.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">VLLM_MOE_ROUTING_SIM...</text>
+<text x="420.0" y="573.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">src</text>
+<text x="454.0" y="573.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">routing_simulator.py</text>
+<rect x="718.0" y="514.0" width="320.0" height="74.0" rx="8" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.4"/>
+<rect x="718.0" y="514.0" width="6.0" height="74.0" rx="3" fill="#0d9488" fill-opacity="1.0" stroke="none"/>
+<circle cx="740.0" cy="531.0" r="10" fill="#0d9488"/>
+<text x="740.0" y="535.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">9</text>
+<text x="756.0" y="536.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Benchmark</text>
+<rect x="937.2" y="522.0" width="92.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#0d9488" stroke-width="1"/>
+<text x="983.6" y="535.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#0d9488" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">bench serve</text>
+<text x="756.0" y="556.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">tool</text>
+<text x="790.0" y="556.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">request_generator.sh</text>
+<text x="756.0" y="573.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">k8s</text>
+<text x="790.0" y="573.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">run-vllm-bench-k8s</text>
+<text x="30.0" y="637.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="626.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="637.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">throughput</text>
+<rect x="207.9" y="626.0" width="14.0" height="14.0" rx="3" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<text x="228.9" y="637.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">reliability / placement</text>
+<rect x="383.0" y="626.0" width="14.0" height="14.0" rx="3" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.4"/>
+<text x="404.0" y="637.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">measurement</text>
+<text x="30.0" y="666.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The recipe DBO thresholds (2/12) and capture size (64) are example values; the READMEs say to tune them.</text>
+<text x="30.0" y="684.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The routing simulator and the forced top-n change model outputs: use it only for benchmarks.</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: the knobs AFD exposes, grouped by goal. Each card names the key or flag and its source line. The recipe values are examples to tune.</figcaption><a class="diagram-open" href="../diagrams/b5_tuning.svg" target="_blank">Open full size ↗</a></div></figure>
+<p>Read the three panels as three goals. Panel 1 shapes throughput; panel 2 keeps startup reliable; panel 3
+measures. Each card gives the key or flag and the file where the code reads it.</p>
+
+<h2 id="in-the-code">In the code<a class="h-anchor" href="#in-the-code" aria-label="Link to this section">#</a></h2>
+
+<h3 id="step-1-the-a-f-rank-ratio">Step 1: The A:F rank ratio<a class="h-anchor" href="#step-1-the-a-f-rank-ratio" aria-label="Link to this section">#</a></h3>
+<p>The attention ranks must be at least the FFN ranks. The P2P topology check raises when
+<code>A &lt; F</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed/topology.py#L52-L58" target="_blank" rel="noopener" title="afd_plugin/distributed/topology.py:52-58 at afd-plugin 7452d52"><code>afd_plugin/distributed/topology.py:52-58</code></a>). Within that rule you choose the
+counts and the DP/TP split per role (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L107-L117" target="_blank" rel="noopener" title="afd_plugin/validation.py:107-117 at afd-plugin 7452d52"><code>afd_plugin/validation.py:107-117</code></a>). See
+<a href="../concepts/deployment-topologies.html">Deployment topologies: how to place the roles</a>.</p>
+
+<h3 id="step-2-dbo-thresholds">Step 2: DBO thresholds<a class="h-anchor" href="#step-2-dbo-thresholds" aria-label="Link to this section">#</a></h3>
+<p><a class="term" href="../reference/glossary.html#term-dbo" data-term="DBO" data-def="Dual-batch overlap. The step is split into two microbatches so compute and communication overlap. AFD uses exactly two.">DBO</a> microbatches a step when the token count passes a threshold. The recipes set a low decode
+threshold <code>2</code> and prefill threshold <code>12</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L24-L25" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:24-25 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:24-25</code></a>).
+The vLLM defaults are higher: <code>32</code> for decode and <code>512</code> for prefill
+(<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/parallel.py#L227" target="_blank" rel="noopener" title="vllm:vllm/config/parallel.py:227 at vLLM ced6857"><code>vllm:vllm/config/parallel.py:227</code></a>, <a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/parallel.py#L232" target="_blank" rel="noopener" title="vllm:vllm/config/parallel.py:232 at vLLM ced6857"><code>vllm:vllm/config/parallel.py:232</code></a>).</p>
+<figure class="code-excerpt" data-lang="bash"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L23-L25" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:23-25</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L23-L25" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">23</span><span class="ln">24</span><span class="ln">25</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-bash">    --enable-dbo \
+    --dbo-decode-token-threshold 2 \
+    --dbo-prefill-token-threshold 12 \</code></pre></div></div></div><figcaption class="code-caption">The recipe's DBO thresholds: example values, lower than the vLLM defaults.</figcaption></figure>
+<p>vLLM reads these thresholds per step to decide whether to microbatch
+(<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/ubatch_utils.py#L141-L149" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/ubatch_utils.py:141-149 at vLLM ced6857"><code>vllm:vllm/v1/worker/ubatch_utils.py:141-149</code></a>). AFD requires exactly two microbatches when DBO is on
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L126-L131" target="_blank" rel="noopener" title="afd_plugin/validation.py:126-131 at afd-plugin 7452d52"><code>afd_plugin/validation.py:126-131</code></a>). See <a href="../concepts/dbo.html">Dual-batch overlap (DBO): two stages per step</a>.</p>
+
+<h3 id="step-3-cuda-graph-capture-size">Step 3: CUDA graph capture size<a class="h-anchor" href="#step-3-cuda-graph-capture-size" aria-label="Link to this section">#</a></h3>
+<p>The graph variants set <code>--max-cudagraph-capture-size</code> and the
+<code>cudagraph_capture_sizes</code> list together, with
+<code>cudagraph_mode: FULL_DECODE_ONLY</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L26-L29" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-29 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-29</code></a>).</p>
+<figure class="code-excerpt" data-lang="bash"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L26-L29" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-29</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L26-L29" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">26</span><span class="ln">27</span><span class="ln">28</span><span class="ln">29</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-bash">    --max-cudagraph-capture-size 64 \
+    --compilation-config &#x27;{
+        &quot;cudagraph_mode&quot;: &quot;FULL_DECODE_ONLY&quot;, &quot;cudagraph_capture_sizes&quot;:[64]
+    }&#x27; \</code></pre></div></div></div><figcaption class="code-caption">Capture size 64 and the FULL_DECODE_ONLY mode. The README says to adjust both together.</figcaption></figure>
+<p>On GPU, AFD allows only <code>FULL_DECODE_ONLY</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L20-L21" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:20-21 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:20-21</code></a>). The README says to set
+<code>--max-cudagraph-capture-size</code> and <code>cudagraph_capture_sizes</code> together, based on the batch
+sizes and GPU memory (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md#L154-L157" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:154-157 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:154-157</code></a>). See
+<a href="../concepts/cuda-graphs.html">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</a>.</p>
+
+<h3 id="step-4-the-group-timeout">Step 4: The group timeout<a class="h-anchor" href="#step-4-the-group-timeout" aria-label="Link to this section">#</a></h3>
+<p><code>afd_process_group_timeout_s</code> sets how long the world process-group rendezvous waits; the default
+is <code>120</code> seconds (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L70" target="_blank" rel="noopener" title="afd_plugin/config.py:70 at afd-plugin 7452d52"><code>afd_plugin/config.py:70</code></a>). The P2P connector reads it when it builds the
+world group (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L275" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:275 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:275</code></a>). The config comment says the right value depends on
+rank count, placement and model size, so it is left to the caller
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L67-L70" target="_blank" rel="noopener" title="afd_plugin/config.py:67-70 at afd-plugin 7452d52"><code>afd_plugin/config.py:67-70</code></a>).</p>
+
+<h3 id="step-5-gate-placement">Step 5: Gate placement<a class="h-anchor" href="#step-5-gate-placement" aria-label="Link to this section">#</a></h3>
+<p><code>compute_gate_on_attention</code> moves the MoE gate to the attention side. When it is on, the FFN side
+runs only the expert layers (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L211-L215" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:211-215 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:211-215</code></a>). It defaults to
+<code>false</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L66" target="_blank" rel="noopener" title="afd_plugin/config.py:66 at afd-plugin 7452d52"><code>afd_plugin/config.py:66</code></a>). Not every model allows it: the Qwen3-MoE wrapper
+requires it to be false (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/qwen3_moe.py#L84-L87" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/qwen3_moe.py:84-87 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/qwen3_moe.py:84-87</code></a>). See
+<a href="../concepts/moe-handoff.html">The MoE handoff: where the gate runs</a>.</p>
+
+<h2 id="deep-dive">Deep dive<a class="h-anchor" href="#deep-dive" aria-label="Link to this section">#</a></h2>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="batch-size-factor-the-npu-cam-receive-capacity" class="dd-title">BATCH_SIZE_FACTOR: the NPU CAM receive capacity</h3></summary><div class="dd-body"><p>On an Ascend NPU, <a class="term" href="../reference/glossary.html#term-batch-size-factor" data-term="BATCH_SIZE_FACTOR" data-def="An Ascend NPU environment variable that multiplies the CAM receive capacity (base 262144 tokens), with native float rounding. Default 1.">BATCH_SIZE_FACTOR</a> multiplies the CAM receive capacity. The base is
+<code>262144</code> tokens; the factor is applied with native float rounding, default <code>1</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L45-L54" target="_blank" rel="noopener" title="afd_plugin/validation.py:45-54 at afd-plugin 7452d52"><code>afd_plugin/validation.py:45-54</code></a>). The async FFN graph capacity check uses the same figure
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/npu/feature_validation.py#L245-L249" target="_blank" rel="noopener" title="afd_plugin/compat/npu/feature_validation.py:245-249 at afd-plugin 7452d52"><code>afd_plugin/compat/npu/feature_validation.py:245-249</code></a>). This knob matters only on NPU; see
+<a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a>.</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-profiler" class="dd-title">The profiler</h3></summary><div class="dd-body"><p>The plugin owns a torch profiler for each GPU runner role, enabled by environment variables with the prefix
+<code>AFD_GPU_ATTENTION_PROFILER</code> or <code>AFD_GPU_FFN_PROFILER</code>. The profiler is off until you set
+<code>..._ENABLE</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/profiler.py#L46-L61" target="_blank" rel="noopener" title="afd_plugin/compat/profiler.py:46-61 at afd-plugin 7452d52"><code>afd_plugin/compat/profiler.py:46-61</code></a>). Only then does the plugin build a torch
+profiler with the schedule from the other variables
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/profiler.py#L64-L96" target="_blank" rel="noopener" title="afd_plugin/compat/profiler.py:64-96 at afd-plugin 7452d52"><code>afd_plugin/compat/profiler.py:64-96</code></a>). The trace directory falls back to
+<code>VLLM_TORCH_PROFILER_DIR</code>, then to a per-role default
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/profiler.py#L131-L132" target="_blank" rel="noopener" title="afd_plugin/compat/profiler.py:131-132 at afd-plugin 7452d52"><code>afd_plugin/compat/profiler.py:131-132</code></a>). The NPU profiler is the same shape with one extra setting,
+<code>..._WITH_STACK</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/npu/profiler.py#L52-L70" target="_blank" rel="noopener" title="afd_plugin/compat/npu/profiler.py:52-70 at afd-plugin 7452d52"><code>afd_plugin/compat/npu/profiler.py:52-70</code></a>). The
+<a href="../reference/env-vars.html">Environment variables reference</a> page lists every profiler variable.</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-routing-simulator" class="dd-title">The routing simulator</h3></summary><div class="dd-body"><p>For controlled MoE benchmarks, the plugin registers a deterministic routing strategy,
+<code>afd_balanced</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L166-L171" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:166-171 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:166-171</code></a>). Select it with
+vLLM's <code>VLLM_MOE_ROUTING_SIMULATION_STRATEGY</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L5-L8" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:5-8 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:5-8</code></a>). It returns uniform weights and deterministic
+expert ids from a fixed seed <code>1024</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L28" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:28 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:28</code></a>). The optional
+<code>AFD_BENCHMARK_FORCE_LB_TOPN_PER_RANK</code> limits the local expert pool per EP rank; <code>0</code>
+selects all local experts (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L125-L127" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:125-127 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:125-127</code></a>).</p>
+<aside class="callout callout-warning"><p class="callout-title">The simulator changes model outputs</p><div class="callout-body"><p>The strategy replaces real routing with a synthetic
+cycle, so it changes model outputs (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L10-L11" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:10-11 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:10-11</code></a>). Use it only
+for benchmark and profiling runs, not for serving.</p></div></aside></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-benchmark-tools-and-the-result-images" class="dd-title">The benchmark tools and the result images</h3></summary><div class="dd-body"><p>The repository ships a benchmark harness under <code>tools/benchmarks/</code>. The
+<code>request_generator.sh</code> script drives load against a running server; it wraps
+<code>vllm bench serve</code> and takes every knob as an environment variable
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tools/benchmarks/request_generator.sh#L44-L57" target="_blank" rel="noopener" title="tools/benchmarks/request_generator.sh:44-57 at afd-plugin 7452d52"><code>tools/benchmarks/request_generator.sh:44-57</code></a>). The <code>decode_bench_server.sh</code> script starts a
+2A2F decode-only stand that fakes out prefill
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tools/benchmarks/decode_bench_server.sh#L4-L20" target="_blank" rel="noopener" title="tools/benchmarks/decode_bench_server.sh:4-20 at afd-plugin 7452d52"><code>tools/benchmarks/decode_bench_server.sh:4-20</code></a>). For a Kubernetes run, the repository ships a
+<code>run-vllm-bench-k8s</code> contributor skill
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/.agents/skills/run-vllm-bench-k8s/SKILL.md#L1-L6" target="_blank" rel="noopener" title=".agents/skills/run-vllm-bench-k8s/SKILL.md:1-6 at afd-plugin 7452d52"><code>.agents/skills/run-vllm-bench-k8s/SKILL.md:1-6</code></a>).</p>
+<p>The NPU recipes include result images with their own captions. The CAMP2p recipe reports DeepSeek-V3.2
+decode throughput per die at 16K and 32K
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md#L365" target="_blank" rel="noopener" title="recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md:365 at afd-plugin 7452d52"><code>recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md:365</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md#L373" target="_blank" rel="noopener" title="recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md:373 at afd-plugin 7452d52"><code>recipe/npu/CAMP2pAFDConnector/deepseek_v3_2/README.md:373</code></a>); the async recipe reports a text-matched
+median TTFT comparison (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/npu/CAMAsyncAFDConnector/deepseek_v3_2/README.md#L432" target="_blank" rel="noopener" title="recipe/npu/CAMAsyncAFDConnector/deepseek_v3_2/README.md:432 at afd-plugin 7452d52"><code>recipe/npu/CAMAsyncAFDConnector/deepseek_v3_2/README.md:432</code></a>). These numbers
+are from older runtimes, so this page does not restate them as current results. See
+<a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a>.</p></div></details>
+
+<h2 id="what-can-go-wrong">What can go wrong<a class="h-anchor" href="#what-can-go-wrong" aria-label="Link to this section">#</a></h2>
+<aside class="callout callout-simplified"><p class="callout-title">Simplified</p><div class="callout-body"><p>This page lists the knobs the repository exposes. It does not tune them for you; the right
+values depend on the model, the hardware and the workload, as the READMEs say.</p></div></aside>
+<ul>
+  <li><strong>DBO on without two microbatches.</strong> AFD requires exactly two microbatches when DBO is on,
+    and raises otherwise (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L126-L131" target="_blank" rel="noopener" title="afd_plugin/validation.py:126-131 at afd-plugin 7452d52"><code>afd_plugin/validation.py:126-131</code></a>).</li>
+  <li><strong>A graph mode other than FULL_DECODE_ONLY on GPU.</strong> The GPU runner accepts only
+    <code>FULL_DECODE_ONLY</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L20-L21" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:20-21 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:20-21</code></a>).</li>
+  <li><strong>A timeout too short for the placement.</strong> The rendezvous fails when the world group does not
+    form in time (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L275" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:275 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:275</code></a>).</li>
+  <li><strong>The routing simulator left on for serving.</strong> It changes model outputs, so it gives wrong
+    answers outside a benchmark (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L10-L11" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:10-11 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:10-11</code></a>).</li>
+</ul>
+<p><strong>Why it matters.</strong> The knobs trade throughput, memory and startup time. The repository gives
+example values and the read sites; the right values come from measuring your own workload.</p>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>What DBO thresholds do the recipes set, and how do they compare with the vLLM defaults?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The recipes set decode <code>2</code> and prefill <code>12</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L24-L25" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:24-25 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:24-25</code></a>).
+      The vLLM defaults are higher, <code>32</code> and <code>512</code>
+      (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/parallel.py#L227" target="_blank" rel="noopener" title="vllm:vllm/config/parallel.py:227 at vLLM ced6857"><code>vllm:vllm/config/parallel.py:227</code></a>, <a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/parallel.py#L232" target="_blank" rel="noopener" title="vllm:vllm/config/parallel.py:232 at vLLM ced6857"><code>vllm:vllm/config/parallel.py:232</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>Is the profiler on by default?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>No. Each role's profiler is off until you set its <code>..._ENABLE</code> variable
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/profiler.py#L46-L61" target="_blank" rel="noopener" title="afd_plugin/compat/profiler.py:46-61 at afd-plugin 7452d52"><code>afd_plugin/compat/profiler.py:46-61</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>What does <code>compute_gate_on_attention</code> change, and which model forbids it?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>When on, the FFN side runs only the expert layers, because the attention side computes the gate
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L211-L215" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:211-215 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:211-215</code></a>). The Qwen3-MoE wrapper requires it to be
+      false (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/qwen3_moe.py#L84-L87" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/qwen3_moe.py:84-87 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/qwen3_moe.py:84-87</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>How do you select the deterministic benchmark routing, and why not use it for serving?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Set <code>VLLM_MOE_ROUTING_SIMULATION_STRATEGY=afd_balanced</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L5-L8" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:5-8 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:5-8</code></a>). It replaces real routing with a synthetic
+      cycle, so it changes model outputs (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L10-L11" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:10-11 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:10-11</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>On an NPU, what does <code>BATCH_SIZE_FACTOR</code> control, and from what base?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>It multiplies the CAM receive capacity, base <code>262144</code> tokens, with native float
+      rounding; default <code>1</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L45-L54" target="_blank" rel="noopener" title="afd_plugin/validation.py:45-54 at afd-plugin 7452d52"><code>afd_plugin/validation.py:45-54</code></a>). It has no effect on
+      GPU.</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/dbo.html">Dual-batch overlap (DBO): two stages per step</a><span class="rel-sum">DBO splits one step into exactly two stages. While one stage waits on the FFN side, the other computes attention, so the two roles stay busy. AFD adds a yield op and scoped patches for DP1.</span></li><li><a href="../concepts/cuda-graphs.html">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</a><span class="rel-sum">AFD supports one CUDA graph mode, FULL_DECODE_ONLY. The attention side wraps native capture and replay to publish control; the FFN side keeps its own graph per token shape.</span></li><li><a href="../reference/env-vars.html">Environment variables reference</a><span class="rel-sum">Every environment variable that afd-plugin reads or sets, generated from the source, with defaults and read sites. A hand section lists the vLLM variables that AFD depends on.</span></li><li><a href="../reference/recipes.html">Recipes reference</a><span class="rel-sum">Every recipe script under recipe/, generated from the source, with hardware, connector, model, topology, role, DP/TP, mode, DBO thresholds and ports. Hand notes cover the parts the parser cannot read.</span></li><li><a href="../concepts/moe-handoff.html">The MoE handoff: where the gate runs</a><span class="rel-sum">The compute_gate_on_attention flag decides whether the MoE gate runs on the attention side or the FFN side. The choice changes which classes build, what crosses the connector, and which layers the FFN runs.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../concepts/deployment-topologies.html"><span class="pn-dir">← Previous</span><span class="pn-title">Deployment topologies: how to place the roles</span></a><a class="pn pn-next" href="../concepts/npu-overview.html"><span class="pn-dir">Next →</span><span class="pn-title">Ascend NPU overview: the same contract, different transports</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#in-the-code">In the code</a></li><li class="toc-l3"><a href="#step-1-the-a-f-rank-ratio">Step 1: The A:F rank ratio</a></li><li class="toc-l3"><a href="#step-2-dbo-thresholds">Step 2: DBO thresholds</a></li><li class="toc-l3"><a href="#step-3-cuda-graph-capture-size">Step 3: CUDA graph capture size</a></li><li class="toc-l3"><a href="#step-4-the-group-timeout">Step 4: The group timeout</a></li><li class="toc-l3"><a href="#step-5-gate-placement">Step 5: Gate placement</a></li><li class="toc-l2"><a href="#deep-dive">Deep dive</a></li><li class="toc-l3"><a href="#batch-size-factor-the-npu-cam-receive-capacity">BATCH_SIZE_FACTOR: the NPU CAM receive capacity</a></li><li class="toc-l3"><a href="#the-profiler">The profiler</a></li><li class="toc-l3"><a href="#the-routing-simulator">The routing simulator</a></li><li class="toc-l3"><a href="#the-benchmark-tools-and-the-result-images">The benchmark tools and the result images</a></li><li class="toc-l2"><a href="#what-can-go-wrong">What can go wrong</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

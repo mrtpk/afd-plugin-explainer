@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What is AFD? · AFD Plugin Explained</title>
+<meta name="description" content="AFD runs the attention part and the FFN/MoE part of one model in separate server processes. This page explains why that helps, what xAyF means, and how AFD differs from prefill/decode disaggregation and from plain expert parallelism.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="learn/what-is-afd">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec" open><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a class="current" aria-current="page" href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>Learn the basics</span><span class="sep">›</span><span aria-current="page">What is AFD?</span></nav>
+<h1 class="page-title">What is AFD?</h1>
+<div class="page-meta"><span class="level level-beginner" title="Level">Beginner</span><span class="meta-sec">Learn the basics</span><span class="meta-time">about 3 min read + 2 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>You do not need to read other pages first.</p></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text"><a class="term" href="../reference/glossary.html#term-afd" data-term="AFD" data-def="Attention-FFN Disaggregation. The attention part and the feed-forward (FFN/MoE) part of a model run in separate server processes and exchange hidden states.">AFD</a> runs the attention part and the feed-forward part of one model in separate server processes, joined by a <a class="term" href="../reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">connector</a>.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p>A transformer decoder layer has two heavy parts. Attention reads the KV cache
+and mixes tokens. The feed-forward part (dense FFN, or MoE experts) applies big
+weight matrices. The two parts are slow for different reasons.</p>
+<p>Attention is memory-bound. Each request owns its KV cache, and the step reads a
+lot of memory for little compute. The FFN and the MoE experts are weight-bound.
+They reuse the same weights for every token, so a large batch makes them
+efficient. One batch size and one rank count cannot suit both parts at once.</p>
+<p><a class="term" href="../reference/glossary.html#term-afd" data-term="AFD" data-def="Attention-FFN Disaggregation. The attention part and the feed-forward (FFN/MoE) part of a model run in separate server processes and exchange hidden states.">Attention-FFN Disaggregation</a> splits the two parts into two groups of
+processes. The <a class="term" href="../reference/glossary.html#term-attention-role" data-term="attention role" data-def="The side that runs attention and sends hidden states to the FFN side. The default role of a process.">attention role</a> keeps the KV cache and the
+API server. The <a class="term" href="../reference/glossary.html#term-ffn-role" data-term="FFN role" data-def="The side that runs the feed-forward and MoE experts. It receives hidden states, computes, and sends the result back.">FFN role</a> holds the experts. A connector moves
+hidden states from the attention side to the FFN side and back. Each role can then
+use its own rank count and its own batch shape.</p>
+<p><strong>An everyday comparison.</strong> Think of a kitchen with a prep station
+and an oven. Prep works per order; the oven works best full. You staff them apart so
+each runs at its own pace. The comparison stops here: the two AFD roles must still
+finish every layer together, once per step, before the next layer starts.</p>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<figure class="diagram" id="fig-b1_afd_split"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Two panels. Panel 1: two boxes side by side. The attention box (blue) lists: state per request is the KV cache, memory-bound, little compute per byte. The FFN/MoE box (emerald) lists: shared weights and experts, weight-bound, faster with a large batch. Panel 2: an attention-role box (blue, x ranks, KV cache and scheduler) on the left and an FFN-role box (emerald, y ranks, experts, no KV cache) on the right. An amber arrow carries hidden states to the FFN role; an emerald arrow carries the FFN output back. The label between them reads connector."><svg role="img" aria-label="Two panels. Panel 1: two boxes side by side. The attention box (blue) lists: state per request is the KV cache, memory-bound, little compute per byte. The FFN/MoE box (emerald) lists: shared weights and experts, weight-bound, faster with a large batch. Panel 2: an attention-role box (blue, x ranks, KV cache and scheduler) on the left and an FFN-role box (emerald, y ranks, experts, no KV cache) on the right. An amber arrow carries hidden states to the FFN role; an emerald arrow carries the FFN output back. The label between them reads connector." xmlns="http://www.w3.org/2000/svg" width="1100" height="672" viewBox="0 0 1100 672">
+<defs><marker id="dg-b1_afd_split-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d97706"/></marker><marker id="dg-b1_afd_split-m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker></defs>
+<rect width="1100" height="672" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Why AFD splits attention from the FFN</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Attention is memory-bound per request. The FFN and MoE experts are weight-bound and want a large batch.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_plugin/config.py:61-64  ·  connectors/gpu/p2p.py:11-20</text>
+<rect x="20.0" y="124.0" width="1060.0" height="196.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="150.0" r="13" fill="#111827"/>
+<text x="46.0" y="154.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="155.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">One model, two very different workloads</text>
+<text x="68.0" y="174.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Each part is slow for a different reason, so each wants a different batch size and rank count.</text>
+<rect x="60.0" y="196.0" width="470.0" height="104.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="295.0" y="216.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">Attention part</text>
+<text x="295.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">state per request: the KV cache</text>
+<text x="295.0" y="249.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">memory-bound: many reads,</text>
+<text x="295.0" y="264.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">little compute per byte moved</text>
+<rect x="570.0" y="196.0" width="470.0" height="104.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="805.0" y="216.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">FFN / MoE part</text>
+<text x="805.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">shared weights and experts</text>
+<text x="805.0" y="249.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">weight-bound: compute-heavy,</text>
+<text x="805.0" y="264.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">faster with a large batch</text>
+<rect x="20.0" y="340.0" width="1060.0" height="232.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="366.0" r="13" fill="#111827"/>
+<text x="46.0" y="370.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="371.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">AFD runs each part as its own server group</text>
+<text x="68.0" y="390.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">A connector moves hidden states both ways; the attention side keeps the KV cache and the API server.</text>
+<rect x="70.0" y="418.0" width="360.0" height="108.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="250.0" y="438.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">Attention role</text>
+<text x="250.0" y="456.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">x ranks (e.g. 2)</text>
+<text x="250.0" y="471.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">KV cache + scheduler</text>
+<text x="250.0" y="486.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">sends hidden states</text>
+<rect x="670.0" y="418.0" width="360.0" height="108.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="850.0" y="438.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">FFN role</text>
+<text x="850.0" y="456.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">y ranks (e.g. 2)</text>
+<text x="850.0" y="471.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">experts, no KV cache</text>
+<text x="850.0" y="486.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">returns the FFN output</text>
+<line x1="430.0" y1="458.0" x2="668.0" y2="458.0" stroke="#d97706" stroke-width="2" marker-end="url(#dg-b1_afd_split-m0)"/>
+<text x="549.0" y="448.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#d97706" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">hidden states -&gt;</text>
+<line x1="668.0" y1="492.0" x2="432.0" y2="492.0" stroke="#059669" stroke-width="2" marker-end="url(#dg-b1_afd_split-m1)"/>
+<text x="549.0" y="482.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">&lt;- FFN output</text>
+<text x="549.0" y="518.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#6b7280" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">connector</text>
+<text x="30.0" y="601.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="590.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="601.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention role</text>
+<rect x="225.1" y="590.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="246.1" y="601.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN role</text>
+<rect x="321.4" y="590.0" width="14.0" height="14.0" rx="3" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<text x="342.4" y="601.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">hidden states</text>
+<text x="30.0" y="624.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Topology name xAyF: x attention ranks and y FFN ranks (e.g. 2A2F). The P2P connector needs num_attention_ranks &gt;= num_ffn_ranks (config.py:61-64, gpu/p2p.py:11-20).</text>
+<text x="30.0" y="642.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Bottleneck facts are general serving knowledge, not repository claims.</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: the two parts have different bottlenecks (panel 1), so AFD gives each its own server group and joins them with a connector (panel 2).</figcaption><a class="diagram-open" href="../diagrams/b1_afd_split.svg" target="_blank">Open full size ↗</a></div></figure>
+<p>Read panel 1 as the problem: two parts, two bottlenecks. Read panel 2 as the
+answer: two server groups, joined by a connector. The attention side sends hidden
+states and gets the FFN output back, once per layer.</p>
+
+<h2 id="deep-dive">Deep dive<a class="h-anchor" href="#deep-dive" aria-label="Link to this section">#</a></h2>
+<p>These blocks compare AFD with two layouts the reader may know, and explain the
+<code>xAyF</code> topology name.</p>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="afd-vs-prefill-decode-disaggregation" class="dd-title">AFD vs. prefill/decode disaggregation</h3></summary><div class="dd-body"><p><a class="term" href="../reference/glossary.html#term-pd-disaggregation" data-term="prefill/decode disaggregation" data-def="A serving layout that runs prefill and decode in separate processes. Each process still runs the whole model. It splits by phase, not by model part.">Prefill/decode disaggregation</a> and AFD both spread
+one model over more processes, but they cut it in different directions.</p>
+<ul>
+  <li><strong>Prefill/decode disaggregation</strong> cuts by <em>phase</em>. A prefill
+      server runs the whole model for the prompt; a decode server runs the whole model
+      for the new tokens. Each process still holds attention and FFN together.</li>
+  <li><strong>AFD</strong> cuts by <em>model part</em>. Inside one phase, attention
+      runs on one group of processes and the FFN runs on another.</li>
+</ul>
+<p>The two layouts stack. The plugin ships a recipe that combines them: a
+<code>2p1a1f</code> topology with two prefill workers, one attention decode worker
+and one FFN decode worker (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md#L27" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:27 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:27</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md#L40-L50" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50</code></a>). A proxy
+server joins the prefill and decode stages (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md#L50" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:50 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:50</code></a>).</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="afd-vs-expert-parallelism-ep" class="dd-title">AFD vs. expert parallelism (EP)</h3></summary><div class="dd-body"><p>Expert parallelism spreads the MoE experts of one layer over several ranks. It is a
+way to place the experts; it does not move attention to another process. Attention and
+the experts still run inside the same worker and the same step.</p>
+<p>AFD is a process split, not an expert placement. It puts attention and the FFN in
+separate processes. Expert parallelism can still run <em>inside</em> the FFN role to
+spread its experts. The GPU runtime in fact needs static expert parallelism on the
+AFD stack, and rejects elastic EP or EPLB (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L118-L125" target="_blank" rel="noopener" title="afd_plugin/validation.py:118-125 at afd-plugin 7452d52"><code>afd_plugin/validation.py:118-125</code></a>).
+So AFD and EP are not alternatives: AFD places the two parts, and EP places the experts
+within the FFN part.</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-xayf-topology-name-and-the-rank-count-rule" class="dd-title">The xAyF topology name and the rank-count rule</h3></summary><div class="dd-body"><p>A topology is named <code>xAyF</code>: <code>x</code> <a class="term" href="../reference/glossary.html#term-attention-role" data-term="attention role" data-def="The side that runs attention and sends hidden states to the FFN side. The default role of a process.">attention</a>
+ranks and <code>y</code> <a class="term" href="../reference/glossary.html#term-ffn-role" data-term="FFN role" data-def="The side that runs the feed-forward and MoE experts. It receives hidden states, computes, and sends the result back.">FFN</a> ranks. For example <code>2A2F</code> is two
+of each. The counts are two AFD config fields, <code>num_attention_ranks</code> and
+<code>num_ffn_ranks</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L61-L64" target="_blank" rel="noopener" title="afd_plugin/config.py:61-64 at afd-plugin 7452d52"><code>afd_plugin/config.py:61-64</code></a>).</p>
+<p>The GPU P2P <a class="term" href="../reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">connector</a> sets a rule: the number of attention ranks must be
+greater than or equal to the number of FFN ranks. The world places the FFN ranks first,
+then the attention ranks, and spreads the attention ranks over the FFN ranks in blocks
+that differ in size by at most one (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L11-L20" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:11-20 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:11-20</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L59" target="_blank" rel="noopener" title="README.md:59 at afd-plugin 7452d52"><code>README.md:59</code></a>). So one FFN rank can serve more than one attention peer, but not
+the other way around. The <a href="../concepts/topology.html">Topology and role ranks: the AFD world</a> page gives the full mapping.</p></div></details>
+
+<h2 id="in-afd-plugin">In afd-plugin<a class="h-anchor" href="#in-afd-plugin" aria-label="Link to this section">#</a></h2>
+<p>afd-plugin adds AFD to vLLM v0.30.0 without changing the vLLM source. Three pointers
+connect this page to the code:</p>
+<ul>
+  <li>The README states the goal and the entry points AFD uses: the
+      <code>vllm.general_plugins</code> hook, <code>--additional-config</code>, role
+      workers and model wrappers (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L11-L26" target="_blank" rel="noopener" title="README.md:11-26 at afd-plugin 7452d52"><code>README.md:11-26</code></a>). See <a href="../learn/vllm-v1-map.html">The vLLM v1 map</a>.</li>
+  <li>The two roles and the connector are the core concepts. Start at
+      <a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a> and <a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a>.</li>
+  <li>A ready recipe runs DeepSeek-V2-Lite on four GPUs in a <code>2A2F</code> layout
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md#L52-L59" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:52-59 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:52-59</code></a>). See
+      <a href="../concepts/deployment-topologies.html">Deployment topologies: how to place the roles</a>.</li>
+</ul>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>Why does AFD put attention and the FFN in separate processes?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The two parts are slow for different reasons. Attention is memory-bound per
+      request; the FFN and the experts are weight-bound and want a large batch. Separate
+      processes let each part use its own rank count and batch shape.</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>What does the name <code>2A2F</code> mean?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Two attention ranks and two FFN ranks. The counts are
+      <code>num_attention_ranks</code> and <code>num_ffn_ranks</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L61-L64" target="_blank" rel="noopener" title="afd_plugin/config.py:61-64 at afd-plugin 7452d52"><code>afd_plugin/config.py:61-64</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>How does AFD differ from prefill/decode disaggregation?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Prefill/decode disaggregation cuts by phase; each process still runs the whole
+      model. AFD cuts by model part: attention and the FFN run in separate processes. The
+      <code>2p1a1f</code> recipe combines both
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md#L40-L50" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>Is AFD an alternative to expert parallelism?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>No. AFD places the two model parts in separate processes. Expert parallelism
+      places the experts inside the FFN part. The GPU stack needs static expert parallelism
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L118-L125" target="_blank" rel="noopener" title="afd_plugin/validation.py:118-125 at afd-plugin 7452d52"><code>afd_plugin/validation.py:118-125</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>On the GPU P2P connector, why must <code>num_attention_ranks</code> be at
+    least <code>num_ffn_ranks</code>?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The connector maps each attention rank to one FFN peer, and lets one FFN rank
+      serve several attention ranks in near-equal blocks. That only works when there are at
+      least as many attention ranks as FFN ranks
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L11-L20" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:11-20 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:11-20</code></a>).</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a><span class="rel-sum">AFD runs the attention part and the FFN part as two server processes. This page shows what each role owns, and why the FFN side has no real scheduler, no KV cache and no sampler.</span></li><li><a href="../concepts/topology.html">Topology and role ranks: the AFD world</a><span class="rel-sum">The P2P connector builds one world, [F0..A0..], from the role ranks. This page shows how the role rank, the subgroups and the DP-metadata routes come from the topology sizes.</span></li><li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a><span class="rel-sum">AFD hooks into a short chain of vLLM v1 processes and classes: the API server, the EngineCore, the executor, the worker, the Model Runner V2 and the model. This page names each box, with its vLLM line and the AFD hook on it.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../index.html"><span class="pn-dir">← Previous</span><span class="pn-title">AFD Plugin Explained</span></a><a class="pn pn-next" href="../learn/vllm-plugins.html"><span class="pn-dir">Next →</span><span class="pn-title">How vLLM plugins work</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#deep-dive">Deep dive</a></li><li class="toc-l3"><a href="#afd-vs-prefill-decode-disaggregation">AFD vs. prefill/decode disaggregation</a></li><li class="toc-l3"><a href="#afd-vs-expert-parallelism-ep">AFD vs. expert parallelism (EP)</a></li><li class="toc-l3"><a href="#the-xayf-topology-name-and-the-rank-count-rule">The xAyF topology name and the rank-count rule</a></li><li class="toc-l2"><a href="#in-afd-plugin">In afd-plugin</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+
+</body>
+</html>

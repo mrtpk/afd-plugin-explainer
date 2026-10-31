@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="766" viewBox="0 0 1100 766">
+<defs></defs>
+<rect width="1100" height="766" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">The vLLM v1 chain AFD hooks into</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">One box per process or class, top to bottom; the violet row is where afd-plugin changes it.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">vLLM v0.30.0  ·  cited at extra_repos.vllm</text>
+<rect x="20.0" y="118.0" width="1060.0" height="548.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="144.0" r="13" fill="#111827"/>
+<text x="46.0" y="148.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="149.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">API server -&gt; EngineCore -&gt; executor -&gt; worker -&gt; runner -&gt; model</text>
+<text x="68.0" y="168.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Each box runs load_general_plugins in its own process, so the plugin runs in each one.</text>
+<rect x="50.0" y="178.0" width="1000.0" height="68.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="50.0" y="178.0" width="6.0" height="68.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="72.0" cy="195.0" r="10" fill="#2563eb"/>
+<text x="72.0" y="199.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="88.0" y="200.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">API server process (AsyncLLM)</text>
+<rect x="922.7" y="186.0" width="119.3" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="982.3" y="199.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">async_llm.py:78</text>
+<text x="88.0" y="220.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">vLLM</text>
+<text x="140.0" y="220.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">builds EngineArgs, parses the CLI, owns HTTP</text>
+<text x="88.0" y="237.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">hook</text>
+<text x="140.0" y="237.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#7c3aed" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">plugin load in add_cli_args / __post_init__</text>
+<rect x="50.0" y="260.0" width="1000.0" height="68.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="50.0" y="260.0" width="6.0" height="68.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="72.0" cy="277.0" r="10" fill="#2563eb"/>
+<text x="72.0" y="281.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="88.0" y="282.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">EngineCore process</text>
+<rect x="922.7" y="268.0" width="119.3" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="982.3" y="281.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">core.py:105,134</text>
+<text x="88.0" y="302.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">vLLM</text>
+<text x="140.0" y="302.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">builds the scheduler and the model_executor</text>
+<text x="88.0" y="319.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">hook</text>
+<text x="140.0" y="319.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#7c3aed" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN EngineCore returns early (engine_core patch)</text>
+<rect x="50.0" y="342.0" width="1000.0" height="68.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="50.0" y="342.0" width="6.0" height="68.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="72.0" cy="359.0" r="10" fill="#2563eb"/>
+<text x="72.0" y="363.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="88.0" y="364.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Executor</text>
+<rect x="909.4" y="350.0" width="132.6" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="975.7" y="363.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">abstract.py:70-77</text>
+<text x="88.0" y="384.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">vLLM</text>
+<text x="140.0" y="384.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">mp = worker processes; uni = one, in-process</text>
+<text x="88.0" y="401.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">hook</text>
+<text x="140.0" y="401.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#7c3aed" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">none; AFD works through the worker it builds</text>
+<rect x="50.0" y="424.0" width="1000.0" height="68.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="50.0" y="424.0" width="6.0" height="68.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="72.0" cy="441.0" r="10" fill="#2563eb"/>
+<text x="72.0" y="445.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">4</text>
+<text x="88.0" y="446.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Worker (per device)</text>
+<rect x="876.3" y="432.0" width="165.7" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="959.2" y="445.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">worker_base.py:271-277</text>
+<text x="88.0" y="466.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">vLLM</text>
+<text x="140.0" y="466.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">imports parallel_config.worker_cls by name</text>
+<text x="88.0" y="483.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">hook</text>
+<text x="140.0" y="483.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#7c3aed" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">worker_cls rewritten to the AFD role worker</text>
+<rect x="50.0" y="506.0" width="1000.0" height="68.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="50.0" y="506.0" width="6.0" height="68.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="72.0" cy="523.0" r="10" fill="#2563eb"/>
+<text x="72.0" y="527.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">5</text>
+<text x="88.0" y="528.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Model Runner V2</text>
+<rect x="882.9" y="514.0" width="159.1" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="962.5" y="527.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">gpu_worker.py:469-482</text>
+<text x="88.0" y="548.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">vLLM</text>
+<text x="140.0" y="548.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">built when the V2 model runner is on</text>
+<text x="88.0" y="565.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">hook</text>
+<text x="140.0" y="565.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#7c3aed" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">runner class swapped in Worker.init_device</text>
+<rect x="50.0" y="588.0" width="1000.0" height="68.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<rect x="50.0" y="588.0" width="6.0" height="68.0" rx="3" fill="#059669" fill-opacity="1.0" stroke="none"/>
+<circle cx="72.0" cy="605.0" r="10" fill="#059669"/>
+<text x="72.0" y="609.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">6</text>
+<text x="88.0" y="610.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">The model</text>
+<rect x="896.2" y="596.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#059669" stroke-width="1"/>
+<text x="969.1" y="609.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:211-214</text>
+<text x="88.0" y="630.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">vLLM</text>
+<text x="140.0" y="630.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">ModelRegistry resolves the architecture name</text>
+<text x="88.0" y="647.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">hook</text>
+<text x="140.0" y="647.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#7c3aed" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">AFD&lt;arch&gt; model wrapper makes it role-aware</text>
+<text x="30.0" y="695.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="684.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="695.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">vLLM v1 box</text>
+<rect x="216.6" y="684.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="237.6" y="695.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">AFD hook point</text>
+<rect x="348.3" y="684.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="369.3" y="695.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">model</text>
+<text x="30.0" y="718.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">One device uses UniProcExecutor, so the worker runs inside the EngineCore process (abstract.py:74-77).</text>
+<text x="30.0" y="736.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Line numbers are vLLM v0.30.0 at the pinned commit.</text>
+</svg>

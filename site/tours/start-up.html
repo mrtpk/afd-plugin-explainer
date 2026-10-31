@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tour: Start-up · AFD Plugin Explained</title>
+<meta name="description" content="Follow both servers from vllm serve to ready, stop by stop: plugin load, the worker_cls rewrite, the FFN EngineCore early return, the runner swap, the connector handshake, and graph capture on both roles.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="tours/start-up">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a class="current" aria-current="page" href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>Guided tours</span><span class="sep">›</span><span aria-current="page">Start-up</span></nav>
+<h1 class="page-title">Tour: Start-up</h1>
+<div class="page-meta"><span class="level level-advanced" title="Level">Advanced</span><span class="meta-sec">Guided tours</span><span class="meta-time">about 9 min read + 1 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a> <span class="level level-intermediate level-sm">Intermediate</span></li><li><a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a> <span class="level level-intermediate level-sm">Intermediate</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">Follow both AFD servers from <code>vllm serve</code> to ready. The plugin loads, the config patch picks the role worker, the two roles meet at the <a class="term" href="../reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">connector</a>, and both sides capture graphs.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p>AFD runs two <code>vllm serve</code> processes, one per role, with the same model. Each process loads the
+<a class="term" href="../reference/glossary.html#term-plugin" data-term="afd-plugin" data-def="The vLLM external plugin that adds AFD. vLLM loads it; it changes no vLLM source file.">afd-plugin</a>, which rewrites the worker class for its role. The <a class="term" href="../reference/glossary.html#term-attention-role" data-term="attention role" data-def="The side that runs attention and sends hidden states to the FFN side. The default role of a process.">attention</a> server
+comes up like a normal vLLM server. The <a class="term" href="../reference/glossary.html#term-ffn-role" data-term="FFN role" data-def="The side that runs the feed-forward and MoE experts. It receives hidden states, computes, and sends the result back.">FFN</a> server stops its <a class="term" href="../reference/glossary.html#term-enginecore" data-term="EngineCore" data-def="The vLLM v1 engine core process. On the FFN role it returns early after the executor is built: no scheduler, no loop.">EngineCore</a>
+early and runs a connector loop instead. The two roles then meet at the connector and capture CUDA graphs.</p>
+<p>This tour uses the graph recipe for one attention server and one FFN server: 2A2F, DP1, TP2, with DBO and
+<code>FULL_DECODE_ONLY</code> graphs
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L7-L32" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-32 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-32</code></a>).</p>
+<p>Keep one rule in mind. The two roles start as separate processes and can come up in either order. They
+synchronize at one point: the collective connector handshake. Everything before it is per-process; the handshake
+is where the roles meet.</p>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<p>The two diagrams split the start-up in half. The first follows the attention server; the second follows the
+FFN server. Read each top to bottom.</p>
+<figure class="diagram" id="fig-b4_startup_attention"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: A vertical sequence of seven step cards for the attention server. 1, vllm serve with role attention, tagged vLLM, from the recipe. 2, plugin load register_afd in process 0, which adds patches, routing, the DBO op and models. 3, the patched create_engine_config rewrites worker_cls from auto to AFDAttentionWorker. 4, AFDAttentionWorker.init_device swaps the runner class to AFDAttentionModelRunnerV2. 5, load_model defers the connector init to the end so attention and FFN weights load together. 6, KV cache for attention only, then graph capture that sends warm-up and capture control. 7, ready: the attention server accepts requests, with a note that the FFN handshake must also finish. Arrows connect the cards top to bottom."><svg role="img" aria-label="A vertical sequence of seven step cards for the attention server. 1, vllm serve with role attention, tagged vLLM, from the recipe. 2, plugin load register_afd in process 0, which adds patches, routing, the DBO op and models. 3, the patched create_engine_config rewrites worker_cls from auto to AFDAttentionWorker. 4, AFDAttentionWorker.init_device swaps the runner class to AFDAttentionModelRunnerV2. 5, load_model defers the connector init to the end so attention and FFN weights load together. 6, KV cache for attention only, then graph capture that sends warm-up and capture control. 7, ready: the attention server accepts requests, with a note that the FFN handshake must also finish. Arrows connect the cards top to bottom." xmlns="http://www.w3.org/2000/svg" width="1100" height="674" viewBox="0 0 1100 674">
+<defs><marker id="dg-b4_startup_attention-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/></marker></defs>
+<rect width="1100" height="674" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Start-up, half 1: the attention server</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">vllm serve loads the plugin, the config patch picks the AFD worker, and the runner swap builds the AFD model runner.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">__init__.py  ·  config_validation.py  ·  attention_worker.py  ·  canvas 1100</text>
+<rect x="130.0" y="128.0" width="840.0" height="52.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<rect x="130.0" y="128.0" width="6.0" height="52.0" rx="3" fill="#9ca3af" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="145.0" r="10" fill="#9ca3af"/>
+<text x="152.0" y="149.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="168.0" y="150.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">vllm serve  (role: attention)</text>
+<rect x="915.5" y="136.0" width="46.5" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1"/>
+<text x="938.8" y="149.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">vLLM</text>
+<text x="168.0" y="170.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">recipe</text>
+<text x="220.0" y="170.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">2a2f_graph_dbo_dp1tp2.sh</text>
+<line x1="550.0" y1="180.0" x2="550.0" y2="194.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-b4_startup_attention-m0)"/>
+<rect x="130.0" y="196.0" width="840.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="130.0" y="196.0" width="6.0" height="52.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="213.0" r="10" fill="#2563eb"/>
+<text x="152.0" y="217.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="168.0" y="218.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">plugin load: register_afd  (process 0)</text>
+<rect x="922.1" y="204.0" width="39.9" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="942.1" y="217.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">afd</text>
+<text x="168.0" y="238.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">adds</text>
+<text x="220.0" y="238.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">patches, routing, DBO op, models  (:142-216)</text>
+<line x1="550.0" y1="248.0" x2="550.0" y2="262.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-b4_startup_attention-m0)"/>
+<rect x="130.0" y="264.0" width="840.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="130.0" y="264.0" width="6.0" height="52.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="281.0" r="10" fill="#2563eb"/>
+<text x="152.0" y="285.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="168.0" y="286.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">patched create_engine_config: worker_cls auto -&gt; AFDAttentionWorker</text>
+<rect x="908.9" y="272.0" width="53.1" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="935.4" y="285.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">patch</text>
+<text x="168.0" y="306.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">only if</text>
+<text x="220.0" y="306.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">worker_cls was &#x27;auto&#x27;  (:92-93, :179-197)</text>
+<line x1="550.0" y1="316.0" x2="550.0" y2="330.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-b4_startup_attention-m0)"/>
+<rect x="130.0" y="332.0" width="840.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="130.0" y="332.0" width="6.0" height="52.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="349.0" r="10" fill="#2563eb"/>
+<text x="152.0" y="353.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">4</text>
+<text x="168.0" y="354.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">AFDAttentionWorker.init_device: swap runner class</text>
+<rect x="922.1" y="340.0" width="39.9" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="942.1" y="353.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">afd</text>
+<text x="168.0" y="374.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">builds</text>
+<text x="220.0" y="374.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">AFDAttentionModelRunnerV2  (:82-87)</text>
+<line x1="550.0" y1="384.0" x2="550.0" y2="398.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-b4_startup_attention-m0)"/>
+<rect x="130.0" y="400.0" width="840.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="130.0" y="400.0" width="6.0" height="52.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="417.0" r="10" fill="#2563eb"/>
+<text x="152.0" y="421.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">5</text>
+<text x="168.0" y="422.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">load_model: connector init deferred to the end</text>
+<rect x="922.1" y="408.0" width="39.9" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="942.1" y="421.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">afd</text>
+<text x="168.0" y="442.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">overlaps</text>
+<text x="220.0" y="442.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention + FFN weight load  (:454-462)</text>
+<line x1="550.0" y1="452.0" x2="550.0" y2="466.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-b4_startup_attention-m0)"/>
+<rect x="130.0" y="468.0" width="840.0" height="52.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<rect x="130.0" y="468.0" width="6.0" height="52.0" rx="3" fill="#7c3aed" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="485.0" r="10" fill="#7c3aed"/>
+<text x="152.0" y="489.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">6</text>
+<text x="168.0" y="490.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">KV cache (attention only) + graph capture</text>
+<rect x="908.9" y="476.0" width="53.1" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1"/>
+<text x="935.4" y="489.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#7c3aed" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">graph</text>
+<text x="168.0" y="510.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">sends</text>
+<text x="220.0" y="510.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">warm-up / capture control  (:509-553)</text>
+<line x1="550.0" y1="520.0" x2="550.0" y2="534.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-b4_startup_attention-m0)"/>
+<rect x="130.0" y="536.0" width="840.0" height="52.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<rect x="130.0" y="536.0" width="6.0" height="52.0" rx="3" fill="#9ca3af" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="553.0" r="10" fill="#9ca3af"/>
+<text x="152.0" y="557.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">7</text>
+<text x="168.0" y="558.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">ready: the attention server accepts requests</text>
+<rect x="908.9" y="544.0" width="53.1" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1"/>
+<text x="935.4" y="557.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">ready</text>
+<text x="168.0" y="578.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">note</text>
+<text x="220.0" y="578.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN side handshake must also finish</text>
+<text x="30.0" y="619.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="608.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="619.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">plugin / patch</text>
+<rect x="222.3" y="608.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="243.3" y="619.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">graph capture</text>
+<rect x="349.3" y="608.0" width="14.0" height="14.0" rx="3" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<text x="370.3" y="619.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">native vLLM / state</text>
+<text x="30.0" y="642.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The connector rendezvous is deferred to the end of load_model so the two roles load weights at the same time (attention_model_runner_v2.py:454-462).</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: half 1. The attention server loads the plugin, the config patch picks the AFD worker, and the runner swap builds the AFD model runner. The connector init is deferred to the end of load_model.</figcaption><a class="diagram-open" href="../diagrams/b4_startup_attention.svg" target="_blank">Open full size ↗</a></div></figure>
+<figure class="diagram" id="fig-b4_startup_ffn"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: A vertical sequence of seven step cards for the FFN server. 1, vllm serve with role ffn, same recipe. 2, plugin load register_afd, with a once-per-process guard. 3, create_engine_config rewrites worker_cls to AFDFFNWorker. 4, the FFN EngineCore returns after the executor: no real scheduler, zero blocks. 5, AFDFFNWorker.init_device swaps the runner class to GPUFFNModelRunner. 6, initialize_from_config joins the connector and starts the loop. 7, the FFN EngineCore calls collective_rpc start_ffn_server_loop and the loop runs. A legend marks plugin or patch, FFN role, and native vLLM or state."><svg role="img" aria-label="A vertical sequence of seven step cards for the FFN server. 1, vllm serve with role ffn, same recipe. 2, plugin load register_afd, with a once-per-process guard. 3, create_engine_config rewrites worker_cls to AFDFFNWorker. 4, the FFN EngineCore returns after the executor: no real scheduler, zero blocks. 5, AFDFFNWorker.init_device swaps the runner class to GPUFFNModelRunner. 6, initialize_from_config joins the connector and starts the loop. 7, the FFN EngineCore calls collective_rpc start_ffn_server_loop and the loop runs. A legend marks plugin or patch, FFN role, and native vLLM or state." xmlns="http://www.w3.org/2000/svg" width="1100" height="692" viewBox="0 0 1100 692">
+<defs><marker id="dg-b4_startup_ffn-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/></marker></defs>
+<rect width="1100" height="692" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Start-up, half 2: the FFN server</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The FFN EngineCore returns after the executor; its worker loads the model, joins the connector, and runs a daemon loop.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">config_validation.py  ·  engine_core.py  ·  ffn_worker.py  ·  canvas 1100</text>
+<rect x="130.0" y="128.0" width="840.0" height="52.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<rect x="130.0" y="128.0" width="6.0" height="52.0" rx="3" fill="#9ca3af" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="145.0" r="10" fill="#9ca3af"/>
+<text x="152.0" y="149.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="168.0" y="150.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">vllm serve  (role: ffn)</text>
+<rect x="915.5" y="136.0" width="46.5" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1"/>
+<text x="938.8" y="149.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">vLLM</text>
+<text x="168.0" y="170.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">recipe</text>
+<text x="220.0" y="170.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">same recipe, role: ffn</text>
+<line x1="550.0" y1="180.0" x2="550.0" y2="194.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-b4_startup_ffn-m0)"/>
+<rect x="130.0" y="196.0" width="840.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="130.0" y="196.0" width="6.0" height="52.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="213.0" r="10" fill="#2563eb"/>
+<text x="152.0" y="217.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="168.0" y="218.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">plugin load: register_afd</text>
+<rect x="922.1" y="204.0" width="39.9" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="942.1" y="217.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">afd</text>
+<text x="168.0" y="238.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">guard</text>
+<text x="220.0" y="238.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">_registered once per process  (:150-153)</text>
+<line x1="550.0" y1="248.0" x2="550.0" y2="262.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-b4_startup_ffn-m0)"/>
+<rect x="130.0" y="264.0" width="840.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="130.0" y="264.0" width="6.0" height="52.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="281.0" r="10" fill="#2563eb"/>
+<text x="152.0" y="285.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="168.0" y="286.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">create_engine_config: worker_cls auto -&gt; AFDFFNWorker</text>
+<rect x="908.9" y="272.0" width="53.1" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="935.4" y="285.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">patch</text>
+<text x="168.0" y="306.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">only if</text>
+<text x="220.0" y="306.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">worker_cls was &#x27;auto&#x27;  (:92-93, :179-197)</text>
+<line x1="550.0" y1="316.0" x2="550.0" y2="330.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-b4_startup_ffn-m0)"/>
+<rect x="130.0" y="332.0" width="840.0" height="52.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<rect x="130.0" y="332.0" width="6.0" height="52.0" rx="3" fill="#059669" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="349.0" r="10" fill="#059669"/>
+<text x="152.0" y="353.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">4</text>
+<text x="168.0" y="354.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN EngineCore: return after the executor</text>
+<rect x="908.9" y="340.0" width="53.1" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#059669" stroke-width="1"/>
+<text x="935.4" y="353.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">early</text>
+<text x="168.0" y="374.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">no real scheduler, blocks 0</text>
+<text x="220.0" y="374.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">engine_core.py:56-68, 599-623</text>
+<line x1="550.0" y1="384.0" x2="550.0" y2="398.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-b4_startup_ffn-m0)"/>
+<rect x="130.0" y="400.0" width="840.0" height="52.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<rect x="130.0" y="400.0" width="6.0" height="52.0" rx="3" fill="#059669" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="417.0" r="10" fill="#059669"/>
+<text x="152.0" y="421.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">5</text>
+<text x="168.0" y="422.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">AFDFFNWorker.init_device: swap runner class</text>
+<rect x="922.1" y="408.0" width="39.9" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#059669" stroke-width="1"/>
+<text x="942.1" y="421.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">afd</text>
+<text x="168.0" y="442.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">builds</text>
+<text x="220.0" y="442.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">GPUFFNModelRunner  (:93-98)</text>
+<line x1="550.0" y1="452.0" x2="550.0" y2="466.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-b4_startup_ffn-m0)"/>
+<rect x="130.0" y="468.0" width="840.0" height="52.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<rect x="130.0" y="468.0" width="6.0" height="52.0" rx="3" fill="#059669" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="485.0" r="10" fill="#059669"/>
+<text x="152.0" y="489.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">6</text>
+<text x="168.0" y="490.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">initialize_from_config: join connector, start loop</text>
+<rect x="922.1" y="476.0" width="39.9" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#059669" stroke-width="1"/>
+<text x="942.1" y="489.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">afd</text>
+<text x="168.0" y="510.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">then</text>
+<text x="220.0" y="510.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">start_ffn_server_loop  (:107-113)</text>
+<line x1="550.0" y1="520.0" x2="550.0" y2="534.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-b4_startup_ffn-m0)"/>
+<rect x="130.0" y="536.0" width="840.0" height="52.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<rect x="130.0" y="536.0" width="6.0" height="52.0" rx="3" fill="#059669" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="553.0" r="10" fill="#059669"/>
+<text x="152.0" y="557.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">7</text>
+<text x="168.0" y="558.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">collective_rpc start_ffn_server_loop -&gt; loop runs</text>
+<rect x="908.9" y="544.0" width="53.1" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#059669" stroke-width="1"/>
+<text x="935.4" y="557.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">ready</text>
+<text x="168.0" y="578.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">from</text>
+<text x="220.0" y="578.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN EngineCore  (engine_core.py:650-659)</text>
+<text x="30.0" y="619.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="608.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="619.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">plugin / patch</text>
+<rect x="222.3" y="608.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="243.3" y="619.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN role</text>
+<rect x="318.7" y="608.0" width="14.0" height="14.0" rx="3" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<text x="339.7" y="619.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">native vLLM / state</text>
+<text x="30.0" y="642.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The FFN EngineCore keeps a no-op scheduler (not None) so the native readiness handshake still works (engine_core.py:608-614).</text>
+<text x="30.0" y="660.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Either role can rendezvous first; init_afd_connector is collective across both.</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: half 2. The FFN EngineCore returns after the executor; its worker loads the model, joins the connector, and runs a daemon loop driven by the control plane.</figcaption><a class="diagram-open" href="../diagrams/b4_startup_ffn.svg" target="_blank">Open full size ↗</a></div></figure>
+
+<section class="stop" id="stop-1"><h2 id="1vllm-serve-starts-both-roles" class="stop-title"><span class="stop-num">1</span>vllm serve starts both roles<a class="h-anchor" href="#1vllm-serve-starts-both-roles" aria-label="Link to this section">#</a></h2><p>Each role is a separate <code>vllm serve</code> command with its own
+<a class="term" href="../reference/glossary.html#term-additional-config" data-term="additional_config" data-def="A vLLM config field. The plugin reads its &quot;afd&quot; key for the role, the connector, the topology sizes and the host/port.">--additional-config</a>. The only difference between the two in this recipe is
+<code>role</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L11-L19" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:11-19 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:11-19</code></a>).</p>
+<figure class="code-excerpt" data-lang="bash"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L11-L29" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:11-29</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L11-L29" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">11</span><span class="ln">12</span><span class="ln hl">13</span><span class="ln">14</span><span class="ln">15</span><span class="ln">16</span><span class="ln">17</span><span class="ln">18</span><span class="ln">19</span><span class="ln">20</span><span class="ln">21</span><span class="ln">22</span><span class="ln hl">23</span><span class="ln">24</span><span class="ln">25</span><span class="ln">26</span><span class="ln">27</span><span class="ln hl">28</span><span class="ln">29</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(12 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(17 * var(--code-lh))"></span><pre><code class="language-bash">    --additional-config &#x27;{
+        &quot;afd&quot;: {
+            &quot;role&quot;: &quot;attention&quot;,
+            &quot;connector&quot;: &quot;P2pNcclAFDConnector&quot;,
+            &quot;host&quot;: &quot;127.0.0.1&quot;,
+            &quot;port&quot;: 6269,
+            &quot;num_attention_ranks&quot;: 2,
+            &quot;num_ffn_ranks&quot;: 2
+        }
+    }&#x27; \
+    --max-num-seqs 64 \
+    --max-num-batched-tokens 64 \
+    --enable-dbo \
+    --dbo-decode-token-threshold 2 \
+    --dbo-prefill-token-threshold 12 \
+    --max-cudagraph-capture-size 64 \
+    --compilation-config &#x27;{
+        &quot;cudagraph_mode&quot;: &quot;FULL_DECODE_ONLY&quot;, &quot;cudagraph_capture_sizes&quot;:[64]
+    }&#x27; \</code></pre></div></div></div><figcaption class="code-caption">The attention server: role, DBO flags, and FULL_DECODE_ONLY graphs.</figcaption></figure>
+<p>Both commands set <code>VLLM_USE_V2_MODEL_RUNNER=1</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L5" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:5 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:5</code></a>).
+AFD needs the V2 model runner on. See <a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a>.</p></section>
+
+<section class="stop" id="stop-2"><h2 id="2vllm-loads-the-plugin-in-process-0" class="stop-title"><span class="stop-num">2</span>vLLM loads the plugin in process 0<a class="h-anchor" href="#2vllm-loads-the-plugin-in-process-0" aria-label="Link to this section">#</a></h2><p>vLLM loads general plugins at the start of <code>add_cli_args</code>, in the launch process
+(<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/engine/arg_utils.py#L3009" target="_blank" rel="noopener" title="vllm:vllm/engine/arg_utils.py:3009 at vLLM ced6857"><code>vllm:vllm/engine/arg_utils.py:3009</code></a>), and again when <code>EngineArgs</code> is built
+(<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/engine/arg_utils.py#L839" target="_blank" rel="noopener" title="vllm:vllm/engine/arg_utils.py:839 at vLLM ced6857"><code>vllm:vllm/engine/arg_utils.py:839</code></a>). Both run in process 0 only. The loader has a once-per-process
+guard, so repeat calls are cheap (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/plugins/__init__.py#L82-L85" target="_blank" rel="noopener" title="vllm:vllm/plugins/__init__.py:82-85 at vLLM ced6857"><code>vllm:vllm/plugins/__init__.py:82-85</code></a>).</p>
+<p>The plugin entry point is <code>afd = "afd_plugin:register_afd"</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/pyproject.toml#L45-L46" target="_blank" rel="noopener" title="pyproject.toml:45-46 at afd-plugin 7452d52"><code>pyproject.toml:45-46</code></a>). The loader calls it. See <a href="../learn/vllm-plugins.html">How vLLM plugins work</a>.</p></section>
+
+<section class="stop" id="stop-3"><h2 id="3register-afd-installs-the-patches" class="stop-title"><span class="stop-num">3</span>register_afd installs the patches<a class="h-anchor" href="#3register-afd-installs-the-patches" aria-label="Link to this section">#</a></h2><p><code>register_afd</code> runs once per process. It checks the vLLM version (warn only), imports the four
+patch modules, registers the routing strategy and the DBO op, and registers the AFD model wrappers
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L142-L216" target="_blank" rel="noopener" title="afd_plugin/__init__.py:142-216 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:142-216</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L172-L192" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/__init__.py:172-192</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L172-L192" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln hl">172</span><span class="ln">173</span><span class="ln">174</span><span class="ln">175</span><span class="ln">176</span><span class="ln">177</span><span class="ln">178</span><span class="ln">179</span><span class="ln">180</span><span class="ln">181</span><span class="ln">182</span><span class="ln">183</span><span class="ln">184</span><span class="ln">185</span><span class="ln">186</span><span class="ln">187</span><span class="ln">188</span><span class="ln">189</span><span class="ln hl">190</span><span class="ln">191</span><span class="ln">192</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(0 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(18 * var(--code-lh))"></span><pre><code class="language-python">    try:
+        import afd_plugin.compat.patches.async_dp_engine  # noqa: F401
+        import afd_plugin.compat.patches.async_dp_forward_context  # noqa: F401
+        import afd_plugin.compat.patches.config_validation  # noqa: F401
+        import afd_plugin.compat.patches.engine_core  # noqa: F401
+    except Exception:
+        _logger.debug(
+            &quot;AFD plugin: compatibility patches could not be applied&quot;,
+            exc_info=True,
+        )
+
+    from afd_plugin.model_executor.routing_simulator import (
+        register_afd_balanced_routing_strategy,
+    )
+
+    register_afd_balanced_routing_strategy()
+
+    try:
+        from afd_plugin.v1.worker.dbo import register_dbo_yield_custom_op
+
+        register_dbo_yield_custom_op()</code></pre></div></div></div><figcaption class="code-caption">register_afd: import the patch modules, then register the routing strategy and the DBO op.</figcaption></figure>
+<p>The patch imports install the <a class="term" href="../reference/glossary.html#term-patch" data-term="patch" data-def="A compat module that replaces a vLLM function at load time. The plugin applies a small set of patches.">compat patches</a> at import time, behind the
+<a class="term" href="../reference/glossary.html#term-version-gate" data-term="version gate" data-def="A check that decides whether a patch installs. is_target_vllm_compatible allows the target vLLM release and any dev build; on a mismatch, no patch installs.">version gate</a>. One of them, <code>config_validation</code>, is what rewrites the worker
+class next. See <a href="../concepts/compat-patches.html">Compat patches: how AFD changes vLLM without editing it</a>.</p></section>
+
+<section class="stop" id="stop-4"><h2 id="4the-config-patch-rewrites-worker-cls" class="stop-title"><span class="stop-num">4</span>The config patch rewrites worker_cls<a class="h-anchor" href="#4the-config-patch-rewrites-worker-cls" aria-label="Link to this section">#</a></h2><p>When vLLM builds the engine config, the patched <code>create_engine_config</code> runs. It rewrites
+<code>worker_cls</code> to the AFD role worker, but only when the value was <code>"auto"</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/config_validation.py#L60" target="_blank" rel="noopener" title="afd_plugin/compat/patches/config_validation.py:60 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/config_validation.py:60</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/config_validation.py#L92-L93" target="_blank" rel="noopener" title="afd_plugin/compat/patches/config_validation.py:92-93 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/config_validation.py:92-93</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/config_validation.py#L179-L197" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/compat/patches/config_validation.py:179-197</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/config_validation.py#L179-L197" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">179</span><span class="ln">180</span><span class="ln">181</span><span class="ln">182</span><span class="ln">183</span><span class="ln">184</span><span class="ln">185</span><span class="ln">186</span><span class="ln">187</span><span class="ln">188</span><span class="ln">189</span><span class="ln">190</span><span class="ln">191</span><span class="ln hl">192</span><span class="ln">193</span><span class="ln">194</span><span class="ln">195</span><span class="ln">196</span><span class="ln">197</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(13 * var(--code-lh))"></span><pre><code class="language-python">def _select_afd_worker_for_auto(vllm_config: VllmConfig) -&gt; None:
+    afd_config = parse_optional_afd_config(vllm_config)
+    if afd_config is None:
+        return
+
+    from vllm.platforms import current_platform
+
+    platform_worker_qualname = vllm_config.parallel_config.worker_cls
+    if not isinstance(platform_worker_qualname, str):
+        raise ValueError(
+            &quot;platform worker_cls must be a qualname string before AFD automatic &quot;
+            f&quot;selection, got {type(platform_worker_qualname).__name__}&quot;,
+        )
+    vllm_config.parallel_config.worker_cls = afd_worker_qualname_for_platform_default(
+        afd_config.role,
+        platform_worker_qualname,
+        is_cuda=current_platform.is_cuda(),
+        device_type=current_platform.device_type,
+    )</code></pre></div></div></div><figcaption class="code-caption">_select_afd_worker_for_auto: pick the AFD role worker for the platform default.</figcaption></figure>
+<p>The attention role gets <code>AFDAttentionWorker</code>; the FFN role gets <code>AFDFFNWorker</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L290-L291" target="_blank" rel="noopener" title="afd_plugin/validation.py:290-291 at afd-plugin 7452d52"><code>afd_plugin/validation.py:290-291</code></a>). See <a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a>.</p></section>
+
+<section class="stop" id="stop-5"><h2 id="5the-ffn-enginecore-returns-early" class="stop-title"><span class="stop-num">5</span>The FFN EngineCore returns early<a class="h-anchor" href="#5the-ffn-enginecore-returns-early" aria-label="Link to this section">#</a></h2><p>The <a class="term" href="../reference/glossary.html#term-enginecore" data-term="EngineCore" data-def="The vLLM v1 engine core process. On the FFN role it returns early after the executor is built: no scheduler, no loop.">EngineCore</a> process builds the model executor. For an FFN config, the patched
+<code>__init__</code> returns right after that, so it sets up no real scheduler (only a no-op stand-in) and no KV cache
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L56-L68" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:56-68 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:56-68</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L56-L69" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/compat/patches/engine_core.py:56-69</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L56-L69" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">56</span><span class="ln">57</span><span class="ln">58</span><span class="ln hl">59</span><span class="ln">60</span><span class="ln">61</span><span class="ln">62</span><span class="ln">63</span><span class="ln">64</span><span class="ln">65</span><span class="ln">66</span><span class="ln">67</span><span class="ln hl">68</span><span class="ln">69</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(3 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(12 * var(--code-lh))"></span><pre><code class="language-python">    # ### PATCH START: AFD FFN EngineCore daemon initialization
+    # FFN ranks are connector daemons, so stop EngineCore initialization after
+    # executor construction instead of setting up KV cache and scheduler state.
+    if _is_afd_ffn_config(vllm_config):
+        _initialize_ffn_engine_core(
+            self,
+            core_module,
+            vllm_config,
+            executor_class,
+            log_stats,
+            executor_fail_callback,
+        )
+        return
+    # ### PATCH END: AFD FFN EngineCore daemon initialization</code></pre></div></div></div><figcaption class="code-caption">FFN EngineCore: initialize the daemon, then return before scheduler and KV setup.</figcaption></figure>
+<p>The FFN path sets zero GPU and CPU blocks and installs a no-op scheduler, which is not None so the native
+readiness handshake still works (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L605-L614" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:605-614 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:605-614</code></a>). The attention
+EngineCore is unchanged.</p></section>
+
+<section class="stop" id="stop-6"><h2 id="6the-workers-load-the-plugin-and-swap-the-runner" class="stop-title"><span class="stop-num">6</span>The workers load the plugin and swap the runner<a class="h-anchor" href="#6the-workers-load-the-plugin-and-swap-the-runner" aria-label="Link to this section">#</a></h2><p>Each worker process loads the plugin again before the worker class is resolved
+(<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/worker_base.py#L271" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/worker_base.py:271 at vLLM ced6857"><code>vllm:vllm/v1/worker/worker_base.py:271</code></a>), then resolves the class
+(<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/worker_base.py#L273-L277" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/worker_base.py:273-277 at vLLM ced6857"><code>vllm:vllm/v1/worker/worker_base.py:273-277</code></a>). The guard makes the repeat load a no-op.</p>
+<p>In <code>init_device</code>, the AFD worker validates the stack, then swaps the native runner class for the
+AFD runner while native construction runs (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_worker.py#L82-L87" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_worker.py:82-87 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_worker.py:82-87</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_worker.py#L82-L88" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/attention_worker.py:82-88</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_worker.py#L82-L88" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">82</span><span class="ln hl">83</span><span class="ln">84</span><span class="ln">85</span><span class="ln">86</span><span class="ln">87</span><span class="ln">88</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(1 * var(--code-lh))"></span><pre><code class="language-python">        native_runner_cls = gpu_model_runner_v2.GPUModelRunner
+        gpu_model_runner_v2.GPUModelRunner = AFDAttentionModelRunnerV2
+        try:
+            super().init_device()
+        finally:
+            gpu_model_runner_v2.GPUModelRunner = native_runner_cls
+        # ### PATCH END: select and directly construct the AFD runner.</code></pre></div></div></div><figcaption class="code-caption">The attention worker swaps in AFDAttentionModelRunnerV2 for native construction.</figcaption></figure>
+<p>The FFN worker does the same swap for <code>GPUFFNModelRunner</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L93-L98" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:93-98 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:93-98</code></a>). See <a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a>.</p></section>
+
+<section class="stop" id="stop-7"><h2 id="7load-model-defers-the-connector-init-attention" class="stop-title"><span class="stop-num">7</span>load_model defers the connector init (attention)<a class="h-anchor" href="#7load-model-defers-the-connector-init-attention" aria-label="Link to this section">#</a></h2><p>The attention runner loads the model, then initializes the connector at the end of <code>load_model</code>, so
+attention and FFN weight loading overlap (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L454-L462" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:454-462 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:454-462</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L454-L462" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/attention_model_runner_v2.py:454-462</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L454-L462" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">454</span><span class="ln">455</span><span class="ln">456</span><span class="ln">457</span><span class="ln">458</span><span class="ln">459</span><span class="ln hl">460</span><span class="ln">461</span><span class="ln hl">462</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(8 * var(--code-lh))"></span><pre><code class="language-python">    def load_model(
+        self,
+        load_dummy_weights: bool = False,
+        *args,
+        **kwargs,
+    ) -&gt; None:
+        super().load_model(load_dummy_weights, *args, **kwargs)
+        if not self.connector.is_initialized:
+            self.connector.init_afd_connector()</code></pre></div></div></div><figcaption class="code-caption">load_model: native weight loading, then init_afd_connector at the end.</figcaption></figure>
+<p>The connector itself is built earlier, in the runner constructor
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L384-L390" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:384-390 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:384-390</code></a>). Only the rendezvous is deferred.</p></section>
+
+<section class="stop" id="stop-8"><h2 id="8the-two-roles-meet-at-the-connector-handshake" class="stop-title"><span class="stop-num">8</span>The two roles meet at the connector handshake<a class="h-anchor" href="#8the-two-roles-meet-at-the-connector-handshake" aria-label="Link to this section">#</a></h2><p><code>init_afd_connector</code> is a collective call: every attention and FFN rank runs it, and the two roles
+meet here (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L124" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:124 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:124</code></a>). The P2P connector builds its process groups at a
+<a class="term" href="../reference/glossary.html#term-rendezvous" data-term="rendezvous" data-def="The host and port where the two roles meet to set up the connector process groups. Both servers use the same host and port.">rendezvous</a> on the configured host and port
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L245-L276" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:245-276 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:245-276</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L269-L276" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/connectors/gpu/p2p.py:269-276</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L269-L276" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">269</span><span class="ln">270</span><span class="ln">271</span><span class="ln">272</span><span class="ln">273</span><span class="ln">274</span><span class="ln">275</span><span class="ln">276</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">        afd_pg = init_afd_process_group(
+            backend=&quot;nccl&quot;,
+            init_method=f&quot;tcp://{self.afd_config.host}:{self.afd_config.port}&quot;,
+            world_size=self.ffn_size + self.attn_size,
+            rank=self.world_rank,
+            group_name=&quot;afd&quot;,
+            timeout=timedelta(seconds=self.afd_config.afd_process_group_timeout_s),
+        )</code></pre></div></div></div><figcaption class="code-caption">The AFD world group: all ranks, with the configured timeout.</figcaption></figure>
+<p>Either role can reach this point first. The group setup blocks until both roles arrive, or until the timeout
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L271" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:271 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:271</code></a>). See <a href="../concepts/topology.html">Topology and role ranks: the AFD world</a>.</p>
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-three-process-groups-and-their-timeouts" class="dd-title">The three process groups and their timeouts</h3></summary><div class="dd-body"><p><code>init_afd_connector</code> builds three groups (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L245-L316" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:245-316 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:245-316</code></a>):</p>
+<ol>
+  <li><strong>The AFD world group</strong>, named <code>"afd"</code>. It holds every attention and FFN rank. Its
+    timeout is <code>afd_process_group_timeout_s</code>, 120 seconds by default
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L269-L276" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:269-276 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:269-276</code></a>).</li>
+  <li><strong>The control group</strong>, named <code>"p2p"</code>. It holds the FFN ranks and the first
+    <code>min_size</code> attention ranks, with a fixed 30-minute timeout
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L306-L314" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:306-314 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:306-314</code></a>).</li>
+  <li><strong>The data-plane subgroups</strong>. Each FFN rank and its attention peers share one subgroup, built
+    on a <code>PrefixStore</code> over the world rendezvous, with a 300-second timeout
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L278-L304" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:278-304 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:278-304</code></a>).</li>
+</ol>
+<p>The subgroups reuse the world's rendezvous store, so they need no port of their own
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L280-L288" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:280-288 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:280-288</code></a>). See <a href="../concepts/topology.html">Topology and role ranks: the AFD world</a>.</p></div></details></section>
+
+<section class="stop" id="stop-9"><h2 id="9kv-cache-on-the-attention-side-only" class="stop-title"><span class="stop-num">9</span>KV cache on the attention side only<a class="h-anchor" href="#9kv-cache-on-the-attention-side-only" aria-label="Link to this section">#</a></h2><p>Only the attention side owns a KV cache. The FFN worker returns an empty KV spec, so vLLM allocates no FFN
+blocks (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L102-L105" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:102-105 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:102-105</code></a>). The FFN worker then joins the connector and starts
+its loop instead of allocating a cache (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L107-L113" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:107-113 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:107-113</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L107-L113" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/ffn_worker.py:107-113</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L107-L113" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">107</span><span class="ln">108</span><span class="ln">109</span><span class="ln">110</span><span class="ln">111</span><span class="ln hl">112</span><span class="ln hl">113</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(5 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><pre><code class="language-python">    def initialize_from_config(self, kv_cache_config: KVCacheConfig) -&gt; None:
+        &quot;&quot;&quot;Skip KV cache allocation and start the FFN connector loop.&quot;&quot;&quot;
+
+        self.cache_config.num_gpu_blocks = kv_cache_config.num_blocks
+        self.model_runner.initialize_kv_cache(kv_cache_config)
+        self.model_runner.initialize_afd_connector()
+        self.start_ffn_server_loop()</code></pre></div></div></div><figcaption class="code-caption">initialize_from_config: skip KV allocation, join the connector, start the loop.</figcaption></figure>
+<p>The attention runner allocates its KV cache as usual, with a scoped seam that enables DP1 DBO
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L473-L486" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:473-486 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:473-486</code></a>). See <a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a>.</p></section>
+
+<section class="stop" id="stop-10"><h2 id="10both-sides-capture-cuda-graphs" class="stop-title"><span class="stop-num">10</span>Both sides capture CUDA graphs<a class="h-anchor" href="#10both-sides-capture-cuda-graphs" aria-label="Link to this section">#</a></h2><p>The attention runner wraps native <code>capture_model</code> to publish warm-up and capture control for each
+FULL descriptor (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L509-L553" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:509-553 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:509-553</code></a>). The FFN worker performs no
+warm-up of its own (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L115-L120" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:115-120 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:115-120</code></a>); its graphs are captured from the server
+loop when the warm-up and capture payloads arrive
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L182-L189" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:182-189 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:182-189</code></a>).</p>
+<p>So graph capture is driven by the attention side and mirrored on the FFN side. See <a href="../concepts/cuda-graphs.html">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</a>.</p></section>
+
+<section class="stop" id="stop-11"><h2 id="11the-ffn-server-loop-starts" class="stop-title"><span class="stop-num">11</span>The FFN server loop starts<a class="h-anchor" href="#11the-ffn-server-loop-starts" aria-label="Link to this section">#</a></h2><p>The FFN EngineCore busy loop starts the worker loop with a collective RPC
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L650-L659" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:650-659 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:650-659</code></a>). The worker starts a daemon thread, the
+<a class="term" href="../reference/glossary.html#term-ffn-server-loop" data-term="FFN server loop" data-def="The connector-driven daemon thread on the FFN worker. It waits for DP metadata, then runs the FFN compute for one step. No scheduler drives it.">FFN server loop</a> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L133-L158" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:133-158 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:133-158</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L650-L659" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/compat/patches/engine_core.py:650-659</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L650-L659" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">650</span><span class="ln">651</span><span class="ln">652</span><span class="ln hl">653</span><span class="ln">654</span><span class="ln">655</span><span class="ln">656</span><span class="ln">657</span><span class="ln">658</span><span class="ln">659</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(3 * var(--code-lh))"></span><pre><code class="language-python">def _run_ffn_busy_loop(self, core_module: Any) -&gt; None:
+    started = False
+    try:
+        self.model_executor.collective_rpc(&quot;start_ffn_server_loop&quot;)
+        started = True
+        # Emit readiness only after the collective start RPC succeeded; the
+        # worker connector loop may not be ready to receive before this point.
+        core_module.logger.info(
+            &quot;AFD FFN EngineCore started; workers run connector loop.&quot;
+        )</code></pre></div></div></div><figcaption class="code-caption">The FFN EngineCore runs the connector loop through collective_rpc.</figcaption></figure>
+<p>The loop blocks on the control plane for the first payload. The FFN server is now driven by the attention
+side (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L168-L176" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:168-176 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:168-176</code></a>). See <a href="../code/ffn-worker.html">v1/worker: the FFN worker and runner</a>.</p></section>
+
+<section class="stop" id="stop-12"><h2 id="12ready" class="stop-title"><span class="stop-num">12</span>Ready<a class="h-anchor" href="#12ready" aria-label="Link to this section">#</a></h2><p>Both servers are up. The attention API server accepts requests; the FFN server runs its loop. The
+<a href="../tours/life-of-a-request.html">Tour: Life of a request</a> tour follows one request from here, and
+<a href="../tours/one-decode-step.html">Tour: One decode step</a> follows one step in detail.</p></section>
+
+<h2 id="what-can-go-wrong">What can go wrong<a class="h-anchor" href="#what-can-go-wrong" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li><strong>A host or port mismatch.</strong> The two roles meet at the same rendezvous. Different values make
+    the handshake block until the timeout (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L271-L276" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:271-276 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:271-276</code></a>).</li>
+  <li><strong>An explicit non-AFD worker.</strong> The config patch rewrites <code>worker_cls</code> only when it
+    was <code>"auto"</code>; an explicit non-AFD worker is rejected later
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L357-L367" target="_blank" rel="noopener" title="afd_plugin/validation.py:357-367 at afd-plugin 7452d52"><code>afd_plugin/validation.py:357-367</code></a>).</li>
+  <li><strong>A mismatched vLLM.</strong> On a non-matching, non-dev vLLM the install gate skips the patches, so
+    <code>worker_cls</code> is never rewritten and AFD does not take effect
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/vllm.py#L53-L68" target="_blank" rel="noopener" title="afd_plugin/compat/vllm.py:53-68 at afd-plugin 7452d52"><code>afd_plugin/compat/vllm.py:53-68</code></a>).</li>
+  <li><strong>V2 runner off.</strong> AFD needs the V2 model runner on; the validator raises when V2 resolves to
+    off (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L90-L91" target="_blank" rel="noopener" title="afd_plugin/validation.py:90-91 at afd-plugin 7452d52"><code>afd_plugin/validation.py:90-91</code></a>). The recipes set the env variable
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L5" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:5 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:5</code></a>).</li>
+</ul>
+<p><strong>Why it matters.</strong> The two roles start apart and meet once, at the connector handshake. If the
+patches do not install, or the roles do not meet, start-up cannot complete.</p>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>What is the only difference between the two <code>vllm serve</code> commands in this recipe?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The <code>role</code> field in the AFD config: one is <code>attention</code>, one is <code>ffn</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L13" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:13 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:13</code></a>,
+      <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L39" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:39 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:39</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>Why does the FFN EngineCore not set up a scheduler or KV cache?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>For an FFN config it returns right after the executor is built; it runs a connector loop instead
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L56-L68" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:56-68 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:56-68</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>The two roles start as separate processes. Where do they synchronize?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>At the collective connector handshake, <code>init_afd_connector</code>. Every rank runs it, and the
+      group setup blocks until both roles arrive (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L124" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:124 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:124</code></a>,
+      <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L269-L276" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:269-276 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:269-276</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>Why is the attention connector rendezvous deferred to the end of <code>load_model</code>?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>So attention and FFN weight loading overlap across the two roles
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L454-L462" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:454-462 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:454-462</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>The FFN worker does no warm-up of its own. How are its CUDA graphs captured?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The attention side drives capture by sending warm-up and capture control. The FFN server loop reads
+      those payloads and calls <code>capture_model</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L115-L120" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:115-120 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:115-120</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L182-L189" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:182-189 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:182-189</code></a>).</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../tours/life-of-a-request.html">Tour: Life of a request</a><span class="rel-sum">Follow one request from the HTTP call to the sampled token, across the attention server and the FFN server, stop by stop. The control plane runs once per step; the data plane runs once per layer and stage.</span></li><li><a href="../tours/one-decode-step.html">Tour: One decode step</a><span class="rel-sum">Follow one decode step on 2A2F with DBO and FULL_DECODE_ONLY graphs: one control-plane publish, graph replay on both sides, two stages of send and receive per layer, then one native sampling call.</span></li><li><a href="../concepts/plugin-entry-point.html">The plugin entry point: register_afd</a><span class="rel-sum">register_afd is the one function vLLM calls to install AFD. This page explains why it is safe to call many times, how it stays importable without vLLM, its version gate, and the order and error behaviour of its registration steps.</span></li><li><a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a><span class="rel-sum">One base class sets the contract that every AFD connector follows. This page shows the lifecycle, the four data-path calls, the optional control plane, the config hook and the factory.</span></li><li><a href="../concepts/cuda-graphs.html">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</a><span class="rel-sum">AFD supports one CUDA graph mode, FULL_DECODE_ONLY. The attention side wraps native capture and replay to publish control; the FFN side keeps its own graph per token shape.</span></li><li><a href="../code/ffn-worker.html">v1/worker: the FFN worker and runner</a><span class="rel-sum">Three files run the FFN role: the worker that starts the daemon loop, the stand-alone connector-driven runner, and the CPU-safe token-count helpers that map attention counts to FFN ranks.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../concepts/npu-overview.html"><span class="pn-dir">← Previous</span><span class="pn-title">Ascend NPU overview: the same contract, different transports</span></a><a class="pn pn-next" href="../tours/life-of-a-request.html"><span class="pn-dir">Next →</span><span class="pn-title">Tour: Life of a request</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#1vllm-serve-starts-both-roles">1vllm serve starts both roles</a></li><li class="toc-l2"><a href="#2vllm-loads-the-plugin-in-process-0">2vLLM loads the plugin in process 0</a></li><li class="toc-l2"><a href="#3register-afd-installs-the-patches">3register_afd installs the patches</a></li><li class="toc-l2"><a href="#4the-config-patch-rewrites-worker-cls">4The config patch rewrites worker_cls</a></li><li class="toc-l2"><a href="#5the-ffn-enginecore-returns-early">5The FFN EngineCore returns early</a></li><li class="toc-l2"><a href="#6the-workers-load-the-plugin-and-swap-the-runner">6The workers load the plugin and swap the runner</a></li><li class="toc-l2"><a href="#7load-model-defers-the-connector-init-attention">7load_model defers the connector init (attention)</a></li><li class="toc-l2"><a href="#8the-two-roles-meet-at-the-connector-handshake">8The two roles meet at the connector handshake</a></li><li class="toc-l3"><a href="#the-three-process-groups-and-their-timeouts">The three process groups and their timeouts</a></li><li class="toc-l2"><a href="#9kv-cache-on-the-attention-side-only">9KV cache on the attention side only</a></li><li class="toc-l2"><a href="#10both-sides-capture-cuda-graphs">10Both sides capture CUDA graphs</a></li><li class="toc-l2"><a href="#11the-ffn-server-loop-starts">11The FFN server loop starts</a></li><li class="toc-l2"><a href="#12ready">12Ready</a></li><li class="toc-l2"><a href="#what-can-go-wrong">What can go wrong</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

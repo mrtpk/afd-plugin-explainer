@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The MoE handoff: where the gate runs · AFD Plugin Explained</title>
+<meta name="description" content="The compute_gate_on_attention flag decides whether the MoE gate runs on the attention side or the FFN side. The choice changes which classes build, what crosses the connector, and which layers the FFN runs.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="concepts/moe-handoff">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a class="current" aria-current="page" href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>AFD concepts</span><span class="sep">›</span><span>Model split</span><span class="sep">›</span><span aria-current="page">The MoE handoff</span></nav>
+<h1 class="page-title">The MoE handoff: where the gate runs</h1>
+<div class="page-meta"><span class="level level-advanced" title="Level">Advanced</span><span class="meta-sec">AFD concepts</span><span class="meta-time">about 5 min read + 2 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../concepts/model-wrappers.html">Model wrappers: the role-aware decoder layer</a> <span class="level level-advanced level-sm">Advanced</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">A MoE layer has a gate and experts. The <a class="term" href="../reference/glossary.html#term-compute-gate-on-attention" data-term="compute_gate_on_attention" data-def="An AFD config flag. When true, the attention side computes the MoE gate and sends the router logits to the FFN side.">compute_gate_on_attention</a> flag decides which <a class="term" href="../reference/glossary.html#term-afd" data-term="AFD" data-def="Attention-FFN Disaggregation. The attention part and the feed-forward (FFN/MoE) part of a model run in separate server processes and exchange hidden states.">AFD</a> role runs the gate, and so what crosses the <a class="term" href="../reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">connector</a>.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p>A mixture-of-experts layer has two parts: a small gate that picks experts per token, and the large experts
+themselves. <a class="term" href="../reference/glossary.html#term-afd" data-term="AFD" data-def="Attention-FFN Disaggregation. The attention part and the feed-forward (FFN/MoE) part of a model run in separate server processes and exchange hidden states.">AFD</a> always runs the experts on the <a class="term" href="../reference/glossary.html#term-ffn-role" data-term="FFN role" data-def="The side that runs the feed-forward and MoE experts. It receives hidden states, computes, and sends the result back.">FFN role</a>, because the expert
+weights are large. The gate is small, so AFD can run it on either side.</p>
+<p>One flag chooses: <code>compute_gate_on_attention</code>. When it is false (the default), the gate stays with
+the experts on the FFN side. When it is true, the gate runs on the <a class="term" href="../reference/glossary.html#term-attention-role" data-term="attention role" data-def="The side that runs attention and sends hidden states to the FFN side. The default role of a process.">attention role</a>,
+and the attention side sends the router output along with the hidden states.</p>
+<p><strong>An everyday comparison.</strong> Think of a mailroom. You can write the delivery route on the parcel
+before you hand it over (gate on the attention side), or let the mailroom read the address and decide (gate on
+the FFN side). Either way the parcel reaches the same shelf. The comparison stops here: the gate output is a
+tensor, not a label, and it must match the experts the FFN side runs.</p>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<figure class="diagram" id="fig-b3_moe_handoff"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Three panels. Panel 1, compute_gate_on_attention false: an attention box sends hidden_states to an FFN box that runs gate plus experts for all layers. Panel 2, compute_gate_on_attention true: an attention box computes the gate to produce router_logits and sends hidden_states plus router_logits to an FFN box that runs experts only for expert layers (lines 211-215). Panel 3, what crosses on the data plane: hidden_states only for any layer with the gate on FFN; hidden_states plus router_logits for a MoE layer with the gate on attention; plus int32 input_ids for DeepSeek-V4 hash MoE."><svg role="img" aria-label="Three panels. Panel 1, compute_gate_on_attention false: an attention box sends hidden_states to an FFN box that runs gate plus experts for all layers. Panel 2, compute_gate_on_attention true: an attention box computes the gate to produce router_logits and sends hidden_states plus router_logits to an FFN box that runs experts only for expert layers (lines 211-215). Panel 3, what crosses on the data plane: hidden_states only for any layer with the gate on FFN; hidden_states plus router_logits for a MoE layer with the gate on attention; plus int32 input_ids for DeepSeek-V4 hash MoE." xmlns="http://www.w3.org/2000/svg" width="1100" height="724" viewBox="0 0 1100 724">
+<defs><marker id="dg-b3_moe_handoff-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker></defs>
+<rect width="1100" height="724" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">The MoE handoff</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">compute_gate_on_attention decides which side runs the MoE gate, and what the connector carries.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">deepseek_v2.py  ·  ffn_model_runner.py:211-215  ·  p2p.py:336-390  ·  canvas 1100</text>
+<rect x="20.0" y="120.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="146.0" r="13" fill="#111827"/>
+<text x="46.0" y="150.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="151.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">compute_gate_on_attention = false  (the default)</text>
+<text x="68.0" y="170.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The gate stays with the experts on the FFN side. The FFN runs every layer.</text>
+<rect x="46.0" y="190.0" width="430.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="58.0" y="210.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">attention side</text>
+<text x="58.0" y="223.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">self_attn -&gt; hidden_states</text>
+<text x="58.0" y="236.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">no gate</text>
+<rect x="630.0" y="190.0" width="424.0" height="52.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="642.0" y="210.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN side</text>
+<text x="642.0" y="223.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">gate + experts, all layers</text>
+<text x="642.0" y="236.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">layer_indices = range(num_layers)</text>
+<line x1="476.0" y1="216.0" x2="628.0" y2="216.0" stroke="#2563eb" stroke-width="1.6" marker-end="url(#dg-b3_moe_handoff-m0)"/>
+<text x="553.0" y="198.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">hidden_states</text>
+<rect x="20.0" y="292.0" width="1060.0" height="158.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="318.0" r="13" fill="#111827"/>
+<text x="46.0" y="322.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="323.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">compute_gate_on_attention = true</text>
+<text x="68.0" y="342.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The attention side builds the gate; the FFN side runs experts only, for expert layers.</text>
+<rect x="46.0" y="364.0" width="430.0" height="56.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="58.0" y="384.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">attention side</text>
+<text x="58.0" y="401.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">gate -&gt; router_logits  (:306-320)</text>
+<text x="58.0" y="414.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">GateOnlyRemoteMoE / remote shell</text>
+<rect x="630.0" y="364.0" width="424.0" height="56.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="642.0" y="384.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN side</text>
+<text x="642.0" y="401.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">compute_experts_output  (:257-261)</text>
+<text x="642.0" y="414.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">layer_indices = expert layers (:211-215)</text>
+<line x1="476.0" y1="392.0" x2="628.0" y2="392.0" stroke="#2563eb" stroke-width="1.6" marker-end="url(#dg-b3_moe_handoff-m0)"/>
+<text x="553.0" y="374.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">+ router_logits</text>
+<rect x="20.0" y="472.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="498.0" r="13" fill="#111827"/>
+<text x="46.0" y="502.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="68.0" y="503.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">What crosses on the data plane (send_attn_output)</text>
+<text x="68.0" y="522.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Order on the wire: hidden_states, then router_logits, then input_ids (p2p.py:336-338).</text>
+<rect x="46.0" y="538.0" width="330.0" height="52.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="58.0" y="558.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">any layer, gate on FFN</text>
+<text x="58.0" y="576.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">hidden_states only</text>
+<rect x="394.0" y="538.0" width="330.0" height="52.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="406.0" y="558.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">MoE layer, gate on attention</text>
+<text x="406.0" y="576.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">hidden_states + router_logits</text>
+<rect x="742.0" y="538.0" width="330.0" height="52.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="754.0" y="558.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">DeepSeek-V4 hash MoE</text>
+<text x="754.0" y="576.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">+ int32 input_ids  (:210)</text>
+<text x="30.0" y="651.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="640.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="651.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention side</text>
+<rect x="225.1" y="640.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="246.1" y="651.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN side</text>
+<rect x="321.4" y="640.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="342.4" y="651.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">wire payload</text>
+<text x="30.0" y="674.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Router logits are consumed only when the FFN runner gate is None; AFD clears it so the runner uses external routing (deepseek_v2.py:548-553, :714-721).</text>
+<text x="30.0" y="692.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Qwen3-MoE requires compute_gate_on_attention=false, so it always ships the whole MoE block (qwen3_moe.py:84-87).</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: the flag moves the gate. With the gate on the attention side the FFN runs experts only, and router_logits cross the wire.</figcaption><a class="diagram-open" href="../diagrams/b3_moe_handoff.svg" target="_blank">Open full size ↗</a></div></figure>
+<p>Read panels 1 and 2 as the two settings. The blue arrow is the <a class="term" href="../reference/glossary.html#term-data-plane" data-term="data plane" data-def="The path that carries the hidden-state tensors between the two roles. It is the connector&#x27;s send and receive calls.">data plane</a>. Panel 3
+lists the three wire payloads. The order on the wire is always hidden states, then router logits, then input
+ids.</p>
+
+<h2 id="in-the-code">In the code<a class="h-anchor" href="#in-the-code" aria-label="Link to this section">#</a></h2>
+
+<h3 id="step-1-the-default-the-gate-runs-on-the-ffn-side">Step 1: The default: the gate runs on the FFN side<a class="h-anchor" href="#step-1-the-default-the-gate-runs-on-the-ffn-side" aria-label="Link to this section">#</a></h3>
+<p>With the flag false, the attention side ships the whole FFN or MoE block through a
+<a class="term" href="../reference/glossary.html#term-remote-ffn-proxy" data-term="RemoteFFNProxy" data-def="A parameter-free module on the attention side. It replaces the FFN stage of a decoder layer and uses the connector instead.">remote FFN proxy</a>. The FFN side runs the native block, gate and all. On the CUDA MoE
+path the attention role still builds a <a class="term" href="../reference/glossary.html#term-remote-experts" data-term="remote experts" data-def="A parameter-free MoE shell on the attention role. It keeps the native MoE forward but sends the expert compute to the FFN role.">remote-experts</a> shell, but its gate is
+<code>None</code>, so the shell ships only the hidden states
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L319-L335" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:319-335 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:319-335</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L306-L335" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/model_executor/models/deepseek_v2.py:306-335</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L306-L335" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln hl">306</span><span class="ln">307</span><span class="ln">308</span><span class="ln">309</span><span class="ln">310</span><span class="ln">311</span><span class="ln">312</span><span class="ln">313</span><span class="ln">314</span><span class="ln">315</span><span class="ln">316</span><span class="ln">317</span><span class="ln">318</span><span class="ln">319</span><span class="ln hl">320</span><span class="ln">321</span><span class="ln">322</span><span class="ln">323</span><span class="ln">324</span><span class="ln">325</span><span class="ln">326</span><span class="ln">327</span><span class="ln">328</span><span class="ln">329</span><span class="ln">330</span><span class="ln">331</span><span class="ln hl">332</span><span class="ln">333</span><span class="ln">334</span><span class="ln">335</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(0 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(14 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(26 * var(--code-lh))"></span><pre><code class="language-python">        if compute_gate_on_attention:
+            self.gate = native.GateLinear(
+                config.hidden_size,
+                config.n_routed_experts,
+                out_dtype=router_dtype,
+                prefix=f&quot;{prefix}.gate&quot;,
+            )
+            if getattr(config, &quot;topk_method&quot;, None) == &quot;noaux_tc&quot;:
+                self.gate.e_score_correction_bias = nn.Parameter(
+                    torch.empty(config.n_routed_experts, dtype=torch.float32),
+                )
+            else:
+                self.gate.e_score_correction_bias = None
+        else:
+            self.gate = None
+
+        ep_size = native.get_ep_group().device_group.size()
+        self.n_routed_experts = int(config.n_routed_experts)
+        self.n_shared_experts = int(config.n_shared_experts)
+        self.n_redundant_experts = parallel_config.eplb_config.num_redundant_experts
+        self.n_logical_experts = self.n_routed_experts
+        self.n_physical_experts = self.n_logical_experts + self.n_redundant_experts
+        self.n_local_physical_experts = self.n_physical_experts // ep_size
+        # No local shared-expert MLP is constructed, so fused shared experts
+        # can never be enabled for this shell.
+        self.is_fused_shared_expert_enabled = False
+        self.experts = AFDAttentionFusedMoE(
+            layer_idx=layer_idx,
+            external_routing=compute_gate_on_attention,
+        )</code></pre></div></div></div><figcaption class="code-caption">The shell builds a gate only when compute_gate_on_attention is set; else gate is None.</figcaption></figure>
+
+<h3 id="step-2-gate-on-the-attention-side-compute-then-send-the-router-logits">Step 2: Gate on the attention side: compute, then send the router logits<a class="h-anchor" href="#step-2-gate-on-the-attention-side-compute-then-send-the-router-logits" aria-label="Link to this section">#</a></h3>
+<p>With the flag true, the shell builds its own gate
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L306-L318" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:306-318 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:306-318</code></a>). Its <code>forward</code> computes the
+router logits first, then calls the experts proxy with them
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L347-L371" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:347-371 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:347-371</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L355-L364" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/model_executor/models/deepseek_v2.py:355-364</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L355-L364" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">355</span><span class="ln">356</span><span class="ln">357</span><span class="ln">358</span><span class="ln">359</span><span class="ln">360</span><span class="ln">361</span><span class="ln">362</span><span class="ln">363</span><span class="ln">364</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">        # ### PATCH START: compute the Attention-side gate before transport.
+        num_tokens, hidden_dim = hidden_states.shape
+        hidden_states = hidden_states.view(-1, hidden_dim)
+        if self.is_sequence_parallel and not already_sequence_parallel:
+            hidden_states = native.sequence_parallel_chunk(hidden_states)
+        router_logits, _ = self.gate(hidden_states)
+        final_hidden_states = self.experts(
+            hidden_states=hidden_states,
+            router_logits=router_logits,
+        )</code></pre></div></div></div><figcaption class="code-caption">The attention-side gate runs before transport; the proxy carries the router logits.</figcaption></figure>
+<p>The experts proxy is <code>AFDAttentionFusedMoE</code>, a <code>RemoteFFNProxy</code> that adds
+<code>router_logits</code> to the send only when the experts use external routing
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L178-L191" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:178-191 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:178-191</code></a>).</p>
+
+<h3 id="step-3-the-ffn-side-runs-experts-only-for-expert-layers-only">Step 3: The FFN side runs experts only, for expert layers only<a class="h-anchor" href="#step-3-the-ffn-side-runs-experts-only-for-expert-layers-only" aria-label="Link to this section">#</a></h3>
+<p>The <a class="term" href="../reference/glossary.html#term-ffn-server-loop" data-term="FFN server loop" data-def="The connector-driven daemon thread on the FFN worker. It waits for DP metadata, then runs the FFN compute for one step. No scheduler drives it.">FFN server loop</a> drives the FFN model runner. Inside
+<code>_ffn_forward</code>, the set of layers depends on the flag. With the gate on the attention side, the FFN
+runs only the expert layers; otherwise it runs all layers
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L211-L215" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:211-215 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:211-215</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L207-L215" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/ffn_model_runner.py:207-215</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L207-L215" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">207</span><span class="ln">208</span><span class="ln">209</span><span class="ln">210</span><span class="ln hl">211</span><span class="ln">212</span><span class="ln hl">213</span><span class="ln">214</span><span class="ln">215</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(4 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><pre><code class="language-python">        num_layers = max(int(self.num_layers or 0), 1)
+        experts_layer_indices = frozenset(
+            model.get_experts_layer_indices(),
+        )
+        layer_indices = (
+            tuple(sorted(experts_layer_indices))
+            if self.afd_config.compute_gate_on_attention
+            else tuple(range(num_layers))
+        )</code></pre></div></div></div><figcaption class="code-caption">layer_indices: expert layers only when the gate runs on the attention side.</figcaption></figure>
+<p>For each received layer, the runner picks the compute call. An expert layer with the gate on the attention
+side calls <code>compute_experts_output</code> with the transported router logits; any other layer calls
+<code>compute_ffn_output</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L251-L267" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:251-267 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:251-267</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L251-L267" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/ffn_model_runner.py:251-267</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L251-L267" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">251</span><span class="ln">252</span><span class="ln">253</span><span class="ln">254</span><span class="ln">255</span><span class="ln">256</span><span class="ln hl">257</span><span class="ln">258</span><span class="ln">259</span><span class="ln">260</span><span class="ln">261</span><span class="ln">262</span><span class="ln hl">263</span><span class="ln">264</span><span class="ln">265</span><span class="ln">266</span><span class="ln">267</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(12 * var(--code-lh))"></span><pre><code class="language-python">                    if (
+                        uses_remote_experts
+                        and self.afd_config.compute_gate_on_attention
+                    ):
+                        router_logits = payload.router_logits
+                        assert router_logits is not None
+                        rank_ffn_output = model.compute_experts_output(
+                            hidden_states,
+                            layer_idx,
+                            router_logits,
+                        )
+                    else:
+                        rank_ffn_output = self._execute_eager_mode(
+                            hidden_states,
+                            layer_idx,
+                            input_ids=payload.input_ids,
+                        )</code></pre></div></div></div><figcaption class="code-caption">compute_experts_output (gate on attention) vs compute_ffn_output (gate on FFN).</figcaption></figure>
+
+<h3 id="step-4-compute-experts-output-needs-the-gate-cleared">Step 4: compute_experts_output needs the gate cleared<a class="h-anchor" href="#step-4-compute-experts-output-needs-the-gate-cleared" aria-label="Link to this section">#</a></h3>
+<p><code>compute_experts_output</code> runs the native experts runner with the transported router logits. It
+checks that the runner gate is <code>None</code>, which is the v0.30 contract for external routing
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L702-L721" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:702-721 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:702-721</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L714-L721" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/model_executor/models/deepseek_v2.py:714-721</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L714-L721" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">714</span><span class="ln">715</span><span class="ln hl">716</span><span class="ln">717</span><span class="ln">718</span><span class="ln">719</span><span class="ln">720</span><span class="ln">721</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><pre><code class="language-python">        # v0.30 runner contract: gate is None means the runner consumes the
+        # router logits transported from Attention (external routing).
+        if self.mlp.experts.gate is not None:
+            raise RuntimeError(&quot;FFN native runner must use external routing&quot;)
+        return self.mlp.experts(
+            hidden_states=hidden_states,
+            router_logits=router_logits,
+        )</code></pre></div></div></div><figcaption class="code-caption">The FFN experts runner must use external routing (gate cleared).</figcaption></figure>
+
+<h2 id="deep-dive">Deep dive<a class="h-anchor" href="#deep-dive" aria-label="Link to this section">#</a></h2>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="what-crosses-the-wire-by-case" class="dd-title">What crosses the wire, by case</h3></summary><div class="dd-body"><p>The send order is fixed: hidden states, then router logits (if any), then input ids (if any)
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L336-L338" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:336-338 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:336-338</code></a>).</p>
+<table>
+  <thead><tr><th>Case</th><th>On the wire (A to F)</th><th>FFN compute</th></tr></thead>
+  <tbody>
+    <tr><td>dense layer, any flag</td><td><code>hidden_states</code></td><td><code>compute_ffn_output</code> (native MLP)</td></tr>
+    <tr><td>MoE layer, gate on FFN</td><td><code>hidden_states</code></td><td><code>compute_ffn_output</code> (native MoE, native gate)</td></tr>
+    <tr><td>MoE layer, gate on attention</td><td><code>hidden_states</code> + <code>router_logits</code></td><td><code>compute_experts_output</code> (external routing)</td></tr>
+    <tr><td>DeepSeek-V4 hash MoE</td><td><code>hidden_states</code> + int32 <code>input_ids</code></td><td><code>compute_ffn_output</code> with ids</td></tr>
+  </tbody>
+</table>
+<p>The <code>input_ids</code> are a 1-D int32 tensor, token-aligned with the hidden states; they are used only
+for the DeepSeek-V4 hash MoE (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L210" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:210 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:210</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v4.py#L89-L92" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v4.py:89-92 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v4.py:89-92</code></a>). The <a href="../concepts/wire-data.html">Data on the wire: tensors per layer and stage</a> page reads
+the tensor shapes and the per-peer split.</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-three-attention-side-moe-classes" class="dd-title">The three attention-side MoE classes</h3></summary><div class="dd-body"><p>Three classes can stand in for the MoE block on the attention role. They differ by device and by what they
+send.</p>
+<table>
+  <thead><tr><th>Class</th><th>Role / device</th><th>Sends</th><th>Line</th></tr></thead>
+  <tbody>
+    <tr><td><code>AFDDeepseekV2RemoteExpertsMoE</code></td><td>CUDA MoE shell</td><td>hidden states; builds the gate when the flag is set</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L277-L335" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:277-335 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:277-335</code></a></td></tr>
+    <tr><td><code>AFDAttentionFusedMoE</code></td><td>the shell's experts proxy</td><td>hidden states + router logits (external routing)</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L161-L191" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:161-191 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:161-191</code></a></td></tr>
+    <tr><td><code>GateOnlyRemoteMoE</code></td><td>NPU gate-on-attention</td><td>hidden states + gate outputs</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L197-L274" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:197-274 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:197-274</code></a></td></tr>
+  </tbody>
+</table>
+<p>The NPU path is covered on <a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a>; this page reads the CUDA classes.</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-afd-balanced-routing-strategy-benchmarks-only" class="dd-title">The afd_balanced routing strategy (benchmarks only)</h3></summary><div class="dd-body"><p>For controlled MoE benchmarks, the plugin registers a deterministic routing strategy,
+<a class="term" href="../reference/glossary.html#term-afd-balanced" data-term="afd_balanced routing" data-def="A deterministic, EP-balanced MoE routing strategy for benchmarks. It returns uniform weights and fixed expert ids, so it changes model outputs.">afd_balanced</a> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L166-L171" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:166-171 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:166-171</code></a>). It
+replaces the gate's choice with uniform weights and fixed, EP-balanced expert ids, so every rank gets an equal
+share (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L122-L163" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:122-163 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:122-163</code></a>).</p>
+<ul>
+  <li><strong>How to turn it on.</strong> Set vLLM's <code>VLLM_MOE_ROUTING_SIMULATION_STRATEGY</code> to
+      <code>afd_balanced</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L5-L8" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:5-8 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:5-8</code></a>).</li>
+  <li><strong>Weights.</strong> Uniform, <code>1 / top_k</code> per selected expert
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L113-L118" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:113-118 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:113-118</code></a>).</li>
+  <li><strong>Expert ids.</strong> A fixed permutation (seed 1024), or the first
+      <code>AFD_BENCHMARK_FORCE_LB_TOPN_PER_RANK</code> experts of each rank
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L66-L96" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:66-96 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:66-96</code></a>).</li>
+  <li><strong>Honesty.</strong> It changes model outputs and is for benchmark and profiling runs only
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L10-L11" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:10-11 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:10-11</code></a>).</li>
+</ul>
+<p>The strategy is registered in <code>register_afd</code>, outside the patch try/except
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L183-L187" target="_blank" rel="noopener" title="afd_plugin/__init__.py:183-187 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:183-187</code></a>).</p></div></details>
+
+<h2 id="what-can-go-wrong">What can go wrong<a class="h-anchor" href="#what-can-go-wrong" aria-label="Link to this section">#</a></h2>
+<aside class="callout callout-simplified"><p class="callout-title">Simplified</p><div class="callout-body"><p>This page reads the CUDA gate placement and the wire payloads. It does not read the NPU
+gate kernels or the hash-router internals. See <a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a> and <a href="../code/deepseek-v2-py.html">model_executor/models/deepseek_v2.py: the DeepSeek wrapper</a>.</p></div></aside>
+<ul>
+  <li><strong>Qwen3-MoE with the gate on attention.</strong> The Qwen3-MoE wrapper requires
+      <code>compute_gate_on_attention=false</code> and raises otherwise
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/qwen3_moe.py#L84-L87" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/qwen3_moe.py:84-87 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/qwen3_moe.py:84-87</code></a>). README.md:50 states the same rule.</li>
+  <li><strong>A held gate on the FFN experts.</strong> <code>compute_experts_output</code> raises if the FFN
+      experts runner still owns a gate (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L716-L717" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:716-717 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:716-717</code></a>).</li>
+  <li><strong>A dense layer sent to compute_experts_output.</strong> It raises if the layer is not an
+      attention-side-gate MoE layer (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L708-L711" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:708-711 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:708-711</code></a>).</li>
+  <li><strong>GPU gate-on-attention calling the wrong path.</strong> On CUDA the gated path must call
+      <code>compute_experts_output</code>, not <code>compute_ffn_output</code>; the dense call raises
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L690-L693" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:690-693 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:690-693</code></a>).</li>
+</ul>
+<p><strong>Why it matters.</strong> The two sides must agree on where the gate runs. If the attention side
+sends router logits but the FFN side keeps its own gate, the experts would route twice and the output would be
+wrong.</p>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>What does <code>compute_gate_on_attention</code> decide?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Which role runs the MoE gate. False (the default) keeps the gate with the experts on the FFN side;
+      true runs it on the attention side
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L306-L320" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:306-320 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:306-320</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>When the gate runs on the attention side, which layers does the FFN run?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Only the expert layers. <code>layer_indices</code> is the sorted expert-layer set when the flag is
+      set, else all layers (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L211-L215" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:211-215 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:211-215</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>What extra tensor crosses the wire when the gate runs on the attention side, and when is
+    it consumed?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p><code>router_logits</code>. The FFN experts runner consumes it only when its gate is
+      <code>None</code> (external routing), which AFD arranges by clearing the runner gate
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L548-L553" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:548-553 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:548-553</code></a>,
+      <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L714-L721" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:714-721 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:714-721</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>What does DeepSeek-V4 add to the handoff, and why?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>A 1-D int32 <code>input_ids</code> tensor, because its hash router needs the token ids to pick
+      experts (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L210" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:210 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:210</code></a>,
+      <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v4.py#L89-L92" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v4.py:89-92 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v4.py:89-92</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>What does the <code>afd_balanced</code> strategy return, and why is it not for production?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Uniform weights (<code>1 / top_k</code>) and deterministic, EP-balanced expert ids
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L99-L119" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:99-119 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:99-119</code></a>). It replaces the real routing, so it
+      changes model outputs; it is for benchmark and profiling runs only
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L10-L11" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:10-11 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:10-11</code></a>).</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/wire-data.html">Data on the wire: tensors per layer and stage</a><span class="rel-sum">The data plane moves hidden states between the two roles once per layer and stage. This page shows the tensors that cross, the transfer metadata, the fan-in and split, and the custom ops.</span></li><li><a href="../concepts/ffn-runtime.html">The FFN runtime: a connector-driven server loop</a><span class="rel-sum">The FFN side has no real scheduler (a no-op stand-in) and no KV cache. A daemon thread reads one control payload per step and drives the FFN model runner, which runs the FFN or experts for each layer and stage.</span></li><li><a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a><span class="rel-sum">One base class sets the contract that every AFD connector follows. This page shows the lifecycle, the four data-path calls, the optional control plane, the config hook and the factory.</span></li><li><a href="../code/deepseek-v2-py.html">model_executor/models/deepseek_v2.py: the DeepSeek wrapper</a><span class="rel-sum">This file holds the DeepSeek AFD wrapper: the role-aware decoder layer, the remote FFN proxies, the remote-experts MoE shell, and the model and causal-LM classes that filter weights by role.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../concepts/model-wrappers.html"><span class="pn-dir">← Previous</span><span class="pn-title">Model wrappers: the role-aware decoder layer</span></a><a class="pn pn-next" href="../concepts/attention-runtime.html"><span class="pn-dir">Next →</span><span class="pn-title">The attention runtime: a seam over Model Runner V2</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#in-the-code">In the code</a></li><li class="toc-l3"><a href="#step-1-the-default-the-gate-runs-on-the-ffn-side">Step 1: The default: the gate runs on the FFN side</a></li><li class="toc-l3"><a href="#step-2-gate-on-the-attention-side-compute-then-send-the-router-logits">Step 2: Gate on the attention side: compute, then send the router logits</a></li><li class="toc-l3"><a href="#step-3-the-ffn-side-runs-experts-only-for-expert-layers-only">Step 3: The FFN side runs experts only, for expert layers only</a></li><li class="toc-l3"><a href="#step-4-compute-experts-output-needs-the-gate-cleared">Step 4: compute_experts_output needs the gate cleared</a></li><li class="toc-l2"><a href="#deep-dive">Deep dive</a></li><li class="toc-l3"><a href="#what-crosses-the-wire-by-case">What crosses the wire, by case</a></li><li class="toc-l3"><a href="#the-three-attention-side-moe-classes">The three attention-side MoE classes</a></li><li class="toc-l3"><a href="#the-afd-balanced-routing-strategy-benchmarks-only">The afd_balanced routing strategy (benchmarks only)</a></li><li class="toc-l2"><a href="#what-can-go-wrong">What can go wrong</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

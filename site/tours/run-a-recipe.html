@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tour: Run a recipe · AFD Plugin Explained</title>
+<meta name="description" content="Read the 2a2f_graph_dbo_dp1tp2 recipe line by line. Each flag, the afd block, the FFN server, the start order, and how to send and benchmark a request, all cited to the script.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="tours/run-a-recipe">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a class="current" aria-current="page" href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>Guided tours</span><span class="sep">›</span><span aria-current="page">Run a recipe</span></nav>
+<h1 class="page-title">Tour: Run a recipe</h1>
+<div class="page-meta"><span class="level level-intermediate" title="Level">Intermediate</span><span class="meta-sec">Guided tours</span><span class="meta-time">about 7 min read</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../concepts/deployment-topologies.html">Deployment topologies: how to place the roles</a> <span class="level level-intermediate level-sm">Intermediate</span></li><li><a href="../reference/afd-config.html">AFD config reference: the additional_config[&quot;afd&quot;] keys</a> <span class="level level-intermediate level-sm">Intermediate</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">This tour reads one GPU recipe line by line. It shows what each flag does inside the plugin and
+vLLM, and how to send a request.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p>A recipe is a shell script that starts the two <a class="term" href="../reference/glossary.html#term-attention-server" data-term="attention server" data-def="The vllm serve process that plays the attention role. It owns the API server, the scheduler and the KV cache.">servers</a> of an AFD run. This tour
+reads <code>2a2f_graph_dbo_dp1tp2.sh</code>, the 2A2F graph recipe for DeepSeek-V2-Lite
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L1-L61" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:1-61 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:1-61</code></a>).
+It starts one <a class="term" href="../reference/glossary.html#term-attention-role" data-term="attention role" data-def="The side that runs attention and sends hidden states to the FFN side. The default role of a process.">attention</a> server on two GPUs and one <a class="term" href="../reference/glossary.html#term-ffn-role" data-term="FFN role" data-def="The side that runs the feed-forward and MoE experts. It receives hidden states, computes, and sends the result back.">FFN</a> server on
+two GPUs, with CUDA graphs and <a class="term" href="../reference/glossary.html#term-dbo" data-term="DBO" data-def="Dual-batch overlap. The step is split into two microbatches so compute and communication overlap. AFD uses exactly two.">DBO</a> on.</p>
+<p>Both servers use the same <code>--additional-config</code> block; only <code>role</code> and the GPUs differ.
+The <a href="../reference/recipes.html">Recipes reference</a> page lists every recipe; the <a href="../tours/life-of-a-request.html">Tour: Life of a request</a> tour follows a
+request through this same recipe.</p>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<figure class="diagram" id="fig-b5_run_a_recipe"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Two panels. Panel 1, two vllm serve processes: an attention-server step card (role attention) with rows for the env VLLM_USE_V2_MODEL_RUNNER=1, GPUs 0 and 1, data-parallel-size 1 and tensor-parallel-size 2, the afd connector P2pNcclAFDConnector on port 6269, cudagraph_mode FULL_DECODE_ONLY, and HTTP port 18305 where clients connect; and an FFN-server step card (role ffn) with rows for GPUs 2 and 3, the same parallelism, the same host and port and ranks, enable-dbo 2 slash 12, the same graph mode, and a note that it has no real scheduler, no KV and no client traffic. Panel 2, start order and traffic: a background-both box, an arrow to a wait-for-startup box (Application startup complete in each log), an arrow to a send-to-attention-18305 box (vllm bench serve, never to the FFN server). A legend marks attention role and client traffic, FFN role, wait condition, and shell step."><svg role="img" aria-label="Two panels. Panel 1, two vllm serve processes: an attention-server step card (role attention) with rows for the env VLLM_USE_V2_MODEL_RUNNER=1, GPUs 0 and 1, data-parallel-size 1 and tensor-parallel-size 2, the afd connector P2pNcclAFDConnector on port 6269, cudagraph_mode FULL_DECODE_ONLY, and HTTP port 18305 where clients connect; and an FFN-server step card (role ffn) with rows for GPUs 2 and 3, the same parallelism, the same host and port and ranks, enable-dbo 2 slash 12, the same graph mode, and a note that it has no real scheduler, no KV and no client traffic. Panel 2, start order and traffic: a background-both box, an arrow to a wait-for-startup box (Application startup complete in each log), an arrow to a send-to-attention-18305 box (vllm bench serve, never to the FFN server). A legend marks attention role and client traffic, FFN role, wait condition, and shell step." xmlns="http://www.w3.org/2000/svg" width="1100" height="634" viewBox="0 0 1100 634">
+<defs><marker id="dg-b5_run_a_recipe-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9ca3af"/></marker></defs>
+<rect width="1100" height="634" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Anatomy of one recipe: 2a2f_graph_dbo_dp1tp2.sh</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">One attention server and one FFN server, DP1 TP2, graph + DBO  ·  same --additional-config, role differs</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">VLLM_USE_V2_MODEL_RUNNER=1   ·   AFD port 6269   ·   HTTP 18305</text>
+<rect x="20.0" y="112.0" width="1060.0" height="228.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="138.0" r="13" fill="#111827"/>
+<text x="46.0" y="142.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="143.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Two vllm serve processes</text>
+<text x="68.0" y="162.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Both set the same afd block; only role and GPUs differ.</text>
+<rect x="46.0" y="178.0" width="494.0" height="144.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="46.0" y="178.0" width="6.0" height="144.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="68.0" cy="195.0" r="10" fill="#2563eb"/>
+<text x="68.0" y="199.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="84.0" y="200.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Attention server</text>
+<rect x="419.3" y="186.0" width="112.7" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="475.6" y="199.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">role=attention</text>
+<text x="84.0" y="220.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">env</text>
+<text x="118.0" y="220.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">VLLM_USE_V2_MODEL_RUNNER=1</text>
+<text x="84.0" y="237.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">gpu</text>
+<text x="118.0" y="237.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">CUDA_VISIBLE_DEVICES=0,1</text>
+<text x="84.0" y="254.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">par</text>
+<text x="118.0" y="254.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">--data-parallel-size 1 --tensor-parallel-size 2</text>
+<text x="84.0" y="271.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">afd</text>
+<text x="118.0" y="271.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">connector=P2pNcclAFDConnector 6269</text>
+<text x="84.0" y="288.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">gfx</text>
+<text x="118.0" y="288.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">cudagraph_mode=FULL_DECODE_ONLY</text>
+<text x="84.0" y="305.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">http</text>
+<text x="118.0" y="305.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">--port 18305  (clients connect here)</text>
+<rect x="560.0" y="178.0" width="494.0" height="144.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<rect x="560.0" y="178.0" width="6.0" height="144.0" rx="3" fill="#059669" fill-opacity="1.0" stroke="none"/>
+<circle cx="582.0" cy="195.0" r="10" fill="#059669"/>
+<text x="582.0" y="199.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="598.0" y="200.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN server</text>
+<rect x="973.0" y="186.0" width="73.0" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#059669" stroke-width="1"/>
+<text x="1009.5" y="199.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">role=ffn</text>
+<text x="598.0" y="220.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">gpu</text>
+<text x="632.0" y="220.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">CUDA_VISIBLE_DEVICES=2,3</text>
+<text x="598.0" y="237.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">par</text>
+<text x="632.0" y="237.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">--data-parallel-size 1 --tensor-parallel-size 2</text>
+<text x="598.0" y="254.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">afd</text>
+<text x="632.0" y="254.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">same host:port 6269, same ranks 2/2</text>
+<text x="598.0" y="271.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">dbo</text>
+<text x="632.0" y="271.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">--enable-dbo  2 / 12</text>
+<text x="598.0" y="288.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">gfx</text>
+<text x="632.0" y="288.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">cudagraph_mode=FULL_DECODE_ONLY</text>
+<text x="598.0" y="305.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">note</text>
+<text x="632.0" y="305.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">no real scheduler, no KV, no client traffic</text>
+<rect x="20.0" y="360.0" width="1060.0" height="160.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="386.0" r="13" fill="#111827"/>
+<text x="46.0" y="390.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="391.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Start order and traffic</text>
+<text x="68.0" y="410.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Background both, wait for startup, then send requests to the attention port only.</text>
+<rect x="46.0" y="428.0" width="240.0" height="64.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="58.0" y="448.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">1. Background both</text>
+<text x="58.0" y="466.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attn.log / ffn.log</text>
+<text x="58.0" y="481.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">then wait</text>
+<line x1="286.0" y1="460.0" x2="330.0" y2="460.0" stroke="#9ca3af" stroke-width="1.6" marker-end="url(#dg-b5_run_a_recipe-m0)"/>
+<rect x="332.0" y="428.0" width="260.0" height="64.0" rx="8" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.5"/>
+<text x="344.0" y="448.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#d97706" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">2. Wait for startup</text>
+<text x="344.0" y="466.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">&#x27;Application startup</text>
+<text x="344.0" y="481.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">complete&#x27; in each log</text>
+<line x1="592.0" y1="460.0" x2="636.0" y2="460.0" stroke="#9ca3af" stroke-width="1.6" marker-end="url(#dg-b5_run_a_recipe-m0)"/>
+<rect x="638.0" y="428.0" width="416.0" height="64.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="650.0" y="448.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">3. Send to attention 18305</text>
+<text x="650.0" y="466.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">vllm bench serve  ·  README:258</text>
+<text x="650.0" y="481.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">never to the FFN server</text>
+<text x="30.0" y="555.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="544.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="555.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention role / client traffic</text>
+<rect x="316.7" y="544.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="337.7" y="555.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN role</text>
+<rect x="413.0" y="544.0" width="14.0" height="14.0" rx="3" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<text x="434.0" y="555.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">wait condition</text>
+<rect x="541.8" y="544.0" width="14.0" height="14.0" rx="3" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<text x="562.8" y="555.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">shell step</text>
+<text x="30.0" y="584.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Every claim is on the page with a line citation from the recipe script.</text>
+<text x="30.0" y="602.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The eager variant replaces the graph flags with --enforce-eager.</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: the recipe starts two servers with the same afd block, waits for both to come up, then sends traffic to the attention HTTP port only.</figcaption><a class="diagram-open" href="../diagrams/b5_run_a_recipe.svg" target="_blank">Open full size ↗</a></div></figure>
+<p>Read panel 1 as the two serve commands, side by side. Read panel 2 as the order: background both, wait for
+startup, then send requests to the attention port.</p>
+
+<section class="stop" id="stop-1"><h2 id="1turn-the-v2-runner-on" class="stop-title"><span class="stop-num">1</span>Turn the V2 runner on<a class="h-anchor" href="#1turn-the-v2-runner-on" aria-label="Link to this section">#</a></h2><p>The script exports one environment variable before it starts a server
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L5" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:5 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:5</code></a>).</p>
+<figure class="code-excerpt" data-lang="bash"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L4-L5" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:4-5</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L4-L5" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">4</span><span class="ln hl">5</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(1 * var(--code-lh))"></span><pre><code class="language-bash">MODEL_PATH=${MODEL_PATH:-/path/model_weights/DeepSeek-V2-Lite}
+export VLLM_USE_V2_MODEL_RUNNER=1</code></pre></div></div></div><figcaption class="code-caption">The model path and the V2 runner switch.</figcaption></figure>
+<p>AFD runs on <a class="term" href="../reference/glossary.html#term-model-runner-v2" data-term="Model Runner V2" data-def="The vLLM v1 model runner, version 2. Both AFD roles need it on; the README sets VLLM_USE_V2_MODEL_RUNNER=1. AFD adds a seam over it.">Model Runner V2</a>. Setting
+<code>VLLM_USE_V2_MODEL_RUNNER=1</code> turns the V2 runner on explicitly. vLLM also picks V2 by default when the
+variable is unset (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/vllm.py#L692-L694" target="_blank" rel="noopener" title="vllm:vllm/config/vllm.py:692-694 at vLLM ced6857"><code>vllm:vllm/config/vllm.py:692-694</code></a>); the recipe sets it so the choice is clear. The
+validator raises only when V2 resolves to off (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L90-L91" target="_blank" rel="noopener" title="afd_plugin/validation.py:90-91 at afd-plugin 7452d52"><code>afd_plugin/validation.py:90-91</code></a>).</p></section>
+
+<section class="stop" id="stop-2"><h2 id="2the-attention-serve-command-and-the-parallel-sizes" class="stop-title"><span class="stop-num">2</span>The attention serve command and the parallel sizes<a class="h-anchor" href="#2the-attention-serve-command-and-the-parallel-sizes" aria-label="Link to this section">#</a></h2><p>The attention server runs on GPUs 0 and 1. The parallel flags set the per-role rank count
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L7-L10" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-10 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-10</code></a>).</p>
+<figure class="code-excerpt" data-lang="bash"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L7-L10" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-10</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L7-L10" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln hl">7</span><span class="ln hl">8</span><span class="ln hl">9</span><span class="ln hl">10</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(0 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(1 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(3 * var(--code-lh))"></span><pre><code class="language-bash">CUDA_VISIBLE_DEVICES=0,1 uv run vllm serve &quot;$MODEL_PATH&quot; \
+    --data-parallel-size 1 \
+    --tensor-parallel-size 2 \
+    --enable-expert-parallel \</code></pre></div></div></div><figcaption class="code-caption">GPUs 0,1; DP1 TP2; expert parallel on.</figcaption></figure>
+<ul>
+  <li><code>CUDA_VISIBLE_DEVICES=0,1</code> picks the two GPUs for this role.</li>
+  <li><code>--data-parallel-size 1 --tensor-parallel-size 2</code> gives two attention ranks, because the rank
+    count must equal <code>DP &times; TP</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L107-L117" target="_blank" rel="noopener" title="afd_plugin/validation.py:107-117 at afd-plugin 7452d52"><code>afd_plugin/validation.py:107-117</code></a>).</li>
+  <li><code>--enable-expert-parallel</code> turns on static expert parallelism, which AFD requires
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L118-L125" target="_blank" rel="noopener" title="afd_plugin/validation.py:118-125 at afd-plugin 7452d52"><code>afd_plugin/validation.py:118-125</code></a>).</li>
+</ul>
+<p>See <a href="../concepts/deployment-topologies.html">Deployment topologies: how to place the roles</a> for the rank rule.</p></section>
+
+<section class="stop" id="stop-3"><h2 id="3the-afd-block-in-additional-config" class="stop-title"><span class="stop-num">3</span>The afd block in --additional-config<a class="h-anchor" href="#3the-afd-block-in-additional-config" aria-label="Link to this section">#</a></h2><p>The <code>--additional-config</code> JSON carries the AFD settings under the <code>"afd"</code> key
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L11-L20" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:11-20 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:11-20</code></a>).</p>
+<figure class="code-excerpt" data-lang="bash"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L11-L20" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:11-20</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L11-L20" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">11</span><span class="ln">12</span><span class="ln hl">13</span><span class="ln hl">14</span><span class="ln">15</span><span class="ln hl">16</span><span class="ln hl">17</span><span class="ln hl">18</span><span class="ln">19</span><span class="ln">20</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(3 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(5 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(7 * var(--code-lh))"></span><pre><code class="language-bash">    --additional-config &#x27;{
+        &quot;afd&quot;: {
+            &quot;role&quot;: &quot;attention&quot;,
+            &quot;connector&quot;: &quot;P2pNcclAFDConnector&quot;,
+            &quot;host&quot;: &quot;127.0.0.1&quot;,
+            &quot;port&quot;: 6269,
+            &quot;num_attention_ranks&quot;: 2,
+            &quot;num_ffn_ranks&quot;: 2
+        }
+    }&#x27; \</code></pre></div></div></div><figcaption class="code-caption">The afd block: role, connector, host, port and rank counts.</figcaption></figure>
+<p>The plugin reads this inner mapping and builds an <a class="term" href="../reference/glossary.html#term-afd-config" data-term="AFDConfig" data-def="The plugin&#x27;s own configuration object. It holds the role, the connector name, the topology sizes and the rendezvous host/port.">AFDConfig</a>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L42" target="_blank" rel="noopener" title="afd_plugin/config.py:42 at afd-plugin 7452d52"><code>afd_plugin/config.py:42</code></a>). The <code>role</code> is <code>attention</code> here; the
+<code>connector</code> is the GPU <a class="term" href="../reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">P2P connector</a>; <code>host</code> and <code>port</code>
+set the <a class="term" href="../reference/glossary.html#term-rendezvous" data-term="rendezvous" data-def="The host and port where the two roles meet to set up the connector process groups. Both servers use the same host and port.">rendezvous</a> where the two roles meet; <code>num_attention_ranks</code> and
+<code>num_ffn_ranks</code> are both <code>2</code>. See <a href="../reference/afd-config.html">AFD config reference: the additional_config[&quot;afd&quot;] keys</a>.</p></section>
+
+<section class="stop" id="stop-4"><h2 id="4the-batch-dbo-and-cuda-graph-flags" class="stop-title"><span class="stop-num">4</span>The batch, DBO and CUDA graph flags<a class="h-anchor" href="#4the-batch-dbo-and-cuda-graph-flags" aria-label="Link to this section">#</a></h2><p>The next flags set the batch limits, DBO and the CUDA graph
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L21-L29" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:21-29 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:21-29</code></a>).</p>
+<figure class="code-excerpt" data-lang="bash"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L21-L29" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:21-29</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L21-L29" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">21</span><span class="ln">22</span><span class="ln hl">23</span><span class="ln hl">24</span><span class="ln hl">25</span><span class="ln hl">26</span><span class="ln">27</span><span class="ln hl">28</span><span class="ln">29</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(3 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(4 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(5 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(7 * var(--code-lh))"></span><pre><code class="language-bash">    --max-num-seqs 64 \
+    --max-num-batched-tokens 64 \
+    --enable-dbo \
+    --dbo-decode-token-threshold 2 \
+    --dbo-prefill-token-threshold 12 \
+    --max-cudagraph-capture-size 64 \
+    --compilation-config &#x27;{
+        &quot;cudagraph_mode&quot;: &quot;FULL_DECODE_ONLY&quot;, &quot;cudagraph_capture_sizes&quot;:[64]
+    }&#x27; \</code></pre></div></div></div><figcaption class="code-caption">DBO thresholds and the FULL_DECODE_ONLY graph capture.</figcaption></figure>
+<ul>
+  <li><code>--enable-dbo</code> with <code>--dbo-decode-token-threshold 2</code> and
+    <code>--dbo-prefill-token-threshold 12</code> turns on <a class="term" href="../reference/glossary.html#term-dbo" data-term="DBO" data-def="Dual-batch overlap. The step is split into two microbatches so compute and communication overlap. AFD uses exactly two.">DBO</a> with low example thresholds. AFD
+    needs exactly two microbatches when DBO is on (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L126-L131" target="_blank" rel="noopener" title="afd_plugin/validation.py:126-131 at afd-plugin 7452d52"><code>afd_plugin/validation.py:126-131</code></a>). See
+    <a href="../concepts/dbo.html">Dual-batch overlap (DBO): two stages per step</a>.</li>
+  <li><code>--max-cudagraph-capture-size 64</code> and the <code>--compilation-config</code> with
+    <code>cudagraph_mode: FULL_DECODE_ONLY</code> turn on CUDA graphs. GPU AFD allows only
+    <code>FULL_DECODE_ONLY</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L20-L21" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:20-21 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:20-21</code></a>). See
+    <a href="../concepts/cuda-graphs.html">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</a>.</li>
+</ul></section>
+
+<section class="stop" id="stop-5"><h2 id="5the-http-port-and-backgrounding" class="stop-title"><span class="stop-num">5</span>The HTTP port and backgrounding<a class="h-anchor" href="#5the-http-port-and-backgrounding" aria-label="Link to this section">#</a></h2><p>The attention server binds an HTTP port and runs in the background
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L30-L32" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:30-32 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:30-32</code></a>).</p>
+<figure class="code-excerpt" data-lang="bash"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L30-L32" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:30-32</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L30-L32" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">30</span><span class="ln hl">31</span><span class="ln hl">32</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(1 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><pre><code class="language-bash">    --host 127.0.0.1 \
+    --port 18305 \
+    --trust-remote-code &gt; attn.log 2&gt;&amp;1 &amp;</code></pre></div></div></div><figcaption class="code-caption">The HTTP host and port; logs to attn.log; runs in the background.</figcaption></figure>
+<p>Clients connect to this HTTP port, <code>18305</code>. It is a different port from the AFD
+<code>6269</code>: the HTTP port carries requests, the AFD port carries the connector setup. The command ends
+with <code>&amp;</code>, so it runs in the background.</p></section>
+
+<section class="stop" id="stop-6"><h2 id="6the-ffn-server-the-same-block-role-ffn" class="stop-title"><span class="stop-num">6</span>The FFN server: the same block, role ffn<a class="h-anchor" href="#6the-ffn-server-the-same-block-role-ffn" aria-label="Link to this section">#</a></h2><p>The FFN server is the same command with two changes: GPUs 2 and 3, and <code>role: ffn</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L34-L59" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:34-59 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:34-59</code></a>).</p>
+<figure class="code-excerpt" data-lang="bash"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L34-L47" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:34-47</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L34-L47" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln hl">34</span><span class="ln">35</span><span class="ln">36</span><span class="ln">37</span><span class="ln">38</span><span class="ln">39</span><span class="ln hl">40</span><span class="ln">41</span><span class="ln">42</span><span class="ln">43</span><span class="ln">44</span><span class="ln">45</span><span class="ln">46</span><span class="ln">47</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(0 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><pre><code class="language-bash">CUDA_VISIBLE_DEVICES=2,3 uv run vllm serve &quot;$MODEL_PATH&quot; \
+    --data-parallel-size 1 \
+    --tensor-parallel-size 2 \
+    --enable-expert-parallel \
+    --additional-config &#x27;{
+        &quot;afd&quot;: {
+            &quot;role&quot;: &quot;ffn&quot;,
+            &quot;connector&quot;: &quot;P2pNcclAFDConnector&quot;,
+            &quot;host&quot;: &quot;127.0.0.1&quot;,
+            &quot;port&quot;: 6269,
+            &quot;num_attention_ranks&quot;: 2,
+            &quot;num_ffn_ranks&quot;: 2
+        }
+    }&#x27; \</code></pre></div></div></div><figcaption class="code-caption">The FFN server: GPUs 2,3, role ffn, same host, port and ranks.</figcaption></figure>
+<p>The FFN server reads the same <code>host</code>, <code>port</code> and rank counts, so the two roles meet at
+the same rendezvous. It runs no KV cache and no real scheduler, only a no-op stand-in; the connector drives it
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L599-L623" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:599-623 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:599-623</code></a>). Send no client traffic here. See
+<a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a> and <a href="../concepts/ffn-runtime.html">The FFN runtime: a connector-driven server loop</a>.</p></section>
+
+<section class="stop" id="stop-7"><h2 id="7start-order-background-both-then-wait" class="stop-title"><span class="stop-num">7</span>Start order: background both, then wait<a class="h-anchor" href="#7start-order-background-both-then-wait" aria-label="Link to this section">#</a></h2><p>The script backgrounds both servers and ends with <code>wait</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L53-L61" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:53-61 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:53-61</code></a>).</p>
+<figure class="code-excerpt" data-lang="bash"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L59-L61" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:59-61</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L59-L61" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">59</span><span class="ln">60</span><span class="ln hl">61</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><pre><code class="language-bash">    --trust-remote-code &gt; ffn.log 2&gt;&amp;1 &amp;
+
+wait</code></pre></div></div></div><figcaption class="code-caption">The FFN server backgrounds, then the script waits for both.</figcaption></figure>
+<p>Both roles start together and meet at the AFD rendezvous. Wait for <code>Application startup complete</code>
+in each log before you send traffic (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/README.md#L39-L43" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/README.md:39-43 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/README.md:39-43</code></a>).</p>
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="run-it-from-the-repository-root" class="dd-title">Run it from the repository root</h3></summary><div class="dd-body"><p>Set the model path and the V2 runner, then run the script
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md#L88-L92" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:88-92 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:88-92</code></a>).</p>
+<pre><code class="language-bash">export MODEL_PATH=/path/model_weights/DeepSeek-V2-Lite
+export VLLM_USE_V2_MODEL_RUNNER=1
+bash recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh</code></pre>
+<p>The script writes <code>attn.log</code> and <code>ffn.log</code> in the current directory.</p></div></details></section>
+
+<section class="stop" id="stop-8"><h2 id="8send-a-request-then-benchmark-it" class="stop-title"><span class="stop-num">8</span>Send a request, then benchmark it<a class="h-anchor" href="#8send-a-request-then-benchmark-it" aria-label="Link to this section">#</a></h2><p>Send requests only to the attention HTTP server
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L258-L260" target="_blank" rel="noopener" title="README.md:258-260 at afd-plugin 7452d52"><code>README.md:258-260</code></a>). The FFN server has no request path; a request there fails fast
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L122-L131" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:122-131 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:122-131</code></a>).</p>
+<pre><code class="language-bash">curl http://127.0.0.1:18305/v1/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model": "'"$MODEL_PATH"'", "prompt": "Hello", "max_tokens": 16}'</code></pre>
+<p>To benchmark, drive load against the same port with the repository's wrapper around
+<code>vllm bench serve</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tools/benchmarks/request_generator.sh#L44-L57" target="_blank" rel="noopener" title="tools/benchmarks/request_generator.sh:44-57 at afd-plugin 7452d52"><code>tools/benchmarks/request_generator.sh:44-57</code></a>). The README shows the
+benchmark command for this model (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md#L104-L120" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:104-120 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:104-120</code></a>).
+See <a href="../concepts/tuning.html">Tuning: the knobs the repo exposes</a>.</p></section>
+
+<h2 id="what-can-go-wrong">What can go wrong<a class="h-anchor" href="#what-can-go-wrong" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li><strong>A request sent to the FFN server.</strong> The FFN worker is connector-driven; a
+    scheduler-driven <code>execute_model</code> raises at once
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L122-L131" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:122-131 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:122-131</code></a>).</li>
+  <li><strong>Different host or port on the two roles.</strong> Both must use the same AFD
+    <code>host:port</code>, or the group setup hangs until the timeout
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L271" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:271 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:271</code></a>).</li>
+  <li><strong>Traffic sent before startup.</strong> Wait for <code>Application startup complete</code> in both
+    logs first (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/README.md#L39-L43" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/README.md:39-43 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/README.md:39-43</code></a>).</li>
+  <li><strong>The rank count does not match DP x TP.</strong> The validator raises before the run starts
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L107-L117" target="_blank" rel="noopener" title="afd_plugin/validation.py:107-117 at afd-plugin 7452d52"><code>afd_plugin/validation.py:107-117</code></a>).</li>
+</ul>
+<p><strong>Why it matters.</strong> The recipe is the full launch contract. One wrong flag, port, or target
+stops the run or hangs the rendezvous.</p>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>Which port do clients connect to, and which port is the AFD rendezvous?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Clients connect to the HTTP port <code>18305</code>; the roles meet at the AFD port <code>6269</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L16" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:16 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:16</code></a>,
+      <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L31" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:31 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:31</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>What changes between the attention and FFN serve commands?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The GPUs (0,1 vs 2,3) and the <code>role</code> (<code>attention</code> vs <code>ffn</code>); the rest
+      of the afd block is the same
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L13" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:13 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:13</code></a>,
+      <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L40" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:40 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:40</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>Why does the recipe set <code>VLLM_USE_V2_MODEL_RUNNER=1</code> if vLLM picks V2 by default?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>To be explicit. vLLM picks V2 by default when the variable is unset
+      (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/vllm.py#L692-L694" target="_blank" rel="noopener" title="vllm:vllm/config/vllm.py:692-694 at vLLM ced6857"><code>vllm:vllm/config/vllm.py:692-694</code></a>), and AFD requires the V2 runner
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L90-L91" target="_blank" rel="noopener" title="afd_plugin/validation.py:90-91 at afd-plugin 7452d52"><code>afd_plugin/validation.py:90-91</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>The recipe turns on DBO with thresholds 2 and 12. What constraint must the run then meet?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Exactly two microbatches. AFD raises when DBO or ubatching is on and
+      <code>num_ubatches != 2</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L126-L131" target="_blank" rel="noopener" title="afd_plugin/validation.py:126-131 at afd-plugin 7452d52"><code>afd_plugin/validation.py:126-131</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>Which two flags switch this recipe from eager to graph, and which graph mode do they set?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p><code>--max-cudagraph-capture-size 64</code> and <code>--compilation-config</code> with
+      <code>cudagraph_mode: FULL_DECODE_ONLY</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L26-L28" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-28 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-28</code></a>).
+      GPU AFD allows only that mode (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L20-L21" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:20-21 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:20-21</code></a>).</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../tours/life-of-a-request.html">Tour: Life of a request</a><span class="rel-sum">Follow one request from the HTTP call to the sampled token, across the attention server and the FFN server, stop by stop. The control plane runs once per step; the data plane runs once per layer and stage.</span></li><li><a href="../concepts/deployment-topologies.html">Deployment topologies: how to place the roles</a><span class="rel-sum">The GPU recipes place the attention and FFN roles in five shapes: 2A2F and 4A4F colocation, 2P1A1F prefill/decode disaggregation with a proxy, a k8s multipod split, and the Qwen3.5 4A2F multipod. This page gives the process count, GPUs, ranks, flags, start order and ports of each.</span></li><li><a href="../reference/recipes.html">Recipes reference</a><span class="rel-sum">Every recipe script under recipe/, generated from the source, with hardware, connector, model, topology, role, DP/TP, mode, DBO thresholds and ports. Hand notes cover the parts the parser cannot read.</span></li><li><a href="../concepts/dbo.html">Dual-batch overlap (DBO): two stages per step</a><span class="rel-sum">DBO splits one step into exactly two stages. While one stage waits on the FFN side, the other computes attention, so the two roles stay busy. AFD adds a yield op and scoped patches for DP1.</span></li><li><a href="../concepts/cuda-graphs.html">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</a><span class="rel-sum">AFD supports one CUDA graph mode, FULL_DECODE_ONLY. The attention side wraps native capture and replay to publish control; the FFN side keeps its own graph per token shape.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../tours/one-decode-step.html"><span class="pn-dir">← Previous</span><span class="pn-title">Tour: One decode step</span></a><a class="pn pn-next" href="../code/index.html"><span class="pn-dir">Next →</span><span class="pn-title">The code map: folders, sizes and dependencies</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#1turn-the-v2-runner-on">1Turn the V2 runner on</a></li><li class="toc-l2"><a href="#2the-attention-serve-command-and-the-parallel-sizes">2The attention serve command and the parallel sizes</a></li><li class="toc-l2"><a href="#3the-afd-block-in-additional-config">3The afd block in --additional-config</a></li><li class="toc-l2"><a href="#4the-batch-dbo-and-cuda-graph-flags">4The batch, DBO and CUDA graph flags</a></li><li class="toc-l2"><a href="#5the-http-port-and-backgrounding">5The HTTP port and backgrounding</a></li><li class="toc-l2"><a href="#6the-ffn-server-the-same-block-role-ffn">6The FFN server: the same block, role ffn</a></li><li class="toc-l2"><a href="#7start-order-background-both-then-wait">7Start order: background both, then wait</a></li><li class="toc-l3"><a href="#run-it-from-the-repository-root">Run it from the repository root</a></li><li class="toc-l2"><a href="#8send-a-request-then-benchmark-it">8Send a request, then benchmark it</a></li><li class="toc-l2"><a href="#what-can-go-wrong">What can go wrong</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

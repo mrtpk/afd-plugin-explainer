@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The code map: folders, sizes and dependencies · AFD Plugin Explained</title>
+<meta name="description" content="The folder tree of afd-plugin at the pinned commit, with file and line counts, a GPU/NPU/shared split, and how the folders depend on each other.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="code/index">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a class="current" aria-current="page" href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>Code map</span><span class="sep">›</span><span>Overview</span><span class="sep">›</span><span aria-current="page">Folder tree</span></nav>
+<h1 class="page-title">The code map: folders, sizes and dependencies</h1>
+<div class="page-meta"><span class="meta-sec">Code map</span><span class="meta-time">about 5 min read</span></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>You do not need to read other pages first.</p></aside>
+<p>This page maps the repository. It shows the folder tree with counts, which folder depends on which, and how
+much of the Python code is GPU, NPU or shared. The module pages then read the most important files.</p>
+
+<h2 id="purpose">Purpose<a class="h-anchor" href="#purpose" aria-label="Link to this section">#</a></h2>
+<p>afd-plugin is one Python package, <code>afd_plugin</code>, plus kernels, recipes, docs and tests. The package
+is what vLLM loads. This map helps you find a file and see where it sits before you open a module page.</p>
+
+<h2 id="the-folder-tree">The folder tree<a class="h-anchor" href="#the-folder-tree" aria-label="Link to this section">#</a></h2>
+<p>The tree below is generated from the repository at the pinned commit. The counts are tracked files and text
+lines per folder. Out-of-scope folders are marked.</p>
+<!-- BEGIN GENERATED folder-tree -->
+<p class="ct-total">595 tracked files, 139,046 lines (text files only; counted with <code>git ls-tree</code> at the pinned commit).</p>
+<div class="ct-tree"><ul><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/.agents" target="_blank" rel="noopener">.agents/</a> <span class="ct-n">95 files · 10,124 lines</span><ul><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/.agents/skills" target="_blank" rel="noopener">.agents/skills/</a> <span class="ct-n">95 files · 10,124 lines</span></li></ul></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/.buildkite" target="_blank" rel="noopener">.buildkite/</a> <span class="ct-n">9 files · 1,437 lines</span><ul><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/.buildkite/common" target="_blank" rel="noopener">.buildkite/common/</a> <span class="ct-n">3 files · 1,250 lines</span></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/.buildkite/cuda" target="_blank" rel="noopener">.buildkite/cuda/</a> <span class="ct-n">6 files · 187 lines</span></li></ul></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/.claude" target="_blank" rel="noopener">.claude/</a> <span class="ct-n">1 files · 1 lines</span></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/.github" target="_blank" rel="noopener">.github/</a> <span class="ct-n">9 files · 396 lines</span><ul><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/.github/ISSUE_TEMPLATE" target="_blank" rel="noopener">.github/ISSUE_TEMPLATE/</a> <span class="ct-n">6 files · 291 lines</span></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/.github/workflows" target="_blank" rel="noopener">.github/workflows/</a> <span class="ct-n">1 files · 51 lines</span></li></ul></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin" target="_blank" rel="noopener">afd_plugin/</a> <span class="ct-n">82 files · 20,214 lines</span> Shared. The plugin Python package that vLLM loads. Holds the GPU and NPU code.<ul><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat" target="_blank" rel="noopener">afd_plugin/compat/</a> <span class="ct-n">20 files · 3,971 lines</span> Shared. Compat patches that replace vLLM functions at load time. The npu/ subfolder is NPU.</li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors" target="_blank" rel="noopener">afd_plugin/connectors/</a> <span class="ct-n">12 files · 4,333 lines</span> Mixed. The connector contract and factory (shared); gpu/ is GPU and npu/ is NPU. <a href="../code/connectors-core.html">page</a></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed" target="_blank" rel="noopener">afd_plugin/distributed/</a> <span class="ct-n">3 files · 359 lines</span> Shared. The AFD process group, the topology and the role-rank helpers.</li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor" target="_blank" rel="noopener">afd_plugin/model_executor/</a> <span class="ct-n">20 files · 5,257 lines</span> Mixed. The AFD model wrappers (shared/GPU); the npu/ subfolder is NPU.</li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1" target="_blank" rel="noopener">afd_plugin/v1/</a> <span class="ct-n">20 files · 5,036 lines</span> Mixed. The role workers, the model runners, DBO and the CUDA graph code; worker/npu is NPU.</li></ul></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/csrc" target="_blank" rel="noopener">csrc/</a> <span class="ct-n">179 files · 47,057 lines</span> Out of scope. C/C++ kernel sources. gpu/ is a GPU stub; npu/ is the Ascend operator sources.<ul><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/csrc/gpu" target="_blank" rel="noopener">csrc/gpu/</a> <span class="ct-n">1 files · 3 lines</span> GPU. A stub (one file).</li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/csrc/npu" target="_blank" rel="noopener">csrc/npu/</a> <span class="ct-n">177 files · 47,046 lines</span> NPU (Ascend). The prebuilt operator sources. Out of scope: only how the Python code loads them.</li></ul></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/docker" target="_blank" rel="noopener">docker/</a> <span class="ct-n">1 files · 59 lines</span></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/docs" target="_blank" rel="noopener">docs/</a> <span class="ct-n">21 files · 4,975 lines</span> Design notes and user guides. Written against an older commit: use as hints, not as a source.<ul><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/docs/assets" target="_blank" rel="noopener">docs/assets/</a> <span class="ct-n">3 files · 242 lines</span></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/docs/design" target="_blank" rel="noopener">docs/design/</a> <span class="ct-n">9 files · 2,898 lines</span></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/docs/gpu" target="_blank" rel="noopener">docs/gpu/</a> <span class="ct-n">1 files · 217 lines</span> GPU. The P2P connector user guide.</li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/docs/npu" target="_blank" rel="noopener">docs/npu/</a> <span class="ct-n">8 files · 1,618 lines</span> NPU (Ascend). The CAM connector user guides and notes.</li></ul></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe" target="_blank" rel="noopener">recipe/</a> <span class="ct-n">24 files · 2,441 lines</span> Launch scripts per connector and model. gpu/ is GPU and npu/ is NPU.<ul><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu" target="_blank" rel="noopener">recipe/gpu/</a> <span class="ct-n">12 files · 1,003 lines</span> GPU. Launch scripts for the P2P connector.</li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/npu" target="_blank" rel="noopener">recipe/npu/</a> <span class="ct-n">11 files · 1,387 lines</span> NPU (Ascend). Launch scripts for the CAM connectors.</li></ul></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tests" target="_blank" rel="noopener">tests/</a> <span class="ct-n">149 files · 42,186 lines</span> Source of facts only. e2e/ and unit/ are shared; npu/ is NPU.<ul><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tests/e2e" target="_blank" rel="noopener">tests/e2e/</a> <span class="ct-n">31 files · 8,199 lines</span></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tests/npu" target="_blank" rel="noopener">tests/npu/</a> <span class="ct-n">13 files · 6,012 lines</span></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tests/unit" target="_blank" rel="noopener">tests/unit/</a> <span class="ct-n">103 files · 27,835 lines</span></li></ul></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tools" target="_blank" rel="noopener">tools/</a> <span class="ct-n">11 files · 2,332 lines</span> Shared. Repository tooling: benchmarks, datasets and pre-commit checks.<ul><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tools/benchmarks" target="_blank" rel="noopener">tools/benchmarks/</a> <span class="ct-n">4 files · 506 lines</span></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tools/datasets" target="_blank" rel="noopener">tools/datasets/</a> <span class="ct-n">1 files · 3 lines</span></li><li><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tools/pre_commit" target="_blank" rel="noopener">tools/pre_commit/</a> <span class="ct-n">4 files · 469 lines</span></li></ul></li></ul></div>
+<!-- END GENERATED folder-tree -->
+<aside class="callout callout-note"><p class="callout-title">Note</p><div class="callout-body"><p>Regenerate this tree with <code>python3 tools/gen_folder_tree.py</code>. The text between the markers
+is generated; do not edit it by hand.</p></div></aside>
+
+<h2 id="how-the-folders-depend-on-each-other">How the folders depend on each other<a class="h-anchor" href="#how-the-folders-depend-on-each-other" aria-label="Link to this section">#</a></h2>
+<p>The Python imports run in one direction, from the entry point down to the distributed helpers. The main
+edges are:</p>
+<ol>
+  <li><strong>Entry point.</strong> <code>afd_plugin/__init__.py</code> imports the config
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L16" target="_blank" rel="noopener" title="afd_plugin/__init__.py:16 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:16</code></a>), then the compat patches, the routing simulator and the DBO op
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L172-L192" target="_blank" rel="noopener" title="afd_plugin/__init__.py:172-192 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:172-192</code></a>).</li>
+  <li><strong>Config and compat.</strong> The <code>config_validation</code> patch reads the AFD config and the
+    validation helpers (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/config_validation.py#L20-L24" target="_blank" rel="noopener" title="afd_plugin/compat/patches/config_validation.py:20-24 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/config_validation.py:20-24</code></a>).</li>
+  <li><strong>Workers and model wrappers.</strong> The runners in <code>v1/worker</code> and the model wrappers
+    in <code>model_executor</code> import the connectors
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L37" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:37 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:37</code></a>,
+    <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L25" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:25 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:25</code></a>).</li>
+  <li><strong>Connectors.</strong> The connectors read the config and resolve the role rank from the
+    distributed helpers (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L11-L17" target="_blank" rel="noopener" title="afd_plugin/connectors/factory.py:11-17 at afd-plugin 7452d52"><code>afd_plugin/connectors/factory.py:11-17</code></a>).</li>
+  <li><strong>Distributed.</strong> <code>afd_plugin/distributed</code> holds the process group, the topology
+    and the role-rank helpers; it is at the bottom of the chain.</li>
+</ol>
+<p>So the order is: entry point &#8594; config and compat &#8594; workers and model wrappers &#8594; connectors
+&#8594; distributed.</p>
+
+<h2 id="the-gpu-npu-shared-split">The GPU / NPU / shared split<a class="h-anchor" href="#the-gpu-npu-shared-split" aria-label="Link to this section">#</a></h2>
+<p>About half of the Python is NPU-specific, and only a small part is GPU-specific. The rest is shared.</p>
+<table>
+  <thead><tr><th>Group</th><th>Files (.py)</th><th>Lines</th></tr></thead>
+  <tbody>
+    <tr><td>Shared (not in a <code>gpu/</code> or <code>npu/</code> folder)</td><td>42</td><td>9,734</td></tr>
+    <tr><td>NPU (Ascend)</td><td>34</td><td>9,329</td></tr>
+    <tr><td>GPU (CUDA)</td><td>2</td><td>1,132</td></tr>
+    <tr><td><strong>Total <code>afd_plugin/</code></strong></td><td><strong>78</strong></td><td><strong>20,195</strong></td></tr>
+  </tbody>
+</table>
+<aside class="callout callout-note"><p class="callout-title">What &quot;shared&quot; means here</p><div class="callout-body"><p>The split is by folder name. A file counts as GPU or NPU only
+when a path part is <code>gpu</code> or <code>npu</code>. Several "shared" files are CUDA paths in practice: the
+repository groups only the connectors by backend (<a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu" target="_blank" rel="noopener"><code>afd_plugin/connectors/gpu/</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu" target="_blank" rel="noopener"><code>afd_plugin/connectors/npu/</code></a>), while the shared runners and model wrappers live outside those
+folders.</p></div></aside>
+
+<h2 id="how-the-numbers-were-measured">How the numbers were measured<a class="h-anchor" href="#how-the-numbers-were-measured" aria-label="Link to this section">#</a></h2>
+<p>The line counts above and in the tree come from the repository at the pinned commit, not from a tool report.
+The method:</p>
+<ol>
+  <li>List tracked files with <code>git ls-tree -r --name-only</code> at the pinned commit.</li>
+  <li>Keep the <code>.py</code> files under <code>afd_plugin/</code> for the split; count the newlines in each
+    one (a file with no trailing newline still counts its last line).</li>
+  <li>Classify each file: NPU when a path part is <code>npu</code>, GPU when a path part is <code>gpu</code>,
+    else shared.</li>
+</ol>
+<p>The folder tree uses the same <code>git ls-tree</code> file list and newline count, over all text files, not
+only Python. The site tool <code>tools/gen_folder_tree.py</code> does this and writes the tree between the
+markers. Binary files count as 0 lines.</p>
+
+<h2 id="the-module-pages">The module pages<a class="h-anchor" href="#the-module-pages" aria-label="Link to this section">#</a></h2>
+<p>These eight pages read the most important modules:</p>
+<ul>
+  <li><a href="../code/init-py.html">afd_plugin/__init__.py: the plugin entry module</a> — the plugin entry module.</li>
+  <li><a href="../code/config-py.html">afd_plugin/config.py: the AFD config schema and parser</a> — the AFD config dataclass and parsing.</li>
+  <li><a href="../code/validation-py.html">afd_plugin/validation.py: runtime wiring checks</a> — the config validation patch.</li>
+  <li><a href="../code/connectors-core.html">connectors/base.py, factory.py, metadata.py: the connector core</a> — the connector base class and factory.</li>
+  <li><a href="../code/p2p-py.html">connectors/gpu/p2p.py: the GPU P2P connector</a> — the GPU P2P connector.</li>
+  <li><a href="../code/attention-worker.html">v1/worker: the attention worker and runner</a> — the attention worker and runner.</li>
+  <li><a href="../code/ffn-worker.html">v1/worker: the FFN worker and runner</a> — the FFN worker and runner.</li>
+  <li><a href="../code/deepseek-v2-py.html">model_executor/models/deepseek_v2.py: the DeepSeek wrapper</a> — the DeepSeek-V2 model wrapper.</li>
+</ul>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../code/init-py.html">afd_plugin/__init__.py: the plugin entry module</a><span class="rel-sum">The package init holds register_afd (the entry point vLLM calls), the AFD model table, and the opt-in spawn override. This page reads it step by step.</span></li><li><a href="../code/config-py.html">afd_plugin/config.py: the AFD config schema and parser</a><span class="rel-sum">config.py defines AFDConfig and the functions that parse and validate additional_config[&quot;afd&quot;]. config_utils.py holds the type coercers; envs.py holds two diagnostic environment flags. This page reads the three files.</span></li><li><a href="../code/connectors-core.html">connectors/base.py, factory.py, metadata.py: the connector core</a><span class="rel-sum">Three files hold the connector contract, the factory and the shared metadata objects. This page maps the files and reads the metadata objects and the factory loader.</span></li><li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a><span class="rel-sum">vLLM reads entry points in the vllm.general_plugins group and calls each one at start-up. This page shows that mechanism, so the afd-plugin entry point makes sense.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../tours/run-a-recipe.html"><span class="pn-dir">← Previous</span><span class="pn-title">Tour: Run a recipe</span></a><a class="pn pn-next" href="../code/init-py.html"><span class="pn-dir">Next →</span><span class="pn-title">afd_plugin/__init__.py: the plugin entry module</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#purpose">Purpose</a></li><li class="toc-l2"><a href="#the-folder-tree">The folder tree</a></li><li class="toc-l2"><a href="#how-the-folders-depend-on-each-other">How the folders depend on each other</a></li><li class="toc-l2"><a href="#the-gpu-npu-shared-split">The GPU / NPU / shared split</a></li><li class="toc-l2"><a href="#how-the-numbers-were-measured">How the numbers were measured</a></li><li class="toc-l2"><a href="#the-module-pages">The module pages</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+
+</body>
+</html>

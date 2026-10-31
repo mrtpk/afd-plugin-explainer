@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1082" viewBox="0 0 1100 1082">
+<defs></defs>
+<rect width="1100" height="1082" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">What register_afd() does, in order</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The entry point runs safety checks first, then the registration steps.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_plugin/__init__.py:142-216  ·  one call per process</text>
+<rect x="20.0" y="128.0" width="1060.0" height="348.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="154.0" r="13" fill="#111827"/>
+<text x="46.0" y="158.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="159.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Safety first (before any registration)</text>
+<text x="68.0" y="178.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Any of these steps can return early, so registration never runs on a bad setup.</text>
+<rect x="80.0" y="192.0" width="940.0" height="58.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<rect x="80.0" y="192.0" width="6.0" height="58.0" rx="3" fill="#9ca3af" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="209.0" r="10" fill="#9ca3af"/>
+<text x="102.0" y="213.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="118.0" y="214.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Guard: already registered?</text>
+<rect x="866.2" y="200.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1"/>
+<text x="939.1" y="213.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:150-153</text>
+<text x="118.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">if</text>
+<text x="152.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">_registered -&gt; return</text>
+<rect x="80.0" y="260.0" width="940.0" height="58.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<rect x="80.0" y="260.0" width="6.0" height="58.0" rx="3" fill="#9ca3af" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="277.0" r="10" fill="#9ca3af"/>
+<text x="102.0" y="281.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="118.0" y="282.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Force spawn start method, if requested</text>
+<rect x="892.7" y="268.0" width="119.3" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1"/>
+<text x="952.3" y="281.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:155</text>
+<text x="118.0" y="302.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">env</text>
+<text x="152.0" y="302.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">AFD_FORCE_SPAWN_MULTIPROCESSING == 1</text>
+<rect x="80.0" y="328.0" width="940.0" height="58.0" rx="8" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<rect x="80.0" y="328.0" width="6.0" height="58.0" rx="3" fill="#d97706" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="345.0" r="10" fill="#d97706"/>
+<text x="102.0" y="349.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="118.0" y="350.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Is vLLM importable?</text>
+<rect x="866.2" y="336.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#d97706" stroke-width="1"/>
+<text x="939.1" y="349.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#d97706" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:157-160</text>
+<text x="118.0" y="370.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">if not</text>
+<text x="152.0" y="370.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">set _registered = True, then return</text>
+<rect x="80.0" y="396.0" width="940.0" height="58.0" rx="8" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<rect x="80.0" y="396.0" width="6.0" height="58.0" rx="3" fill="#d97706" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="413.0" r="10" fill="#d97706"/>
+<text x="102.0" y="417.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">4</text>
+<text x="118.0" y="418.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Check the vLLM version</text>
+<rect x="866.2" y="404.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#d97706" stroke-width="1"/>
+<text x="939.1" y="417.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#d97706" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:162-165</text>
+<text x="118.0" y="438.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">call</text>
+<text x="152.0" y="438.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">assert_vllm_version_supported(strict=False)</text>
+<rect x="20.0" y="498.0" width="1060.0" height="480.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="524.0" r="13" fill="#111827"/>
+<text x="46.0" y="528.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="529.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Then register (vLLM is present)</text>
+<text x="68.0" y="548.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">These steps run in this order; step 8 runs only on NPU.</text>
+<rect x="80.0" y="562.0" width="940.0" height="58.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="80.0" y="562.0" width="6.0" height="58.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="579.0" r="10" fill="#2563eb"/>
+<text x="102.0" y="583.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">5</text>
+<text x="118.0" y="584.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Import the 4 compat patch modules</text>
+<rect x="866.2" y="570.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="939.1" y="583.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:172-176</text>
+<text x="118.0" y="604.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">imports</text>
+<text x="152.0" y="604.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">async_dp_engine, async_dp_forward_context, ...</text>
+<rect x="80.0" y="630.0" width="940.0" height="58.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="80.0" y="630.0" width="6.0" height="58.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="647.0" r="10" fill="#2563eb"/>
+<text x="102.0" y="651.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">6</text>
+<text x="118.0" y="652.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Register the AFD routing strategy</text>
+<rect x="866.2" y="638.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="939.1" y="651.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:183-187</text>
+<text x="118.0" y="672.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">call</text>
+<text x="152.0" y="672.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">register_afd_balanced_routing_strategy()</text>
+<rect x="80.0" y="698.0" width="940.0" height="58.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="80.0" y="698.0" width="6.0" height="58.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="715.0" r="10" fill="#2563eb"/>
+<text x="102.0" y="719.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">7</text>
+<text x="118.0" y="720.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Register the DBO yield custom op</text>
+<rect x="866.2" y="706.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="939.1" y="719.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:189-192</text>
+<text x="118.0" y="740.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">call</text>
+<text x="152.0" y="740.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">register_dbo_yield_custom_op()</text>
+<rect x="80.0" y="766.0" width="940.0" height="58.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<rect x="80.0" y="766.0" width="6.0" height="58.0" rx="3" fill="#7c3aed" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="783.0" r="10" fill="#7c3aed"/>
+<text x="102.0" y="787.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">8</text>
+<text x="118.0" y="788.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">NPU only: apply the Ascend config patch</text>
+<rect x="866.2" y="774.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1"/>
+<text x="939.1" y="787.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#7c3aed" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:202-209</text>
+<text x="118.0" y="808.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">if</text>
+<text x="152.0" y="808.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">current_platform.device_type == &quot;npu&quot;</text>
+<rect x="80.0" y="834.0" width="940.0" height="58.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="80.0" y="834.0" width="6.0" height="58.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="851.0" r="10" fill="#2563eb"/>
+<text x="102.0" y="855.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">9</text>
+<text x="118.0" y="856.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Register each AFD&lt;arch&gt; model</text>
+<rect x="866.2" y="842.0" width="145.8" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="939.1" y="855.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:211-214</text>
+<text x="118.0" y="876.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">loop</text>
+<text x="152.0" y="876.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">ModelRegistry.register_model(&quot;AFD&quot;+arch, cls)</text>
+<rect x="80.0" y="902.0" width="940.0" height="58.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<rect x="80.0" y="902.0" width="6.0" height="58.0" rx="3" fill="#059669" fill-opacity="1.0" stroke="none"/>
+<circle cx="102.0" cy="919.0" r="10" fill="#059669"/>
+<text x="102.0" y="923.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">10</text>
+<text x="118.0" y="924.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Mark the process done</text>
+<rect x="892.7" y="910.0" width="119.3" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#059669" stroke-width="1"/>
+<text x="952.3" y="923.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">__init__.py:216</text>
+<text x="118.0" y="944.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">set</text>
+<text x="152.0" y="944.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">_registered = True</text>
+<text x="30.0" y="1007.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="996.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="1007.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">always (vLLM present)</text>
+<rect x="274.4" y="996.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="295.4" y="1007.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">NPU only</text>
+<rect x="370.7" y="996.0" width="14.0" height="14.0" rx="3" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<text x="391.7" y="1007.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">check / early exit</text>
+<rect x="518.4" y="996.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="539.4" y="1007.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">done</text>
+<text x="30.0" y="1032.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Steps 4, 5 and 7 are wrapped in try/except; a failure is logged and does not stop the rest (__init__.py:162-197).</text>
+<text x="30.0" y="1050.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">_force_spawn_multiprocessing_if_requested also runs once at package import time (__init__.py:94).</text>
+</svg>

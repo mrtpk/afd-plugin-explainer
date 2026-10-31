@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>afd_plugin/validation.py: runtime wiring checks · AFD Plugin Explained</title>
+<meta name="description" content="validation.py holds the CPU-safe checks for the AFD runtime stack: the worker FQCN constants, the GPU and NPU model-runner validators, the worker-selection mapper, and assert_compatible_afd_stack. This page reads the GPU parts in full and names the NPU parts.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="code/validation-py">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a class="current" aria-current="page" href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>Code map</span><span class="sep">›</span><span>Modules</span><span class="sep">›</span><span aria-current="page">validation.py</span></nav>
+<h1 class="page-title">afd_plugin/validation.py: runtime wiring checks</h1>
+<div class="page-meta"><span class="level level-intermediate" title="Level">Intermediate</span><span class="meta-sec">Code map</span><span class="meta-time">about 4 min read + 1 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a> <span class="level level-intermediate level-sm">Intermediate</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">This module holds the CPU-safe checks that wire the AFD runtime: the worker names, the model-runner validators, the worker mapper and the stack check.</p></div>
+
+<h2 id="purpose">Purpose<a class="h-anchor" href="#purpose" aria-label="Link to this section">#</a></h2>
+<p>The module validates that an AFD deployment is wired correctly, before the model runs. It uses
+duck typing, so unit tests and CPU runs do not need a real vLLM config.</p>
+<table>
+  <tbody>
+    <tr><th>File</th><td><code>afd_plugin/validation.py</code> (388 lines, shared).</td></tr>
+    <tr><th>Main functions</th><td><code>validate_gpu_model_runner_v2_config</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L76" target="_blank" rel="noopener" title="afd_plugin/validation.py:76 at afd-plugin 7452d52"><code>afd_plugin/validation.py:76</code></a>), <code>assert_compatible_afd_stack</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L312" target="_blank" rel="noopener" title="afd_plugin/validation.py:312 at afd-plugin 7452d52"><code>afd_plugin/validation.py:312</code></a>),
+      <code>afd_worker_qualname_for_platform_default</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L280" target="_blank" rel="noopener" title="afd_plugin/validation.py:280 at afd-plugin 7452d52"><code>afd_plugin/validation.py:280</code></a>).</td></tr>
+    <tr><th>Runs in</th><td>The API server process (worker mapping) and each worker process (the
+      stack and runner checks, in <code>init_device</code>).</td></tr>
+    <tr><th>Called by</th><td>The config patch (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/config_validation.py#L24-L26" target="_blank" rel="noopener" title="afd_plugin/compat/patches/config_validation.py:24-26 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/config_validation.py:24-26</code></a>)
+      and the AFD workers (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_worker.py#L16-L19" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_worker.py:16-19 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_worker.py:16-19</code></a>).</td></tr>
+    <tr><th>Calls</th><td>The config parser (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L12-L17" target="_blank" rel="noopener" title="afd_plugin/validation.py:12-17 at afd-plugin 7452d52"><code>afd_plugin/validation.py:12-17</code></a>), the CUDA-graph
+      helpers (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L18-L21" target="_blank" rel="noopener" title="afd_plugin/validation.py:18-21 at afd-plugin 7452d52"><code>afd_plugin/validation.py:18-21</code></a>), and <code>has_afd_model_registration</code>.</td></tr>
+    <tr><th>Not in this file</th><td>The NPU validator internals beyond naming them, the worker bodies,
+      and the config schema (in <code>config.py</code>).</td></tr>
+  </tbody>
+</table>
+
+<h2 id="where-it-sits">Where it sits<a class="h-anchor" href="#where-it-sits" aria-label="Link to this section">#</a></h2>
+<h3 id="who-calls-it">Who calls it<a class="h-anchor" href="#who-calls-it" aria-label="Link to this section">#</a></h3>
+<p>The config patch calls <code>afd_worker_qualname_for_platform_default</code> to rewrite the
+worker (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/config_validation.py#L192-L197" target="_blank" rel="noopener" title="afd_plugin/compat/patches/config_validation.py:192-197 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/config_validation.py:192-197</code></a>). Each AFD worker calls
+<code>assert_compatible_afd_stack</code> and the runner validator in <code>init_device</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_worker.py#L64-L73" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_worker.py:64-73 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_worker.py:64-73</code></a>).</p>
+<h3 id="what-it-calls">What it calls<a class="h-anchor" href="#what-it-calls" aria-label="Link to this section">#</a></h3>
+<p>It parses the AFD config with an expected role (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L93" target="_blank" rel="noopener" title="afd_plugin/validation.py:93 at afd-plugin 7452d52"><code>afd_plugin/validation.py:93</code></a>), and imports
+<code>has_afd_model_registration</code> lazily so the module stays independent of the model package
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L136-L138" target="_blank" rel="noopener" title="afd_plugin/validation.py:136-138 at afd-plugin 7452d52"><code>afd_plugin/validation.py:136-138</code></a>).</p>
+
+<h2 id="key-classes-and-functions">Key classes and functions<a class="h-anchor" href="#key-classes-and-functions" aria-label="Link to this section">#</a></h2>
+<table>
+  <thead><tr><th>Name</th><th>Line</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td>Worker FQCN constants</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L26-L41" target="_blank" rel="noopener" title="afd_plugin/validation.py:26-41 at afd-plugin 7452d52"><code>afd_plugin/validation.py:26-41</code></a></td><td>The qualified names of the AFD and native workers.</td></tr>
+    <tr><td><code>BATCH_SIZE_FACTOR</code> / <code>cam_receive_capacity</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L45-L54" target="_blank" rel="noopener" title="afd_plugin/validation.py:45-54 at afd-plugin 7452d52"><code>afd_plugin/validation.py:45-54</code></a></td><td>Compute the CAM receive capacity from an env factor.</td></tr>
+    <tr><td><code>validate_gpu_model_runner_v2_config</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L76" target="_blank" rel="noopener" title="afd_plugin/validation.py:76 at afd-plugin 7452d52"><code>afd_plugin/validation.py:76</code></a></td><td>The GPU deployment rules.</td></tr>
+    <tr><td><code>validate_npu_model_runner_v2_config</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L146" target="_blank" rel="noopener" title="afd_plugin/validation.py:146 at afd-plugin 7452d52"><code>afd_plugin/validation.py:146</code></a></td><td>The Ascend NPU deployment rules.</td></tr>
+    <tr><td><code>afd_worker_qualname_for_platform_default</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L280" target="_blank" rel="noopener" title="afd_plugin/validation.py:280 at afd-plugin 7452d52"><code>afd_plugin/validation.py:280</code></a></td><td>Map the platform default worker to the AFD worker.</td></tr>
+    <tr><td><code>assert_compatible_afd_stack</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L312" target="_blank" rel="noopener" title="afd_plugin/validation.py:312 at afd-plugin 7452d52"><code>afd_plugin/validation.py:312</code></a></td><td>Check the config and the worker class match the role.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="walk-through-the-main-methods">Walk through the main methods<a class="h-anchor" href="#walk-through-the-main-methods" aria-label="Link to this section">#</a></h2>
+
+<h3 id="the-fqcn-constants">The FQCN constants<a class="h-anchor" href="#the-fqcn-constants" aria-label="Link to this section">#</a></h3>
+<p>The module names each worker and runner as a string constant. The GPU workers, the NPU workers
+and the native platform workers all have their own names
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L26-L41" target="_blank" rel="noopener" title="afd_plugin/validation.py:26-41 at afd-plugin 7452d52"><code>afd_plugin/validation.py:26-41</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L26-L42" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/validation.py:26-42</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L26-L42" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">26</span><span class="ln">27</span><span class="ln">28</span><span class="ln">29</span><span class="ln">30</span><span class="ln">31</span><span class="ln">32</span><span class="ln">33</span><span class="ln">34</span><span class="ln">35</span><span class="ln">36</span><span class="ln">37</span><span class="ln">38</span><span class="ln">39</span><span class="ln">40</span><span class="ln">41</span><span class="ln">42</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">ATTENTION_WORKER_FQCN: Final[str] = &quot;afd_plugin.v1.worker.AFDAttentionWorker&quot;
+FFN_WORKER_FQCN: Final[str] = &quot;afd_plugin.v1.worker.AFDFFNWorker&quot;
+ATTENTION_MODEL_RUNNER_FQCN: Final[str] = (
+    &quot;afd_plugin.v1.worker.AFDAttentionModelRunnerV2&quot;
+)
+FFN_MODEL_RUNNER_FQCN: Final[str] = &quot;afd_plugin.v1.worker.GPUFFNModelRunner&quot;
+NPU_ATTENTION_WORKER_FQCN: Final[str] = &quot;afd_plugin.v1.worker.npu.AFDNPUAttentionWorker&quot;
+NPU_FFN_WORKER_FQCN: Final[str] = &quot;afd_plugin.v1.worker.npu.AFDNPUFFNWorker&quot;
+NPU_ATTENTION_MODEL_RUNNER_FQCN: Final[str] = (
+    &quot;afd_plugin.v1.worker.npu.AFDNPUAttentionModelRunnerV2&quot;
+)
+NPU_FFN_MODEL_RUNNER_FQCN: Final[str] = &quot;afd_plugin.v1.worker.npu.AFDNPUFFNModelRunner&quot;
+VLLM_GPU_WORKER_FQCN: Final[str] = &quot;vllm.v1.worker.gpu_worker.Worker&quot;
+VLLM_ASCEND_NPU_WORKER_FQCN: Final[str] = &quot;vllm_ascend.worker.worker.NPUWorker&quot;
+VLLM_ASCEND_310P_WORKER_FQCN: Final[str] = &quot;vllm_ascend._310p.worker_310p.NPUWorker310&quot;
+VLLM_ASCEND_XLITE_WORKER_FQCN: Final[str] = &quot;vllm_ascend.xlite.xlite_worker.XliteWorker&quot;
+GPU_MRV2_NUM_UBATCHES: Final[int] = 2</code></pre></div></div></div><figcaption class="code-caption">The worker and runner qualified names, plus the GPU ubatch count.</figcaption></figure>
+
+<h3 id="validate-gpu-model-runner-v2-config-rule-by-rule">validate_gpu_model_runner_v2_config, rule by rule<a class="h-anchor" href="#validate-gpu-model-runner-v2-config-rule-by-rule" aria-label="Link to this section">#</a></h3>
+<p>This function raises a <code>RuntimeError</code> for each broken rule
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L76-L143" target="_blank" rel="noopener" title="afd_plugin/validation.py:76-143 at afd-plugin 7452d52"><code>afd_plugin/validation.py:76-143</code></a>).</p>
+<ol>
+  <li><strong>Line 90-91.</strong> It needs the V2 model runner
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L90-L91" target="_blank" rel="noopener" title="afd_plugin/validation.py:90-91 at afd-plugin 7452d52"><code>afd_plugin/validation.py:90-91</code></a>).</li>
+  <li><strong>Line 93-97.</strong> The device must be CUDA and the connector the synchronous
+      <code>P2pNcclAFDConnector</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L93-L97" target="_blank" rel="noopener" title="afd_plugin/validation.py:93-97 at afd-plugin 7452d52"><code>afd_plugin/validation.py:93-97</code></a>).</li>
+  <li><strong>Line 99-105.</strong> It rejects pipeline and context parallelism
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L99-L105" target="_blank" rel="noopener" title="afd_plugin/validation.py:99-105 at afd-plugin 7452d52"><code>afd_plugin/validation.py:99-105</code></a>).</li>
+  <li><strong>Line 107-117.</strong> The role rank count must equal data-parallel size times
+      tensor-parallel size (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L107-L117" target="_blank" rel="noopener" title="afd_plugin/validation.py:107-117 at afd-plugin 7452d52"><code>afd_plugin/validation.py:107-117</code></a>).</li>
+  <li><strong>Line 118-125.</strong> It needs static expert parallelism, and rejects elastic EP,
+      EPLB and sequence-parallel MoE (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L118-L125" target="_blank" rel="noopener" title="afd_plugin/validation.py:118-125 at afd-plugin 7452d52"><code>afd_plugin/validation.py:118-125</code></a>).</li>
+  <li><strong>Line 126-131.</strong> With DBO or ubatching, the number of microbatches must be exactly
+      two (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L126-L131" target="_blank" rel="noopener" title="afd_plugin/validation.py:126-131 at afd-plugin 7452d52"><code>afd_plugin/validation.py:126-131</code></a>).</li>
+  <li><strong>Line 136-141.</strong> The model must resolve to a registered AFD model
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L136-L141" target="_blank" rel="noopener" title="afd_plugin/validation.py:136-141 at afd-plugin 7452d52"><code>afd_plugin/validation.py:136-141</code></a>).</li>
+  <li><strong>Line 143.</strong> It checks the CUDA-graph mode for the role
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L143" target="_blank" rel="noopener" title="afd_plugin/validation.py:143 at afd-plugin 7452d52"><code>afd_plugin/validation.py:143</code></a>).</li>
+</ol>
+
+<h3 id="assert-compatible-afd-stack">assert_compatible_afd_stack<a class="h-anchor" href="#assert-compatible-afd-stack" aria-label="Link to this section">#</a></h3>
+<p>This check compares the resolved worker with the expected AFD worker for the role. It raises
+when the field is still <code>"auto"</code>, or when the worker does not match
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L337-L367" target="_blank" rel="noopener" title="afd_plugin/validation.py:337-367 at afd-plugin 7452d52"><code>afd_plugin/validation.py:337-367</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L343-L367" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/validation.py:343-367</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L343-L367" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln hl">343</span><span class="ln">344</span><span class="ln">345</span><span class="ln">346</span><span class="ln">347</span><span class="ln">348</span><span class="ln">349</span><span class="ln">350</span><span class="ln">351</span><span class="ln">352</span><span class="ln">353</span><span class="ln">354</span><span class="ln">355</span><span class="ln">356</span><span class="ln hl">357</span><span class="ln">358</span><span class="ln">359</span><span class="ln">360</span><span class="ln">361</span><span class="ln">362</span><span class="ln hl">363</span><span class="ln">364</span><span class="ln">365</span><span class="ln">366</span><span class="ln">367</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(0 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(14 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(20 * var(--code-lh))"></span><pre><code class="language-python">    if worker_cls_raw.strip() == &quot;auto&quot;:
+        raise ValueError(
+            &quot;parallel_config.worker_cls remained &#x27;auto&#x27; after AFD config &quot;
+            &quot;normalization; ensure the AFD general plugin is loaded before &quot;
+            f&quot;VllmConfig is created{_ctx()}&quot;,
+        )
+
+    expected_qualname = (
+        async_expected_worker
+        or expected_worker_qualname_override
+        or expected_worker_qualname(config.role)
+    )
+    worker_fqcn = normalize_qualname(worker_cls_raw.strip())
+    expected_fqcn = normalize_qualname(expected_qualname)
+    if worker_fqcn != expected_fqcn:
+        prefix = (
+            &quot;CAMAsyncAFDConnector requires Ascend NPU worker class: &quot;
+            if async_expected_worker is not None
+            else &quot;invalid worker class for AFD runtime stack: &quot;
+        )
+        raise ValueError(
+            prefix + f&quot;got={worker_fqcn!r} expected={expected_qualname!r}; &quot;
+            &quot;remove --worker-cls to let AFD select it automatically, or pass &quot;
+            f&quot;--worker-cls {expected_qualname}{_ctx()}&quot;,
+        )</code></pre></div></div></div><figcaption class="code-caption">Reject a leftover 'auto', then reject a mismatched worker with both names.</figcaption></figure>
+
+<h3 id="afd-worker-qualname-for-platform-default">afd_worker_qualname_for_platform_default<a class="h-anchor" href="#afd-worker-qualname-for-platform-default" aria-label="Link to this section">#</a></h3>
+<p>This function maps the normalized platform default worker to the AFD worker for the role. CUDA
+maps to the GPU workers; the standard Ascend worker maps to the NPU workers; the 310P and Xlite
+Ascend workers are rejected (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L280-L309" target="_blank" rel="noopener" title="afd_plugin/validation.py:280-309 at afd-plugin 7452d52"><code>afd_plugin/validation.py:280-309</code></a>). The
+<a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a> page gives the table.</p>
+
+<h3 id="the-npu-validator-npu-scope">The NPU validator (NPU scope)<a class="h-anchor" href="#the-npu-validator-npu-scope" aria-label="Link to this section">#</a></h3>
+<p><code>validate_npu_model_runner_v2_config</code> holds the Ascend rules
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L146-L239" target="_blank" rel="noopener" title="afd_plugin/validation.py:146-239 at afd-plugin 7452d52"><code>afd_plugin/validation.py:146-239</code></a>). It accepts the sync and async CAM connectors, and
+checks eager execution, the DP rule and the ACL graph modes. This is NPU code; the
+<a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a> page covers it. Other pages cite it only to name a rule.</p>
+
+<h2 id="deep-dive">Deep dive<a class="h-anchor" href="#deep-dive" aria-label="Link to this section">#</a></h2>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-gpu-rules-as-an-error-path-table" class="dd-title">The GPU rules as an error-path table</h3></summary><div class="dd-body"><p>Every rule in <code>validate_gpu_model_runner_v2_config</code> raises a
+<code>RuntimeError</code> with a clear message.</p>
+<table>
+  <thead><tr><th>Rule</th><th>Lines</th><th>Message hint</th></tr></thead>
+  <tbody>
+    <tr><td>No V2 runner</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L90-L91" target="_blank" rel="noopener" title="afd_plugin/validation.py:90-91 at afd-plugin 7452d52"><code>afd_plugin/validation.py:90-91</code></a></td><td>"AFD GPU requires ModelRunnerV2".</td></tr>
+    <tr><td>Wrong device or connector</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L93-L97" target="_blank" rel="noopener" title="afd_plugin/validation.py:93-97 at afd-plugin 7452d52"><code>afd_plugin/validation.py:93-97</code></a></td><td>"requires CUDA and synchronous P2pNcclAFDConnector".</td></tr>
+    <tr><td>PP or CP set</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L99-L105" target="_blank" rel="noopener" title="afd_plugin/validation.py:99-105 at afd-plugin 7452d52"><code>afd_plugin/validation.py:99-105</code></a></td><td>"does not support PP or CP".</td></tr>
+    <tr><td>Rank mismatch</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L107-L117" target="_blank" rel="noopener" title="afd_plugin/validation.py:107-117 at afd-plugin 7452d52"><code>afd_plugin/validation.py:107-117</code></a></td><td>"ranks must match DP * TP".</td></tr>
+    <tr><td>Not static EP</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L118-L125" target="_blank" rel="noopener" title="afd_plugin/validation.py:118-125 at afd-plugin 7452d52"><code>afd_plugin/validation.py:118-125</code></a></td><td>"requires static expert parallelism".</td></tr>
+    <tr><td>Wrong ubatch count</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L126-L131" target="_blank" rel="noopener" title="afd_plugin/validation.py:126-131 at afd-plugin 7452d52"><code>afd_plugin/validation.py:126-131</code></a></td><td>"requires exactly two microbatches".</td></tr>
+    <tr><td>Not an AFD model</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L136-L141" target="_blank" rel="noopener" title="afd_plugin/validation.py:136-141 at afd-plugin 7452d52"><code>afd_plugin/validation.py:136-141</code></a></td><td>"requires a registered AFD model".</td></tr>
+  </tbody>
+</table></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="batch-size-factor-and-the-cam-receive-capacity" class="dd-title">BATCH_SIZE_FACTOR and the CAM receive capacity</h3></summary><div class="dd-body"><p><code>cam_receive_capacity</code> scales a fixed token cap by an environment factor. It reads
+<code>BATCH_SIZE_FACTOR</code> (default <code>"1"</code>), packs it as a 32-bit float to match the
+native code, and multiplies <code>CAM_MAX_RECEIVE_TOKENS</code> (262144)
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L45-L54" target="_blank" rel="noopener" title="afd_plugin/validation.py:45-54 at afd-plugin 7452d52"><code>afd_plugin/validation.py:45-54</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L45-L54" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/validation.py:45-54</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L45-L54" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">45</span><span class="ln">46</span><span class="ln">47</span><span class="ln">48</span><span class="ln hl">49</span><span class="ln hl">50</span><span class="ln hl">51</span><span class="ln hl">52</span><span class="ln hl">53</span><span class="ln hl">54</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(4 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(5 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(7 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(8 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(9 * var(--code-lh))"></span><pre><code class="language-python">CAM_MAX_RECEIVE_TOKENS = 262144
+CAM_MAX_SOURCE_ROWS = (1 &lt;&lt; 16) - 1
+
+
+def cam_receive_capacity() -&gt; int:
+    # Match the native std::stof + float multiplication, including rounding.
+    factor = struct.unpack(
+        &quot;f&quot;, struct.pack(&quot;f&quot;, float(os.environ.get(&quot;BATCH_SIZE_FACTOR&quot;, &quot;1&quot;)))
+    )[0]
+    return int(CAM_MAX_RECEIVE_TOKENS * factor)</code></pre></div></div></div><figcaption class="code-caption">cam_receive_capacity: match the native float math exactly.</figcaption></figure>
+<p>This value bounds the async CAM connector on NPU. The 32-bit pack and unpack reproduce the
+rounding of the native <code>std::stof</code> and float multiply, so Python and the kernel agree on
+the capacity.</p></div></details>
+
+<h2 id="related-concepts">Related concepts<a class="h-anchor" href="#related-concepts" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li><a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a></li>
+  <li><a href="../concepts/afd-config.html">AFD configuration: additional_config[&quot;afd&quot;]</a></li>
+  <li><a href="../code/config-py.html">afd_plugin/config.py: the AFD config schema and parser</a></li>
+  <li><a href="../code/init-py.html">afd_plugin/__init__.py: the plugin entry module</a></li>
+</ul>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>What does <code>validate_gpu_model_runner_v2_config</code> check first?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>That the V2 model runner is on. It raises "AFD GPU requires ModelRunnerV2" otherwise
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L90-L91" target="_blank" rel="noopener" title="afd_plugin/validation.py:90-91 at afd-plugin 7452d52"><code>afd_plugin/validation.py:90-91</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>Why does the module import <code>has_afd_model_registration</code> inside the
+    function, not at the top?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>To keep the CPU-safe validation module independent of the model-wrapper package; the
+      validator runs only after the vLLM config is built
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L133-L138" target="_blank" rel="noopener" title="afd_plugin/validation.py:133-138 at afd-plugin 7452d52"><code>afd_plugin/validation.py:133-138</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>Which two connectors does the NPU validator accept?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The synchronous <code>CAMP2pAFDConnector</code> and the async
+      <code>CAMAsyncAFDConnector</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L159-L178" target="_blank" rel="noopener" title="afd_plugin/validation.py:159-178 at afd-plugin 7452d52"><code>afd_plugin/validation.py:159-178</code></a>). It is NPU code;
+      see <a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a>.</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>Why does <code>cam_receive_capacity</code> pack the factor as a 32-bit float
+    before multiplying?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>To reproduce the native <code>std::stof</code> and float multiply exactly, including the
+      rounding, so Python and the kernel compute the same capacity
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L49-L54" target="_blank" rel="noopener" title="afd_plugin/validation.py:49-54 at afd-plugin 7452d52"><code>afd_plugin/validation.py:49-54</code></a>).</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a><span class="rel-sum">AFD chooses a role-specific worker class by rewriting parallel_config.worker_cls, but only when the user left it as &quot;auto&quot;. This page shows the rewrite, the platform-to-worker table, the native resolution, the runner swap and the compatibility check.</span></li><li><a href="../concepts/afd-config.html">AFD configuration: additional_config[&quot;afd&quot;]</a><span class="rel-sum">AFD reads one key, additional_config[&quot;afd&quot;]. This page shows its schema, the compatibility aliases, how values are normalized and coerced, the validation rules, and the rule that AFD is active only when the key is present.</span></li><li><a href="../code/config-py.html">afd_plugin/config.py: the AFD config schema and parser</a><span class="rel-sum">config.py defines AFDConfig and the functions that parse and validate additional_config[&quot;afd&quot;]. config_utils.py holds the type coercers; envs.py holds two diagnostic environment flags. This page reads the three files.</span></li><li><a href="../code/init-py.html">afd_plugin/__init__.py: the plugin entry module</a><span class="rel-sum">The package init holds register_afd (the entry point vLLM calls), the AFD model table, and the opt-in spawn override. This page reads it step by step.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../code/config-py.html"><span class="pn-dir">← Previous</span><span class="pn-title">afd_plugin/config.py: the AFD config schema and parser</span></a><a class="pn pn-next" href="../code/connectors-core.html"><span class="pn-dir">Next →</span><span class="pn-title">connectors/base.py, factory.py, metadata.py: the connector core</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#purpose">Purpose</a></li><li class="toc-l2"><a href="#where-it-sits">Where it sits</a></li><li class="toc-l3"><a href="#who-calls-it">Who calls it</a></li><li class="toc-l3"><a href="#what-it-calls">What it calls</a></li><li class="toc-l2"><a href="#key-classes-and-functions">Key classes and functions</a></li><li class="toc-l2"><a href="#walk-through-the-main-methods">Walk through the main methods</a></li><li class="toc-l3"><a href="#the-fqcn-constants">The FQCN constants</a></li><li class="toc-l3"><a href="#validate-gpu-model-runner-v2-config-rule-by-rule">validate_gpu_model_runner_v2_config, rule by rule</a></li><li class="toc-l3"><a href="#assert-compatible-afd-stack">assert_compatible_afd_stack</a></li><li class="toc-l3"><a href="#afd-worker-qualname-for-platform-default">afd_worker_qualname_for_platform_default</a></li><li class="toc-l3"><a href="#the-npu-validator-npu-scope">The NPU validator (NPU scope)</a></li><li class="toc-l2"><a href="#deep-dive">Deep dive</a></li><li class="toc-l3"><a href="#the-gpu-rules-as-an-error-path-table">The GPU rules as an error-path table</a></li><li class="toc-l3"><a href="#batch-size-factor-and-the-cam-receive-capacity">BATCH_SIZE_FACTOR and the CAM receive capacity</a></li><li class="toc-l2"><a href="#related-concepts">Related concepts</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

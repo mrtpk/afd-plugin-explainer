@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>connectors/base.py, factory.py, metadata.py: the connector core · AFD Plugin Explained</title>
+<meta name="description" content="Three files hold the connector contract, the factory and the shared metadata objects. This page maps the files and reads the metadata objects and the factory loader.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="code/connectors-core">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a class="current" aria-current="page" href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>Code map</span><span class="sep">›</span><span>Modules</span><span class="sep">›</span><span aria-current="page">connectors/base.py</span></nav>
+<h1 class="page-title">connectors/base.py, factory.py, metadata.py: the connector core</h1>
+<div class="page-meta"><span class="level level-intermediate" title="Level">Intermediate</span><span class="meta-sec">Code map</span><span class="meta-time">about 4 min read</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a> <span class="level level-intermediate level-sm">Intermediate</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">Three files form the <a class="term" href="../reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">connector</a> core: <code>base.py</code> (the contract), <code>factory.py</code> (name to class) and <code>metadata.py</code> (the shared data objects).</p></div>
+
+<h2 id="purpose">Purpose<a class="h-anchor" href="#purpose" aria-label="Link to this section">#</a></h2>
+<p>These files hold the parts every connector shares. The contract and the factory are explained on the
+<a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a> page; this page maps the three files and reads the metadata objects and
+the factory loader.</p>
+<table>
+  <thead><tr><th>Item</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Files (lines, origin)</td><td><code>base.py</code> (310), <code>factory.py</code> (105), <code>metadata.py</code> (438); AFD-owned</td></tr>
+    <tr><td>Main types</td><td><code>AFDConnectorBase</code>, <code>AFDControlPlane</code>, <code>AFDConnectorFactory</code>, the <code>AFD*</code> metadata dataclasses</td></tr>
+    <tr><td>Runs in</td><td>every attention and FFN worker process; metadata encode/decode on the CPU</td></tr>
+    <tr><td>Called by</td><td>the role runners and the model wrappers (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L80-L85" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:80-85 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:80-85</code></a>)</td></tr>
+    <tr><td>Calls</td><td><code>importlib</code>, <code>torch</code>, <code>json</code>, and the AFD config helpers</td></tr>
+    <tr><td>Not in this file</td><td>the transports: the GPU P2P connector is in <code>connectors/gpu/p2p.py</code>, the NPU ones in <code>connectors/npu/</code></td></tr>
+  </tbody>
+</table>
+
+<h2 id="where-it-sits">Where it sits<a class="h-anchor" href="#where-it-sits" aria-label="Link to this section">#</a></h2>
+<h3 id="who-calls-it">Who calls it<a class="h-anchor" href="#who-calls-it" aria-label="Link to this section">#</a></h3>
+<p>The factory builds a connector for a runner. The FFN runner calls <code>create_connector</code> at
+construction (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L80-L85" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:80-85 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:80-85</code></a>); the attention runner does the same.
+The model wrappers build the metadata objects for each transfer
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L140-L145" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:140-145 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:140-145</code></a>).</p>
+<h3 id="what-it-calls">What it calls<a class="h-anchor" href="#what-it-calls" aria-label="Link to this section">#</a></h3>
+<p><code>base.py</code> reads the AFD config helper <code>connector_extra_config_from_source</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L105-L107" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:105-107 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:105-107</code></a>). <code>factory.py</code> imports the connector module lazily
+with <code>importlib</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L38-L45" target="_blank" rel="noopener" title="afd_plugin/connectors/factory.py:38-45 at afd-plugin 7452d52"><code>afd_plugin/connectors/factory.py:38-45</code></a>). <code>metadata.py</code> encodes
+the control payload with <code>json</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L344-L346" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:344-346 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:344-346</code></a>).</p>
+
+<h2 id="key-classes-and-functions">Key classes and functions<a class="h-anchor" href="#key-classes-and-functions" aria-label="Link to this section">#</a></h2>
+<table>
+  <thead><tr><th>Name</th><th>Line</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td><code>AFDConnectorBase</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L37" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:37 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:37</code></a></td><td>the connector contract (see <a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a>)</td></tr>
+    <tr><td><code>AFDControlPlane</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L258" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:258 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:258</code></a></td><td>the control-plane contract</td></tr>
+    <tr><td><code>AFDConnectorFactory</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L23" target="_blank" rel="noopener" title="afd_plugin/connectors/factory.py:23 at afd-plugin 7452d52"><code>afd_plugin/connectors/factory.py:23</code></a></td><td>name &rarr; class, build an instance</td></tr>
+    <tr><td><code>AFDDPMetadata</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L23" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:23 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:23</code></a></td><td>per-DP-rank token counts for the control plane</td></tr>
+    <tr><td><code>AFDControlPayload</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L107" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:107 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:107</code></a></td><td>the control-plane envelope (per-stage metadata + flags)</td></tr>
+    <tr><td><code>AFDTransferMetadata</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L171" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:171 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:171</code></a></td><td>layer, stage and per-peer lengths for one transfer</td></tr>
+    <tr><td><code>AFDTransferContext</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L234" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:234 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:234</code></a></td><td>transfer metadata plus optional backend state</td></tr>
+    <tr><td><code>AFDA2FTransferPayload</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L261" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:261 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:261</code></a></td><td>the FFN-side receive payload (hidden states + extras)</td></tr>
+    <tr><td><code>encode_control_payload</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L320" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:320 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:320</code></a></td><td>payload &rarr; compact JSON bytes</td></tr>
+    <tr><td><code>send_control_payload</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L376" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:376 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:376</code></a></td><td>send the size tensor and the byte tensor</td></tr>
+  </tbody>
+</table>
+
+<h2 id="walk-through-the-main-methods">Walk through the main methods<a class="h-anchor" href="#walk-through-the-main-methods" aria-label="Link to this section">#</a></h2>
+
+<h3 id="afdtransfermetadata-the-per-transfer-record">AFDTransferMetadata: the per-transfer record<a class="h-anchor" href="#afdtransfermetadata-the-per-transfer-record" aria-label="Link to this section">#</a></h3>
+<p>This dataclass describes one layer-and-stage transfer. It validates its lengths and derives the total
+token count (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L171-L200" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:171-200 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:171-200</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L188-L200" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/connectors/metadata.py:188-200</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L188-L200" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">188</span><span class="ln">189</span><span class="ln">190</span><span class="ln">191</span><span class="ln">192</span><span class="ln">193</span><span class="ln">194</span><span class="ln">195</span><span class="ln">196</span><span class="ln">197</span><span class="ln">198</span><span class="ln hl">199</span><span class="ln">200</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(11 * var(--code-lh))"></span><pre><code class="language-python">    layer_idx: int
+    stage_idx: int
+    seq_lens: list[int]
+
+    def __post_init__(self) -&gt; None:
+        if not self.seq_lens:
+            raise ValueError(&quot;seq_lens cannot be empty&quot;)
+        if any(length &lt;= 0 for length in self.seq_lens):
+            raise ValueError(&quot;all sequence lengths must be positive&quot;)
+
+    @property
+    def total_tokens(self) -&gt; int:
+        return sum(self.seq_lens)</code></pre></div></div></div><figcaption class="code-caption">The fields, the validation and total_tokens.</figcaption></figure>
+<ol>
+  <li>Line 188-190. The fields: <code>layer_idx</code>, <code>stage_idx</code>, and the per-peer
+      <code>seq_lens</code> list.</li>
+  <li>Line 192-196. <code>__post_init__</code> rejects an empty list and any non-positive length.</li>
+  <li>Line 198-200. <code>total_tokens</code> is the sum of the lengths; it is the expected leading
+      dimension.</li>
+</ol>
+<p>Two class methods build the attention form (one length) and the FFN form (a list of lengths)
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L202-L228" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:202-228 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:202-228</code></a>). The shape check is
+<code>validate_tensor_shape</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L230-L231" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:230-231 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:230-231</code></a>).</p>
+
+<h3 id="encode-control-payload-the-wire-format">encode_control_payload: the wire format<a class="h-anchor" href="#encode-control-payload-the-wire-format" aria-label="Link to this section">#</a></h3>
+<p>The control payload is serialized to compact JSON, with only the fields the FFN side reads back
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L320-L346" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:320-346 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:320-346</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L329-L346" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/connectors/metadata.py:329-346</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L329-L346" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">329</span><span class="ln">330</span><span class="ln">331</span><span class="ln">332</span><span class="ln">333</span><span class="ln">334</span><span class="ln">335</span><span class="ln">336</span><span class="ln">337</span><span class="ln">338</span><span class="ln">339</span><span class="ln">340</span><span class="ln">341</span><span class="ln">342</span><span class="ln">343</span><span class="ln hl">344</span><span class="ln">345</span><span class="ln">346</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(15 * var(--code-lh))"></span><pre><code class="language-python">    metadata_payload: dict[str, dict[str, int | list[int]]] = {}
+    for stage_idx, dp_metadata in payload.dp_metadata_list.items():
+        stage_payload: dict[str, int | list[int]] = {
+            &quot;num_tokens_across_dp_cpu&quot;: dp_metadata.num_tokens_across_dp_cpu.tolist(),
+            &quot;max_tokens_across_dp_cpu&quot;: _to_int(dp_metadata.max_tokens_across_dp_cpu),
+        }
+        metadata_payload[str(int(stage_idx))] = stage_payload
+
+    wire_payload = {
+        &quot;dp_metadata_list&quot;: metadata_payload,
+        &quot;is_graph_capturing&quot;: bool(payload.is_graph_capturing),
+        &quot;is_warmup&quot;: bool(payload.is_warmup),
+        &quot;is_graph_replaying&quot;: bool(payload.is_graph_replaying),
+        &quot;is_profile&quot;: bool(payload.is_profile),
+    }
+    return json.dumps(wire_payload, separators=(&quot;,&quot;, &quot;:&quot;), sort_keys=True).encode(
+        &quot;utf-8&quot;,
+    )</code></pre></div></div></div><figcaption class="code-caption">Per-stage token counts and the flags, as sorted compact JSON.</figcaption></figure>
+<ol>
+  <li>Line 329-335. One entry per stage: the per-DP-rank token list and its max.</li>
+  <li>Line 337-343. The graph-capture, warm-up, replay and profile flags.</li>
+  <li>Line 344-346. <code>json.dumps</code> with sorted keys and no spaces. The <a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a>
+      page reads the send and receive.</li>
+</ol>
+
+<h3 id="afdconnectorfactory-name-to-class">AFDConnectorFactory: name to class<a class="h-anchor" href="#afdconnectorfactory-name-to-class" aria-label="Link to this section">#</a></h3>
+<p>The factory keeps a registry of loaders. <code>register_connector</code> stores a loader that imports the
+module lazily (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L26-L47" target="_blank" rel="noopener" title="afd_plugin/connectors/factory.py:26-47 at afd-plugin 7452d52"><code>afd_plugin/connectors/factory.py:26-47</code></a>); <code>create_connector</code> looks the name
+up, resolves the <a class="term" href="../reference/glossary.html#term-role-rank" data-term="role rank" data-def="The rank of a process inside its own role group. It comes from the DP, PCP and TP placement.">role rank</a>, and builds the instance
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L49-L68" target="_blank" rel="noopener" title="afd_plugin/connectors/factory.py:49-68 at afd-plugin 7452d52"><code>afd_plugin/connectors/factory.py:49-68</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L38-L47" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/connectors/factory.py:38-47</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L38-L47" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">38</span><span class="ln">39</span><span class="ln">40</span><span class="ln">41</span><span class="ln">42</span><span class="ln">43</span><span class="ln">44</span><span class="ln">45</span><span class="ln">46</span><span class="ln">47</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">        def loader() -&gt; type[AFDConnectorBase]:
+            module = importlib.import_module(module_path)
+            connector_cls = vars(module)[class_name]
+            if not issubclass(connector_cls, AFDConnectorBase):
+                raise TypeError(
+                    f&quot;{module_path}.{class_name} is not an AFDConnectorBase&quot;,
+                )
+            return connector_cls
+
+        cls._registry[name] = loader</code></pre></div></div></div><figcaption class="code-caption">The lazy loader: import the module, check the subclass, return the class.</figcaption></figure>
+<p>Three connectors are registered at import time; an unknown name raises
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L58-L59" target="_blank" rel="noopener" title="afd_plugin/connectors/factory.py:58-59 at afd-plugin 7452d52"><code>afd_plugin/connectors/factory.py:58-59</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L88-L102" target="_blank" rel="noopener" title="afd_plugin/connectors/factory.py:88-102 at afd-plugin 7452d52"><code>afd_plugin/connectors/factory.py:88-102</code></a>).</p>
+
+<h2 id="deep-dive">Deep dive<a class="h-anchor" href="#deep-dive" aria-label="Link to this section">#</a></h2>
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-metadata-objects-at-a-glance" class="dd-title">The metadata objects at a glance</h3></summary><div class="dd-body"><p>The dataclasses split the control plane from the data plane.</p>
+<table>
+  <thead><tr><th>Object</th><th>Plane</th><th>Carries</th></tr></thead>
+  <tbody>
+    <tr><td><code>AFDDPMetadata</code></td><td>control</td><td>per-DP-rank token counts (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L23-L44" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:23-44 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:23-44</code></a>)</td></tr>
+    <tr><td><code>AFDControlPayload</code></td><td>control</td><td>per-stage DP metadata + flags (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L135-L139" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:135-139 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:135-139</code></a>)</td></tr>
+    <tr><td><code>AFDTransferMetadata</code></td><td>data</td><td>layer, stage, per-peer lengths (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L188-L190" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:188-190 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:188-190</code></a>)</td></tr>
+    <tr><td><code>AFDTransferContext</code></td><td>data</td><td>metadata + optional backend state (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L257-L258" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:257-258 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:257-258</code></a>)</td></tr>
+    <tr><td><code>AFDA2FTransferPayload</code></td><td>data</td><td>hidden states, context, optional logits and IDs (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L279-L282" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:279-282 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:279-282</code></a>)</td></tr>
+  </tbody>
+</table>
+<p><code>AFDTransferContext.states</code> defaults to <code>None</code> so the generated
+<code>__init__</code> stays traceable by <code>torch.compile</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L244-L249" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:244-249 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:244-249</code></a>).</p></div></details>
+
+<h2 id="related-concepts">Related concepts<a class="h-anchor" href="#related-concepts" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li><a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a> — the ABC, the lifecycle and the factory in full.</li>
+  <li><a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a> — how the control payload is published and received.</li>
+  <li><a href="../concepts/wire-data.html">Data on the wire: tensors per layer and stage</a> — how the transfer metadata drives the fan-in and split.</li>
+  <li><a href="../code/p2p-py.html">connectors/gpu/p2p.py: the GPU P2P connector</a> — the GPU connector that implements the contract.</li>
+</ul>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>Which file holds the shared metadata dataclasses?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p><code>connectors/metadata.py</code>. It defines <code>AFDDPMetadata</code>,
+      <code>AFDControlPayload</code>, <code>AFDTransferMetadata</code> and the transfer payloads
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L23" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:23 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:23</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L171" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:171 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:171</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>How does the factory load a connector class?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Lazily. <code>register_connector</code> stores a loader that imports the module with
+      <code>importlib</code> and checks the subclass only when the name is first used
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L38-L47" target="_blank" rel="noopener" title="afd_plugin/connectors/factory.py:38-47 at afd-plugin 7452d52"><code>afd_plugin/connectors/factory.py:38-47</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>What is <code>total_tokens</code>, and where is it checked?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>It is the sum of the per-peer <code>seq_lens</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L198-L200" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:198-200 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:198-200</code></a>). <code>validate_tensor_shape</code> checks that a
+      tensor's leading dimension equals it (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L230-L231" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:230-231 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:230-231</code></a>).</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a><span class="rel-sum">Before each layer loop, the attention side sends per-stage token counts to the FFN side. This page shows what the control plane carries, both publish paths, the wire format and the receive side.</span></li><li><a href="../concepts/wire-data.html">Data on the wire: tensors per layer and stage</a><span class="rel-sum">The data plane moves hidden states between the two roles once per layer and stage. This page shows the tensors that cross, the transfer metadata, the fan-in and split, and the custom ops.</span></li><li><a href="../code/p2p-py.html">connectors/gpu/p2p.py: the GPU P2P connector</a><span class="rel-sum">The GPU connector moves hidden states with vLLM&#x27;s NCCL wrapper. This page maps the class layout, the collective init, the four data calls, the control plane and the custom ops.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../code/validation-py.html"><span class="pn-dir">← Previous</span><span class="pn-title">afd_plugin/validation.py: runtime wiring checks</span></a><a class="pn pn-next" href="../code/p2p-py.html"><span class="pn-dir">Next →</span><span class="pn-title">connectors/gpu/p2p.py: the GPU P2P connector</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#purpose">Purpose</a></li><li class="toc-l2"><a href="#where-it-sits">Where it sits</a></li><li class="toc-l3"><a href="#who-calls-it">Who calls it</a></li><li class="toc-l3"><a href="#what-it-calls">What it calls</a></li><li class="toc-l2"><a href="#key-classes-and-functions">Key classes and functions</a></li><li class="toc-l2"><a href="#walk-through-the-main-methods">Walk through the main methods</a></li><li class="toc-l3"><a href="#afdtransfermetadata-the-per-transfer-record">AFDTransferMetadata: the per-transfer record</a></li><li class="toc-l3"><a href="#encode-control-payload-the-wire-format">encode_control_payload: the wire format</a></li><li class="toc-l3"><a href="#afdconnectorfactory-name-to-class">AFDConnectorFactory: name to class</a></li><li class="toc-l2"><a href="#deep-dive">Deep dive</a></li><li class="toc-l3"><a href="#the-metadata-objects-at-a-glance">The metadata objects at a glance</a></li><li class="toc-l2"><a href="#related-concepts">Related concepts</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

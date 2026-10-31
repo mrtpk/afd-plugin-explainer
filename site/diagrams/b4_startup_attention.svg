@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="674" viewBox="0 0 1100 674">
+<defs><marker id="m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/></marker></defs>
+<rect width="1100" height="674" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Start-up, half 1: the attention server</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">vllm serve loads the plugin, the config patch picks the AFD worker, and the runner swap builds the AFD model runner.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">__init__.py  ·  config_validation.py  ·  attention_worker.py  ·  canvas 1100</text>
+<rect x="130.0" y="128.0" width="840.0" height="52.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<rect x="130.0" y="128.0" width="6.0" height="52.0" rx="3" fill="#9ca3af" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="145.0" r="10" fill="#9ca3af"/>
+<text x="152.0" y="149.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="168.0" y="150.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">vllm serve  (role: attention)</text>
+<rect x="915.5" y="136.0" width="46.5" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1"/>
+<text x="938.8" y="149.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">vLLM</text>
+<text x="168.0" y="170.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">recipe</text>
+<text x="220.0" y="170.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">2a2f_graph_dbo_dp1tp2.sh</text>
+<line x1="550.0" y1="180.0" x2="550.0" y2="194.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#m0)"/>
+<rect x="130.0" y="196.0" width="840.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="130.0" y="196.0" width="6.0" height="52.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="213.0" r="10" fill="#2563eb"/>
+<text x="152.0" y="217.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="168.0" y="218.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">plugin load: register_afd  (process 0)</text>
+<rect x="922.1" y="204.0" width="39.9" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="942.1" y="217.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">afd</text>
+<text x="168.0" y="238.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">adds</text>
+<text x="220.0" y="238.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">patches, routing, DBO op, models  (:142-216)</text>
+<line x1="550.0" y1="248.0" x2="550.0" y2="262.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#m0)"/>
+<rect x="130.0" y="264.0" width="840.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="130.0" y="264.0" width="6.0" height="52.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="281.0" r="10" fill="#2563eb"/>
+<text x="152.0" y="285.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="168.0" y="286.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">patched create_engine_config: worker_cls auto -&gt; AFDAttentionWorker</text>
+<rect x="908.9" y="272.0" width="53.1" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="935.4" y="285.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">patch</text>
+<text x="168.0" y="306.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">only if</text>
+<text x="220.0" y="306.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">worker_cls was &#x27;auto&#x27;  (:92-93, :179-197)</text>
+<line x1="550.0" y1="316.0" x2="550.0" y2="330.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#m0)"/>
+<rect x="130.0" y="332.0" width="840.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="130.0" y="332.0" width="6.0" height="52.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="349.0" r="10" fill="#2563eb"/>
+<text x="152.0" y="353.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">4</text>
+<text x="168.0" y="354.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">AFDAttentionWorker.init_device: swap runner class</text>
+<rect x="922.1" y="340.0" width="39.9" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="942.1" y="353.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">afd</text>
+<text x="168.0" y="374.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">builds</text>
+<text x="220.0" y="374.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">AFDAttentionModelRunnerV2  (:82-87)</text>
+<line x1="550.0" y1="384.0" x2="550.0" y2="398.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#m0)"/>
+<rect x="130.0" y="400.0" width="840.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="130.0" y="400.0" width="6.0" height="52.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="417.0" r="10" fill="#2563eb"/>
+<text x="152.0" y="421.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">5</text>
+<text x="168.0" y="422.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">load_model: connector init deferred to the end</text>
+<rect x="922.1" y="408.0" width="39.9" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="942.1" y="421.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">afd</text>
+<text x="168.0" y="442.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">overlaps</text>
+<text x="220.0" y="442.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention + FFN weight load  (:454-462)</text>
+<line x1="550.0" y1="452.0" x2="550.0" y2="466.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#m0)"/>
+<rect x="130.0" y="468.0" width="840.0" height="52.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<rect x="130.0" y="468.0" width="6.0" height="52.0" rx="3" fill="#7c3aed" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="485.0" r="10" fill="#7c3aed"/>
+<text x="152.0" y="489.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">6</text>
+<text x="168.0" y="490.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">KV cache (attention only) + graph capture</text>
+<rect x="908.9" y="476.0" width="53.1" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1"/>
+<text x="935.4" y="489.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#7c3aed" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">graph</text>
+<text x="168.0" y="510.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">sends</text>
+<text x="220.0" y="510.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">warm-up / capture control  (:509-553)</text>
+<line x1="550.0" y1="520.0" x2="550.0" y2="534.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#m0)"/>
+<rect x="130.0" y="536.0" width="840.0" height="52.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<rect x="130.0" y="536.0" width="6.0" height="52.0" rx="3" fill="#9ca3af" fill-opacity="1.0" stroke="none"/>
+<circle cx="152.0" cy="553.0" r="10" fill="#9ca3af"/>
+<text x="152.0" y="557.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">7</text>
+<text x="168.0" y="558.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">ready: the attention server accepts requests</text>
+<rect x="908.9" y="544.0" width="53.1" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1"/>
+<text x="935.4" y="557.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">ready</text>
+<text x="168.0" y="578.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">note</text>
+<text x="220.0" y="578.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN side handshake must also finish</text>
+<text x="30.0" y="619.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="608.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="619.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">plugin / patch</text>
+<rect x="222.3" y="608.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="243.3" y="619.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">graph capture</text>
+<rect x="349.3" y="608.0" width="14.0" height="14.0" rx="3" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<text x="370.3" y="619.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">native vLLM / state</text>
+<text x="30.0" y="642.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The connector rendezvous is deferred to the end of load_model so the two roles load weights at the same time (attention_model_runner_v2.py:454-462).</text>
+</svg>

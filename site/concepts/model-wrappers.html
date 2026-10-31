@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model wrappers: the role-aware decoder layer · AFD Plugin Explained</title>
+<meta name="description" content="Each supported model gets an AFD wrapper. The wrapper builds a decoder layer that constructs only the modules its role owns, and routes the FFN stage through the connector.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="concepts/model-wrappers">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a class="current" aria-current="page" href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>AFD concepts</span><span class="sep">›</span><span>Model split</span><span class="sep">›</span><span aria-current="page">Model wrappers</span></nav>
+<h1 class="page-title">Model wrappers: the role-aware decoder layer</h1>
+<div class="page-meta"><span class="level level-advanced" title="Level">Advanced</span><span class="meta-sec">AFD concepts</span><span class="meta-time">about 8 min read + 3 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a> <span class="level level-intermediate level-sm">Intermediate</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">An AFD <a class="term" href="../reference/glossary.html#term-model-wrapper" data-term="model wrapper" data-def="An AFD&lt;arch&gt; model class that makes a model role-aware. On the attention side the FFN stage becomes a remote proxy.">model wrapper</a> replaces each decoder layer with a role-aware layer. It builds only the modules its <a class="term" href="../reference/glossary.html#term-attention-role" data-term="attention role" data-def="The side that runs attention and sends hidden states to the FFN side. The default role of a process.">attention</a> or <a class="term" href="../reference/glossary.html#term-ffn-role" data-term="FFN role" data-def="The side that runs the feed-forward and MoE experts. It receives hidden states, computes, and sends the result back.">FFN role</a> owns.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p><a class="term" href="../reference/glossary.html#term-afd" data-term="AFD" data-def="Attention-FFN Disaggregation. The attention part and the feed-forward (FFN/MoE) part of a model run in separate server processes and exchange hidden states.">AFD</a> runs one model as two server processes. The two processes load the same checkpoint, but each
+one needs only part of it. The attention process needs attention; the FFN process needs the feed-forward and
+MoE experts. A model wrapper makes this split at the decoder-layer level.</p>
+<p>For DeepSeek, the wrapper is a small set of classes in
+<code>afd_plugin/model_executor/models/deepseek_v2.py</code>. The key class is
+<code>AFDDeepseekV2DecoderLayer</code>, a subclass of the native vLLM decoder layer
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L375" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:375 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:375</code></a>). Its constructor reads the AFD role, then
+builds only that role's modules. The stage it does not own becomes a placeholder or a
+<a class="term" href="../reference/glossary.html#term-remote-ffn-proxy" data-term="RemoteFFNProxy" data-def="A parameter-free module on the attention side. It replaces the FFN stage of a decoder layer and uses the connector instead.">remote FFN proxy</a>.</p>
+<p><strong>An everyday comparison.</strong> Think of two cooks who share one recipe card. One cook keeps only
+the sauce steps; the other keeps only the bake steps. Neither buys the ingredients for the other half. The
+comparison stops here: the two cooks still pass the half-made dish between them on every step, which the
+<a class="term" href="../reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">connector</a> does for hidden states.</p>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<figure class="diagram" id="fig-b3_model_wrappers"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Three panels. Panel 1: the attention role. A neutral box &#x27;role == attention&#x27; with self_attn native. Below it four blue branch boxes: dense layer uses RemoteFFNProxy (lines 516-517); CUDA MoE layer uses AFDDeepseekV2RemoteExpertsMoE (493-500); NPU MoE layer with gate-on-attention uses GateOnlyRemoteMoE (501-507); dense layer with gate-on-attention uses native DeepseekV2MLP (508-515). Panel 2: the FFN role. self_attn is PPMissingLayer; three emerald boxes: dense plus gate-on-attention uses PPMissingLayer (521-522); MoE layer uses native DeepseekV2MoE with the gate cleared (523-553); dense layer uses native DeepseekV2MLP (554-561). Panel 3: four violet boxes for the four model families, deepseek_v2.py, qwen3_moe.py (CUDA only), qwen3_5.py (CUDA text only) and deepseek_v4.py (sends input_ids)."><svg role="img" aria-label="Three panels. Panel 1: the attention role. A neutral box &#x27;role == attention&#x27; with self_attn native. Below it four blue branch boxes: dense layer uses RemoteFFNProxy (lines 516-517); CUDA MoE layer uses AFDDeepseekV2RemoteExpertsMoE (493-500); NPU MoE layer with gate-on-attention uses GateOnlyRemoteMoE (501-507); dense layer with gate-on-attention uses native DeepseekV2MLP (508-515). Panel 2: the FFN role. self_attn is PPMissingLayer; three emerald boxes: dense plus gate-on-attention uses PPMissingLayer (521-522); MoE layer uses native DeepseekV2MoE with the gate cleared (523-553); dense layer uses native DeepseekV2MLP (554-561). Panel 3: four violet boxes for the four model families, deepseek_v2.py, qwen3_moe.py (CUDA only), qwen3_5.py (CUDA text only) and deepseek_v4.py (sends input_ids)." xmlns="http://www.w3.org/2000/svg" width="1100" height="858" viewBox="0 0 1100 858">
+<defs></defs>
+<rect width="1100" height="858" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Role-aware decoder layers</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">AFDDeepseekV2DecoderLayer.__init__ builds only the module its AFD role owns.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">deepseek_v2.py:383-561  ·  one branch per layer kind  ·  canvas 1100</text>
+<rect x="20.0" y="120.0" width="1060.0" height="262.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="146.0" r="13" fill="#111827"/>
+<text x="46.0" y="150.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="151.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Attention role: what replaces mlp?</text>
+<text x="68.0" y="170.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">self_attn is always the native attention module (:474-491). mlp depends on the layer.</text>
+<rect x="400.0" y="180.0" width="300.0" height="40.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="550.0" y="200.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">role == attention</text>
+<text x="550.0" y="214.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">self_attn: native  (:474-491)</text>
+<rect x="46.0" y="246.0" width="500.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="58.0" y="266.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">dense layer  (default)</text>
+<text x="58.0" y="284.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">mlp = RemoteFFNProxy                 :516-517</text>
+<rect x="566.0" y="246.0" width="500.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="578.0" y="266.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">CUDA MoE layer</text>
+<text x="578.0" y="284.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">mlp = AFDDeepseekV2RemoteExpertsMoE   :493-500</text>
+<rect x="46.0" y="312.0" width="500.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="58.0" y="332.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">NPU MoE layer + gate-on-attention</text>
+<text x="58.0" y="350.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">mlp = GateOnlyRemoteMoE              :501-507</text>
+<rect x="566.0" y="312.0" width="500.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="578.0" y="332.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">dense layer + gate-on-attention</text>
+<text x="578.0" y="350.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">mlp = native DeepseekV2MLP (local)   :508-515</text>
+<rect x="20.0" y="404.0" width="1060.0" height="160.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="430.0" r="13" fill="#111827"/>
+<text x="46.0" y="434.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="435.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN role: self_attn is dropped, mlp is the real compute</text>
+<text x="68.0" y="454.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">self_attn = PPMissingLayer (:520). mlp depends on the layer kind.</text>
+<rect x="46.0" y="476.0" width="330.0" height="56.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="58.0" y="496.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">dense + gate-on-attention</text>
+<text x="58.0" y="513.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">mlp = PPMissingLayer</text>
+<text x="58.0" y="526.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">owned by attention  :521-522</text>
+<rect x="394.0" y="476.0" width="330.0" height="56.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="406.0" y="496.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">MoE layer</text>
+<text x="406.0" y="513.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">mlp = native DeepseekV2MoE</text>
+<text x="406.0" y="526.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">gate cleared on CUDA  :523-553</text>
+<rect x="742.0" y="476.0" width="330.0" height="56.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="754.0" y="496.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">dense layer</text>
+<text x="754.0" y="513.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">mlp = native DeepseekV2MLP</text>
+<text x="754.0" y="526.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">full FFN here  :554-561</text>
+<rect x="20.0" y="586.0" width="1060.0" height="170.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="612.0" r="13" fill="#111827"/>
+<text x="46.0" y="616.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="68.0" y="617.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Four model families, one pattern</text>
+<text x="68.0" y="636.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Each wrapper replaces the remote stage with a parameter-free proxy; the details differ.</text>
+<rect x="46.0" y="648.0" width="500.0" height="44.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="58.0" y="668.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">DeepSeek V2 / V3 / V3.2 / GLM-MoE-DSA</text>
+<text x="58.0" y="686.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">deepseek_v2.py   gate-on-attention optional</text>
+<rect x="566.0" y="648.0" width="500.0" height="44.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="578.0" y="668.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Qwen3-MoE</text>
+<text x="578.0" y="686.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">qwen3_moe.py   CUDA only, gate always on FFN</text>
+<rect x="46.0" y="704.0" width="500.0" height="44.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="58.0" y="724.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Qwen3.5 / 3.6 MoE</text>
+<text x="58.0" y="742.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">qwen3_5.py   CUDA, text only</text>
+<rect x="566.0" y="704.0" width="500.0" height="44.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="578.0" y="724.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">DeepSeek-V4</text>
+<text x="578.0" y="742.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">deepseek_v4.py   CUDA, sends int32 input_ids</text>
+<text x="30.0" y="785.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="774.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="785.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention role</text>
+<rect x="225.1" y="774.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="246.1" y="785.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN role</text>
+<rect x="321.4" y="774.0" width="14.0" height="14.0" rx="3" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<text x="342.4" y="785.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">native module</text>
+<rect x="446.7" y="774.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="467.7" y="785.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">model family</text>
+<text x="30.0" y="808.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">On CUDA every MoE layer uses the remote-experts shell (uses_remote_experts, :444); GateOnlyRemoteMoE is the NPU gate-on-attention path.</text>
+<text x="30.0" y="826.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The FFN role keeps the gate weights loadable but clears the runner gate on CUDA, so it consumes the attention-side router logits (:548-553).</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: each role builds only its own modules. The attention role has four mlp branches; the FFN role has three.</figcaption><a class="diagram-open" href="../diagrams/b3_model_wrappers.svg" target="_blank">Open full size ↗</a></div></figure>
+<p>Read panel 1 top to bottom. The attention role always builds the native attention module, then picks one of
+four branches for <code>mlp</code>. Panel 2 shows the FFN role, where the attention module is dropped and
+<code>mlp</code> is the real compute. Panel 3 lists the four model families and their main differences.</p>
+
+<h2 id="in-the-code">In the code<a class="h-anchor" href="#in-the-code" aria-label="Link to this section">#</a></h2>
+
+<h3 id="step-1-one-decoder-layer-class-two-roles">Step 1: One decoder-layer class, two roles<a class="h-anchor" href="#step-1-one-decoder-layer-class-two-roles" aria-label="Link to this section">#</a></h3>
+<p><code>AFDDeepseekV2DecoderLayer.__init__</code> reads the role from the AFD config, then calls
+<code>torch.nn.Module.__init__</code> directly instead of the native constructor. This way, it never allocates
+the modules of the other role (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L391-L396" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:391-396 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:391-396</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L391-L396" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/model_executor/models/deepseek_v2.py:391-396</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L391-L396" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">391</span><span class="ln">392</span><span class="ln">393</span><span class="ln">394</span><span class="ln">395</span><span class="ln">396</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">        # ### PATCH START: require an explicit AFD role before allocation.
+        afd_config = parse_afd_config(vllm_config, validate=False)
+        afd_role = afd_config.role
+
+        torch.nn.Module.__init__(self)
+        # ### PATCH END</code></pre></div></div></div><figcaption class="code-caption">The constructor reads the role before any allocation.</figcaption></figure>
+<p>The layer also records whether it is a MoE layer and whether the gate runs on the attention side
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L423-L444" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:423-444 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:423-444</code></a>). The flag
+<code>uses_remote_experts</code> is true only on CUDA for a MoE layer
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L444" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:444 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:444</code></a>).</p>
+
+<h3 id="step-2-the-attention-role-builds-native-attention-and-one-of-four-mlp-branches">Step 2: The attention role builds native attention and one of four mlp branches<a class="h-anchor" href="#step-2-the-attention-role-builds-native-attention-and-one-of-four-mlp-branches" aria-label="Link to this section">#</a></h3>
+<p>On the attention role, <code>self_attn</code> is always a native attention module; the class picks the
+right attention variant for the model (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L459-L491" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:459-491 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:459-491</code></a>).</p>
+<p>The <code>mlp</code> stage then takes one of four branches. The table names the class and the exact lines.</p>
+<table>
+  <thead><tr><th>Branch (condition)</th><th>mlp becomes</th><th>Lines</th></tr></thead>
+  <tbody>
+    <tr><td>CUDA MoE layer (<code>uses_remote_experts</code>)</td><td><code>AFDDeepseekV2RemoteExpertsMoE</code> (a <a class="term" href="../reference/glossary.html#term-remote-experts" data-term="remote experts" data-def="A parameter-free MoE shell on the attention role. It keeps the native MoE forward but sends the expert compute to the FFN role.">remote-experts</a> shell)</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L493-L500" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:493-500 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:493-500</code></a></td></tr>
+    <tr><td>NPU MoE layer + <a class="term" href="../reference/glossary.html#term-compute-gate-on-attention" data-term="compute_gate_on_attention" data-def="An AFD config flag. When true, the attention side computes the MoE gate and sends the router logits to the FFN side.">compute_gate_on_attention</a></td><td><code>GateOnlyRemoteMoE</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L501-L507" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:501-507 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:501-507</code></a></td></tr>
+    <tr><td>dense layer + gate on attention</td><td>native <code>DeepseekV2MLP</code> (computed locally)</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L508-L515" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:508-515 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:508-515</code></a></td></tr>
+    <tr><td>otherwise (dense default, or MoE with the gate on the FFN side)</td><td><code>RemoteFFNProxy</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L516-L517" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:516-517 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:516-517</code></a></td></tr>
+  </tbody>
+</table>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L493-L517" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/model_executor/models/deepseek_v2.py:493-517</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L493-L517" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">493</span><span class="ln hl">494</span><span class="ln">495</span><span class="ln">496</span><span class="ln">497</span><span class="ln">498</span><span class="ln">499</span><span class="ln">500</span><span class="ln">501</span><span class="ln hl">502</span><span class="ln">503</span><span class="ln">504</span><span class="ln">505</span><span class="ln">506</span><span class="ln">507</span><span class="ln">508</span><span class="ln hl">509</span><span class="ln">510</span><span class="ln">511</span><span class="ln">512</span><span class="ln">513</span><span class="ln">514</span><span class="ln">515</span><span class="ln">516</span><span class="ln hl">517</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(1 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(9 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(16 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(24 * var(--code-lh))"></span><pre><code class="language-python">            if self.uses_remote_experts:
+                self.mlp = AFDDeepseekV2RemoteExpertsMoE(
+                    config=config,
+                    parallel_config=parallel_config,
+                    layer_idx=layer_idx,
+                    prefix=f&quot;{prefix}.mlp&quot;,
+                    compute_gate_on_attention=self.compute_gate_on_attention,
+                )
+            elif self.compute_gate_on_attention and self.is_moe_layer:
+                self.mlp = GateOnlyRemoteMoE(
+                    config=config,
+                    layer_idx=layer_idx,
+                    prefix=f&quot;{prefix}.mlp&quot;,
+                    vllm_config=vllm_config,
+                )
+            elif self.compute_gate_on_attention:
+                self.mlp = native.DeepseekV2MLP(
+                    hidden_size=config.hidden_size,
+                    intermediate_size=config.intermediate_size,
+                    hidden_act=config.hidden_act,
+                    quant_config=quant_config,
+                    prefix=f&quot;{prefix}.mlp&quot;,
+                )
+            else:
+                self.mlp = RemoteFFNProxy(layer_idx=layer_idx)</code></pre></div></div></div><figcaption class="code-caption">The four mlp branches on the attention role.</figcaption></figure>
+<aside class="callout callout-note"><p class="callout-title">On CUDA the gate-on-attention MoE path is the shell, not GateOnlyRemoteMoE</p><div class="callout-body"><p>On CUDA a MoE
+layer always takes the first branch, because <code>uses_remote_experts</code> is true. The shell builds the
+gate inside itself when the flag is set (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L306-L320" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:306-320 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:306-320</code></a>).
+<code>GateOnlyRemoteMoE</code> is the NPU gate-on-attention path. See <a href="../concepts/moe-handoff.html">The MoE handoff: where the gate runs</a>.</p></div></aside>
+
+<h3 id="step-3-the-ffn-role-drops-attention-and-keeps-the-real-ffn">Step 3: The FFN role drops attention and keeps the real FFN<a class="h-anchor" href="#step-3-the-ffn-role-drops-attention-and-keeps-the-real-ffn" aria-label="Link to this section">#</a></h3>
+<p>On the FFN role, <code>self_attn</code> is a <code>PPMissingLayer</code>: a placeholder that holds no
+weights (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L520" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:520 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:520</code></a>). The <code>mlp</code> stage takes one
+of three branches.</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L519-L561" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/model_executor/models/deepseek_v2.py:519-561</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L519-L561" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">519</span><span class="ln hl">520</span><span class="ln">521</span><span class="ln hl">522</span><span class="ln">523</span><span class="ln">524</span><span class="ln">525</span><span class="ln">526</span><span class="ln">527</span><span class="ln">528</span><span class="ln">529</span><span class="ln">530</span><span class="ln">531</span><span class="ln">532</span><span class="ln">533</span><span class="ln">534</span><span class="ln">535</span><span class="ln">536</span><span class="ln">537</span><span class="ln hl">538</span><span class="ln">539</span><span class="ln">540</span><span class="ln">541</span><span class="ln">542</span><span class="ln">543</span><span class="ln">544</span><span class="ln">545</span><span class="ln">546</span><span class="ln">547</span><span class="ln">548</span><span class="ln">549</span><span class="ln">550</span><span class="ln">551</span><span class="ln">552</span><span class="ln">553</span><span class="ln">554</span><span class="ln hl">555</span><span class="ln">556</span><span class="ln">557</span><span class="ln">558</span><span class="ln">559</span><span class="ln">560</span><span class="ln">561</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(1 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(3 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(19 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(36 * var(--code-lh))"></span><pre><code class="language-python">        elif afd_role == &quot;ffn&quot;:
+            self.self_attn = native.PPMissingLayer()
+            if self.compute_gate_on_attention and not self.is_moe_layer:
+                self.mlp = native.PPMissingLayer()
+            elif self.is_moe_layer:
+                # vLLM models bind FusedMoEFactory at module import time. AFD
+                # can import native DeepSeek before vLLM-Ascend patches the
+                # package factory, so refresh that binding after platform
+                # initialization and before constructing the NPU FFN MoE.
+                if device_type == &quot;npu&quot;:
+                    native.FusedMoEFactory = fused_moe.FusedMoEFactory
+                moe_config = config
+                if afd_config.connector == AFD_ASYNC_CONNECTOR:
+                    moe_config = copy(config)
+                    # HF validates this public field as int, but pinned native
+                    # MoE uses only None to omit shared construction (0 builds
+                    # a zero-width MLP). Apply its sentinel to this private
+                    # construction copy; preserve the real model config.
+                    object.__setattr__(moe_config, &quot;n_shared_experts&quot;, None)
+                self.mlp = native.DeepseekV2MoE(
+                    config=moe_config,
+                    parallel_config=parallel_config,
+                    quant_config=quant_config,
+                    prefix=f&quot;{prefix}.mlp&quot;,
+                    # aiter applies routed_scaling_factor internally
+                    apply_routed_scale_to_output=(
+                        not native.rocm_aiter_ops.is_fused_moe_enabled()
+                    ),
+                )
+                if self.compute_gate_on_attention and device_type == &quot;cuda&quot;:
+                    # Keep the gate weights loadable, but with the runner&#x27;s
+                    # gate cleared it consumes the Attention-side router
+                    # logits instead of computing its own (gate is None means
+                    # external routing in the v0.30 runner contract).
+                    self.mlp.experts.gate = None
+            else:
+                self.mlp = native.DeepseekV2MLP(
+                    hidden_size=config.hidden_size,
+                    intermediate_size=config.intermediate_size,
+                    hidden_act=config.hidden_act,
+                    quant_config=quant_config,
+                    prefix=f&quot;{prefix}.mlp&quot;,
+                )</code></pre></div></div></div><figcaption class="code-caption">The FFN role: a missing attention module and the real FFN/MoE block.</figcaption></figure>
+<ol>
+  <li><strong>Dense layer with the gate on the attention side.</strong> The dense MLP runs on the attention
+      side, so the FFN role drops it too (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L521-L522" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:521-522 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:521-522</code></a>).</li>
+  <li><strong>MoE layer.</strong> The FFN role builds the native <code>DeepseekV2MoE</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L538-L547" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:538-547 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:538-547</code></a>). On CUDA with the gate on the
+      attention side, it clears the runner gate, so the experts consume the transported router logits
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L548-L553" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:548-553 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:548-553</code></a>).</li>
+  <li><strong>Dense layer (the gate stays on the FFN side).</strong> The FFN role builds the native
+      <code>DeepseekV2MLP</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L554-L561" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:554-561 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:554-561</code></a>).</li>
+</ol>
+
+<h3 id="step-4-remoteffnproxy-sends-yields-then-receives">Step 4: RemoteFFNProxy sends, yields, then receives<a class="h-anchor" href="#step-4-remoteffnproxy-sends-yields-then-receives" aria-label="Link to this section">#</a></h3>
+<p>The <a class="term" href="../reference/glossary.html#term-remote-ffn-proxy" data-term="RemoteFFNProxy" data-def="A parameter-free module on the attention side. It replaces the FFN stage of a decoder layer and uses the connector instead.">remote FFN proxy</a> is a parameter-free module
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L117-L125" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:117-125 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:117-125</code></a>). Its
+<code>_send_and_receive</code> is the one place where the attention role crosses to the FFN role inside a
+layer.</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L127-L158" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/model_executor/models/deepseek_v2.py:127-158</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L127-L158" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">127</span><span class="ln">128</span><span class="ln">129</span><span class="ln">130</span><span class="ln">131</span><span class="ln">132</span><span class="ln">133</span><span class="ln">134</span><span class="ln">135</span><span class="ln">136</span><span class="ln">137</span><span class="ln">138</span><span class="ln">139</span><span class="ln">140</span><span class="ln">141</span><span class="ln">142</span><span class="ln">143</span><span class="ln">144</span><span class="ln">145</span><span class="ln hl">146</span><span class="ln">147</span><span class="ln">148</span><span class="ln">149</span><span class="ln">150</span><span class="ln hl">151</span><span class="ln">152</span><span class="ln">153</span><span class="ln">154</span><span class="ln hl">155</span><span class="ln">156</span><span class="ln">157</span><span class="ln">158</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(19 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(24 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(28 * var(--code-lh))"></span><pre><code class="language-python">    def _send_and_receive(
+        self,
+        hidden_states: torch.Tensor,
+        **send_kwargs: torch.Tensor,
+    ) -&gt; torch.Tensor:
+        afd_metadata = get_afd_metadata_from_forward_context()
+        if afd_metadata is None:
+            raise RuntimeError(&quot;RemoteFFNProxy requires AFD forward metadata&quot;)
+        forward_context = get_forward_context()
+        stage_idx = int(
+            getattr(forward_context, &quot;ubatch_idx&quot;, afd_metadata.stage_idx),
+        )
+        afd_metadata.stage_idx = stage_idx
+        metadata = AFDTransferMetadata.create_attention_metadata(
+            layer_idx=self.layer_idx,
+            stage_idx=stage_idx,
+            seq_len=int(hidden_states.shape[0]),
+        )
+        context = AFDTransferContext(metadata=metadata)
+        afd_metadata.connector.send_attn_output(
+            hidden_states,
+            context,
+            **send_kwargs,
+        )
+        hidden_states = maybe_apply_dbo_yield(
+            hidden_states,
+            role=&quot;attention&quot;,
+        )
+        return afd_metadata.connector.recv_ffn_output(
+            ref_tensor=hidden_states,
+            ubatch_idx=stage_idx,
+        )</code></pre></div></div></div><figcaption class="code-caption">_send_and_receive: read the AFD metadata, send, yield for DBO, then receive.</figcaption></figure>
+<ol>
+  <li>Lines 132-139. Read the <a class="term" href="../reference/glossary.html#term-afd-forward-metadata" data-term="AFD forward metadata" data-def="A sidecar object that AFD attaches to the vLLM forward context. It holds the connector, the stage index and count, the transaction id, and the token offsets and lengths.">AFD forward metadata</a> and the stage index from
+      the vLLM forward context.</li>
+  <li>Lines 140-145. Build the transfer metadata for this layer and <a class="term" href="../reference/glossary.html#term-stage" data-term="stage" data-def="The DBO ubatch index of one transfer on the wire. A connector sends one transfer per layer and stage.">stage</a>, with the row count equal to
+      the number of tokens.</li>
+  <li>Line 146. <code>send_attn_output</code> sends the hidden states to the FFN side.</li>
+  <li>Line 151. <code>maybe_apply_dbo_yield</code> yields to the other microbatch under <a class="term" href="../reference/glossary.html#term-dbo" data-term="DBO" data-def="Dual-batch overlap. The step is split into two microbatches so compute and communication overlap. AFD uses exactly two.">DBO</a>.</li>
+  <li>Line 155. <code>recv_ffn_output</code> receives the FFN result into the same tensor and returns it.</li>
+</ol>
+<aside class="callout callout-note"><p class="callout-title">Two proxy subclasses add payloads</p><div class="callout-body"><p><code>AFDAttentionFusedMoE</code> is a
+<code>RemoteFFNProxy</code> that also sends <code>router_logits</code> when the experts use external routing
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L161-L191" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:161-191 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:161-191</code></a>).
+<code>GateOnlyRemoteMoE</code> sends the gate outputs too
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L254-L274" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:254-274 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:254-274</code></a>).</p></div></aside>
+
+<h3 id="step-5-weight-loading-keeps-only-this-role-s-checkpoint-paths">Step 5: Weight loading keeps only this role's checkpoint paths<a class="h-anchor" href="#step-5-weight-loading-keeps-only-this-role-s-checkpoint-paths" aria-label="Link to this section">#</a></h3>
+<p>Both roles read the same checkpoint, but each keeps only its own weights. The causal-LM wrapper filters the
+weight stream before the native loader sees it
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L964-L974" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:964-974 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:964-974</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L964-L974" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/model_executor/models/deepseek_v2.py:964-974</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L964-L974" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">964</span><span class="ln hl">965</span><span class="ln">966</span><span class="ln">967</span><span class="ln">968</span><span class="ln">969</span><span class="ln">970</span><span class="ln">971</span><span class="ln">972</span><span class="ln">973</span><span class="ln">974</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(1 * var(--code-lh))"></span><pre><code class="language-python">    def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -&gt; set[str]:
+        return super().load_weights(
+            _iter_role_weights(
+                weights,
+                role=self.afd_role,
+                config=self.config,
+                compute_gate_on_attention=self.afd_config.compute_gate_on_attention,
+                attention_shared_experts=self.afd_config.connector
+                == AFD_ASYNC_CONNECTOR,
+            )
+        )</code></pre></div></div></div><figcaption class="code-caption">load_weights wraps the weight iterator with a role filter.</figcaption></figure>
+<p>The filter is <code>_iter_role_weights</code>, which calls <code>_checkpoint_weight_roles</code> for each
+weight path and keeps a weight only when this role owns it
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L98-L114" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:98-114 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:98-114</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L69-L95" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/model_executor/models/deepseek_v2.py:69-95</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L69-L95" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">69</span><span class="ln">70</span><span class="ln">71</span><span class="ln">72</span><span class="ln">73</span><span class="ln">74</span><span class="ln">75</span><span class="ln">76</span><span class="ln">77</span><span class="ln">78</span><span class="ln">79</span><span class="ln">80</span><span class="ln">81</span><span class="ln hl">82</span><span class="ln">83</span><span class="ln hl">84</span><span class="ln">85</span><span class="ln">86</span><span class="ln">87</span><span class="ln hl">88</span><span class="ln">89</span><span class="ln">90</span><span class="ln">91</span><span class="ln">92</span><span class="ln">93</span><span class="ln">94</span><span class="ln hl">95</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(13 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(15 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(19 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(26 * var(--code-lh))"></span><pre><code class="language-python">def _checkpoint_weight_roles(
+    name: str,
+    config: _DeepseekAdapterConfig,
+    *,
+    compute_gate_on_attention: bool,
+    attention_shared_experts: bool = False,
+) -&gt; frozenset[str]:
+    &quot;&quot;&quot;Classify one native checkpoint path by its AFD execution owner.&quot;&quot;&quot;
+    layer_path = _weight_layer_path(name)
+    if layer_path is None:
+        return _BOTH_ROLES
+
+    layer_idx, stage, remainder = layer_path
+    if stage == &quot;self_attn&quot;:
+        return _ATTENTION_ROLE
+    if stage != &quot;mlp&quot;:
+        return _BOTH_ROLES
+
+    if not _is_moe_layer(config, layer_idx):
+        return _ATTENTION_ROLE if compute_gate_on_attention else _FFN_ROLE
+
+    if attention_shared_experts and remainder and remainder[0] == &quot;shared_experts&quot;:
+        return _ATTENTION_ROLE
+    is_moe_gate = bool(remainder) and remainder[0] == &quot;gate&quot;
+    if is_moe_gate and compute_gate_on_attention:
+        return _BOTH_ROLES
+    return _FFN_ROLE</code></pre></div></div></div><figcaption class="code-caption">_checkpoint_weight_roles: which role owns each decoder weight.</figcaption></figure>
+<ol>
+  <li>Lines 82-83. A <code>self_attn</code> weight belongs to the attention role.</li>
+  <li>Lines 84-85. A weight that is not under <code>mlp</code> belongs to both roles (for example embeddings).</li>
+  <li>Lines 87-88. A dense-layer <code>mlp</code> weight follows the gate flag: attention side when the gate
+      runs there, otherwise the FFN side.</li>
+  <li>Lines 92-95. A MoE <code>gate</code> weight goes to both roles when the gate runs on the attention side;
+      the other expert weights go to the FFN role.</li>
+</ol>
+
+<h2 id="deep-dive">Deep dive<a class="h-anchor" href="#deep-dive" aria-label="Link to this section">#</a></h2>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-other-three-model-families-one-at-a-time" class="dd-title">The other three model families, one at a time</h3></summary><div class="dd-body"><p>Four wrappers follow the same pattern. The differences are the native base model, the device support, and
+the extra payloads.</p>
+<p><strong>Qwen3-MoE</strong> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/qwen3_moe.py#L102" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/qwen3_moe.py:102 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/qwen3_moe.py:102</code></a>). The wrapper reuses
+the native <code>decoder_layer_type</code> hook instead of rebuilding <code>make_layers</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/qwen3_moe.py#L198-L202" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/qwen3_moe.py:198-202 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/qwen3_moe.py:198-202</code></a>). It supports CUDA only and requires
+<code>compute_gate_on_attention=false</code>, so the gate always runs on the FFN side
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/qwen3_moe.py#L82-L87" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/qwen3_moe.py:82-87 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/qwen3_moe.py:82-87</code></a>). On the attention role, <strong>every</strong>
+layer (dense or MoE) uses a plain <code>RemoteFFNProxy</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/qwen3_moe.py#L157" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/qwen3_moe.py:157 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/qwen3_moe.py:157</code></a>); there is no remote-experts shell. The FFN role
+builds the native <code>Qwen3MoeSparseMoeBlock</code> or <code>Qwen3MoeMLP</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/qwen3_moe.py#L167-L180" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/qwen3_moe.py:167-180 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/qwen3_moe.py:167-180</code></a>).</p>
+<p><strong>Qwen3.5 / 3.6 MoE.</strong> The code registers the architecture
+<code>Qwen3_5MoeForConditionalGeneration</code> as <code>AFDQwen3_5MoeForConditionalGeneration</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/qwen3_5.py#L444" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/qwen3_5.py:444 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/qwen3_5.py:444</code></a>). It supports CUDA only
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L34-L38" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/model_utils.py:34-38 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/model_utils.py:34-38</code></a>) and text-only execution; a multimodal config
+raises (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/qwen3_5.py#L22-L29" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/qwen3_5.py:22-29 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/qwen3_5.py:22-29</code></a>). It uses a remote-experts shell built on the
+native <code>Qwen3NextSparseMoeBlock</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/qwen3_5.py#L88-L90" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/qwen3_5.py:88-90 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/qwen3_5.py:88-90</code></a>), and
+reuses <code>AFDAttentionFusedMoE</code> from the DeepSeek wrapper
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/qwen3_5.py#L15" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/qwen3_5.py:15 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/qwen3_5.py:15</code></a>).</p>
+<p><strong>DeepSeek-V4</strong> (CUDA wrapper,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v4.py#L574-L578" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v4.py:574-578 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v4.py:574-578</code></a>). It supports CUDA only and the synchronous
+P2P connector (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v4.py#L392-L397" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v4.py:392-397 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v4.py:392-397</code></a>). Its hash-router MoE needs
+the token ids, so the wrapper sets <code>afd_requires_input_ids = True</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v4.py#L578" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v4.py:578 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v4.py:578</code></a>) and its proxy sends the
+<code>input_ids</code> alongside the hidden states
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v4.py#L108-L112" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v4.py:108-112 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v4.py:108-112</code></a>). The mHC residual state stays on the
+attention role (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v4.py#L175-L178" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v4.py:175-178 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v4.py:175-178</code></a>).</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-npu-wrappers-named-here-covered-on-the-overview-page" class="dd-title">The NPU wrappers (named here, covered on the overview page)</h3></summary><div class="dd-body"><p>The model table maps <code>DeepseekV4ForCausalLM</code> to the NPU wrapper only when
+<code>torch_npu</code> is importable; otherwise it maps to the CUDA wrapper
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L109-L113" target="_blank" rel="noopener" title="afd_plugin/__init__.py:109-113 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:109-113</code></a>). The NPU DeepSeek-V4 wrapper is
+<code>afd_plugin/model_executor/models/npu/deepseek_v4.py</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/npu/deepseek_v4.py#L649" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/npu/deepseek_v4.py:649 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/npu/deepseek_v4.py:649</code></a>). The DeepSeek V2/V3 NPU gate helpers live
+next to it (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/npu/deepseek_v2_attention_gate.py#L31-L80" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/npu/deepseek_v2_attention_gate.py:31-80 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/npu/deepseek_v2_attention_gate.py:31-80</code></a>). The
+<a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a> page reads the NPU code; this page covers the CUDA path.</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="worked-example-which-modules-load-for-deepseek-v2-lite" class="dd-title">Worked example: which modules load for DeepSeek-V2-Lite</h3></summary><div class="dd-body"><p>Take DeepSeek-V2-Lite with the GPU connector and <code>compute_gate_on_attention=false</code>. This model
+has 27 decoder layers, with the first layer dense and the rest MoE. <em>The 27 and the dense/MoE split are
+inferred from the DeepSeek-V2-Lite checkpoint config; they are not stored in either repository.</em></p>
+<ul>
+  <li><strong>Attention role.</strong> Each layer builds a native attention module. Layer 0 (dense) and every
+      MoE layer use the branches from Step 2: layer 0 gets a <code>RemoteFFNProxy</code>, each MoE layer gets
+      the remote-experts shell on CUDA. No expert weights load, because
+      <code>_checkpoint_weight_roles</code> sends them to the FFN role.</li>
+  <li><strong>FFN role.</strong> Each <code>self_attn</code> is a <code>PPMissingLayer</code>, so no attention
+      weights load. Layer 0 builds the native dense MLP; each MoE layer builds the native MoE block with its
+      experts. The attention and embedding weights do not load.</li>
+  <li><strong>Shared weights.</strong> The embeddings, the final norm and the LM head are not under a decoder
+      <code>mlp</code> or <code>self_attn</code>, so <code>_checkpoint_weight_roles</code> returns both roles
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L78-L79" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:78-79 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:78-79</code></a>).</li>
+</ul></div></details>
+
+<h2 id="what-can-go-wrong">What can go wrong<a class="h-anchor" href="#what-can-go-wrong" aria-label="Link to this section">#</a></h2>
+<aside class="callout callout-simplified"><p class="callout-title">Simplified</p><div class="callout-body"><p>This page shows the construction branches and the proxy. It does not read the full attention
+forward or the NPU gate helpers. The <a href="../concepts/moe-handoff.html">The MoE handoff: where the gate runs</a> page reads the gate placement, and
+<a href="../code/deepseek-v2-py.html">model_executor/models/deepseek_v2.py: the DeepSeek wrapper</a> reads the file class by class.</p></div></aside>
+<ul>
+  <li><strong>EPLB on CUDA remote experts.</strong> The attention role with CUDA remote experts and EPLB
+      raises at construction (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L445-L452" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:445-452 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:445-452</code></a>).</li>
+  <li><strong>Gate on attention off CUDA and NPU.</strong> <code>compute_gate_on_attention</code> needs CUDA or
+      NPU; another device raises (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L453-L456" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:453-456 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:453-456</code></a>).</li>
+  <li><strong>No AFD metadata in the context.</strong> The proxy raises when the forward context has no AFD
+      metadata (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L133-L134" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:133-134 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:133-134</code></a>).</li>
+  <li><strong>DeepSeek-V4 without the P2P connector.</strong> The wrapper raises if the connector is not the
+      synchronous P2P connector (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v4.py#L394-L397" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v4.py:394-397 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v4.py:394-397</code></a>).</li>
+</ul>
+<p><strong>Why it matters.</strong> The role filter and the branch set are what let two processes load one
+checkpoint without duplicating the large weights. A wrong branch would load the wrong half, or run the FFN in
+the wrong process.</p>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>On the FFN role, what is <code>self_attn</code>?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>A <code>PPMissingLayer</code>: a placeholder with no weights
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L520" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:520 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:520</code></a>). The FFN role does no attention.</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>Which model family must run the gate on the FFN side?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Qwen3-MoE. The wrapper requires <code>compute_gate_on_attention=false</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/qwen3_moe.py#L84-L87" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/qwen3_moe.py:84-87 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/qwen3_moe.py:84-87</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>On the attention role, which class does a CUDA MoE layer build for <code>mlp</code>, and
+    why not <code>GateOnlyRemoteMoE</code>?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p><code>AFDDeepseekV2RemoteExpertsMoE</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L493-L500" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:493-500 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:493-500</code></a>).
+      On CUDA, <code>uses_remote_experts</code> is true for a MoE layer, so the first branch is taken;
+      <code>GateOnlyRemoteMoE</code> is the NPU path
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L444" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:444 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:444</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>How does the attention role avoid loading the expert weights?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p><code>load_weights</code> wraps the weight stream in <code>_iter_role_weights</code>, which keeps a
+      weight only when the role owns it. Expert weights map to the FFN role
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L964-L974" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:964-974 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:964-974</code></a>,
+      <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L92-L95" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:92-95 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:92-95</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>Why does DeepSeek-V4 set <code>afd_requires_input_ids</code>, and where does the value
+    change the run?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Its hash-router MoE needs the token ids to route
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v4.py#L578" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v4.py:578 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v4.py:578</code></a>). The attention proxy sends the ids
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v4.py#L108-L112" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v4.py:108-112 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v4.py:108-112</code></a>), and the FFN runner reads the flag to
+      request them from the connector
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L221" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:221 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:221</code></a>).</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/moe-handoff.html">The MoE handoff: where the gate runs</a><span class="rel-sum">The compute_gate_on_attention flag decides whether the MoE gate runs on the attention side or the FFN side. The choice changes which classes build, what crosses the connector, and which layers the FFN runs.</span></li><li><a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a><span class="rel-sum">One base class sets the contract that every AFD connector follows. This page shows the lifecycle, the four data-path calls, the optional control plane, the config hook and the factory.</span></li><li><a href="../concepts/attention-runtime.html">The attention runtime: a seam over Model Runner V2</a><span class="rel-sum">The attention runner is a thin subclass of the native vLLM GPU Model Runner V2. It overrides a few seams for the connector and the control plane, and delegates the model forward, sampling and output to the native class.</span></li><li><a href="../code/deepseek-v2-py.html">model_executor/models/deepseek_v2.py: the DeepSeek wrapper</a><span class="rel-sum">This file holds the DeepSeek AFD wrapper: the role-aware decoder layer, the remote FFN proxies, the remote-experts MoE shell, and the model and causal-LM classes that filter weights by role.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../concepts/wire-data.html"><span class="pn-dir">← Previous</span><span class="pn-title">Data on the wire: tensors per layer and stage</span></a><a class="pn pn-next" href="../concepts/moe-handoff.html"><span class="pn-dir">Next →</span><span class="pn-title">The MoE handoff: where the gate runs</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#in-the-code">In the code</a></li><li class="toc-l3"><a href="#step-1-one-decoder-layer-class-two-roles">Step 1: One decoder-layer class, two roles</a></li><li class="toc-l3"><a href="#step-2-the-attention-role-builds-native-attention-and-one-of-four-mlp-branches">Step 2: The attention role builds native attention and one of four mlp branches</a></li><li class="toc-l3"><a href="#step-3-the-ffn-role-drops-attention-and-keeps-the-real-ffn">Step 3: The FFN role drops attention and keeps the real FFN</a></li><li class="toc-l3"><a href="#step-4-remoteffnproxy-sends-yields-then-receives">Step 4: RemoteFFNProxy sends, yields, then receives</a></li><li class="toc-l3"><a href="#step-5-weight-loading-keeps-only-this-role-s-checkpoint-paths">Step 5: Weight loading keeps only this role&#x27;s checkpoint paths</a></li><li class="toc-l2"><a href="#deep-dive">Deep dive</a></li><li class="toc-l3"><a href="#the-other-three-model-families-one-at-a-time">The other three model families, one at a time</a></li><li class="toc-l3"><a href="#the-npu-wrappers-named-here-covered-on-the-overview-page">The NPU wrappers (named here, covered on the overview page)</a></li><li class="toc-l3"><a href="#worked-example-which-modules-load-for-deepseek-v2-lite">Worked example: which modules load for DeepSeek-V2-Lite</a></li><li class="toc-l2"><a href="#what-can-go-wrong">What can go wrong</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

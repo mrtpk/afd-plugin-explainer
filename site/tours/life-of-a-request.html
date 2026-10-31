@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tour: Life of a request · AFD Plugin Explained</title>
+<meta name="description" content="Follow one request from the HTTP call to the sampled token, across the attention server and the FFN server, stop by stop. The control plane runs once per step; the data plane runs once per layer and stage.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/viz/viz.css">
+</head>
+<body data-root="../" data-page="tours/life-of-a-request">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a class="current" aria-current="page" href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>Guided tours</span><span class="sep">›</span><span aria-current="page">Life of a request</span></nav>
+<h1 class="page-title">Tour: Life of a request</h1>
+<div class="page-meta"><span class="level level-intermediate" title="Level">Intermediate</span><span class="meta-sec">Guided tours</span><span class="meta-time">about 11 min read + 1 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a> <span class="level level-intermediate level-sm">Intermediate</span></li><li><a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a> <span class="level level-intermediate level-sm">Intermediate</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">Follow one request from the HTTP call to the first token. It stays on the
+<a class="term" href="../reference/glossary.html#term-attention-server" data-term="attention server" data-def="The vllm serve process that plays the attention role. It owns the API server, the scheduler and the KV cache.">attention server</a> and reaches the <a class="term" href="../reference/glossary.html#term-ffn-server" data-term="FFN server" data-def="The vllm serve process that plays the FFN role. It has no API server, no scheduler and no KV cache; a connector loop drives it.">FFN server</a> only through the
+<a class="term" href="../reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">connector</a>.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p>A client sends a request to one server. The <a class="term" href="../reference/glossary.html#term-attention-role" data-term="attention role" data-def="The side that runs attention and sends hidden states to the FFN side. The default role of a process.">attention</a> server owns the API, the
+scheduler and the <a class="term" href="../reference/glossary.html#term-enginecore" data-term="EngineCore" data-def="The vLLM v1 engine core process. On the FFN role it returns early after the executor is built: no scheduler, no loop.">EngineCore</a>. The <a class="term" href="../reference/glossary.html#term-ffn-role" data-term="FFN role" data-def="The side that runs the feed-forward and MoE experts. It receives hidden states, computes, and sends the result back.">FFN</a> server owns no API for requests;
+a connector loop drives it. So the whole request path lives on the attention side, and the FFN side answers one
+piece of each model layer.</p>
+<p>This tour uses the simplest GPU recipe: one attention server, one FFN server, and the GPU
+<a class="term" href="../reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">P2P connector</a>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh#L7-L29" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh:7-29 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh:7-29</code></a>).
+Each server runs two ranks (<code>--tensor-parallel-size 2</code>), so the topology is 2A2F. Rank A0 maps to
+rank F0 (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed/topology.py#L135-L136" target="_blank" rel="noopener" title="afd_plugin/distributed/topology.py:135-136 at afd-plugin 7452d52"><code>afd_plugin/distributed/topology.py:135-136</code></a>). We follow A0 and F0.</p>
+<p>Keep one timing rule in mind. The <a class="term" href="../reference/glossary.html#term-control-plane" data-term="control plane" data-def="The path that carries DP metadata (per-stage token counts) from the attention side to the FFN side. It is optional.">control plane</a> publishes <a class="term" href="../reference/glossary.html#term-dp-metadata" data-term="DP metadata" data-def="The per-step data-parallel metadata the attention side sends to the FFN side on the control plane. It carries the per-stage token counts that set the tensor shapes.">DP metadata</a>
+<strong>once per step</strong>, before the layer loop. The <a class="term" href="../reference/glossary.html#term-data-plane" data-term="data plane" data-def="The path that carries the hidden-state tensors between the two roles. It is the connector&#x27;s send and receive calls.">data plane</a> sends tensors
+<strong>once per layer and <a class="term" href="../reference/glossary.html#term-stage" data-term="stage" data-def="The DBO ubatch index of one transfer on the wire. A connector sends one transfer per layer and stage.">stage</a></strong>. With <a class="term" href="../reference/glossary.html#term-dbo" data-term="DBO" data-def="Dual-batch overlap. The step is split into two microbatches so compute and communication overlap. AFD uses exactly two.">DBO</a> there are two stages per layer.</p>
+<aside class="callout callout-note"><p class="callout-title">The prefill/decode proxy is a different thing</p><div class="callout-body"><p>Some recipes start
+<code>tools/proxy_server.py</code>, a load-balance proxy copied from vLLM-Ascend
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tools/proxy_server.py#L1" target="_blank" rel="noopener" title="tools/proxy_server.py:1 at afd-plugin 7452d52"><code>tools/proxy_server.py:1</code></a>). It splits prefill and decode across servers in the <code>2p1a1f</code>
+recipes (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh#L110-L118" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:110-118 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:110-118</code></a>).
+It is not part of the attention/FFN split, and this tour does not use it.</p></div></aside>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<p>The two diagrams split the path in half. The first shows the attention server, from the HTTP call to the
+connector. The second shows the connector and the FFN server loop. The control-plane arrow runs once per step;
+the data-plane arrows run per layer and stage.</p>
+<figure class="diagram" id="fig-s2_request_attention"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: A vertical pipeline for the attention server. From top: box 1, HTTP request to the attention API server, tagged vLLM, with a note that requests go only here. Box 2, EngineCore and scheduler, tagged vLLM, attention side only. Box 3, executor to AFDAttentionWorker, tagged afd. Box 4, AFDAttentionModelRunnerV2.execute_model, tagged afd. Box 5, control-plane publish of DP metadata, tagged afd, in violet, with an arrow to a callout that reads once per step, before the layer loop, to the FFN server. Box 6, decoder layer: attention then FFN proxy, tagged afd, in emerald, with an arrow to a callout that reads per layer and stage, send hidden states and receive FFN output. A legend marks vLLM native, control plane, and data plane."><svg role="img" aria-label="A vertical pipeline for the attention server. From top: box 1, HTTP request to the attention API server, tagged vLLM, with a note that requests go only here. Box 2, EngineCore and scheduler, tagged vLLM, attention side only. Box 3, executor to AFDAttentionWorker, tagged afd. Box 4, AFDAttentionModelRunnerV2.execute_model, tagged afd. Box 5, control-plane publish of DP metadata, tagged afd, in violet, with an arrow to a callout that reads once per step, before the layer loop, to the FFN server. Box 6, decoder layer: attention then FFN proxy, tagged afd, in emerald, with an arrow to a callout that reads per layer and stage, send hidden states and receive FFN output. A legend marks vLLM native, control plane, and data plane." xmlns="http://www.w3.org/2000/svg" width="1100" height="778" viewBox="0 0 1100 778">
+<defs><marker id="dg-s2_request_attention-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/></marker><marker id="dg-s2_request_attention-m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker><marker id="dg-s2_request_attention-m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker></defs>
+<rect width="1100" height="778" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Life of a request - the attention server</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">One step on a 2A2F GPU recipe (one attention server, one FFN server, P2P connector). Follow rank A0.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_plugin/v1/worker/  ·  model_executor/models/deepseek_v2.py  ·  canvas 1100</text>
+<rect x="20.0" y="120.0" width="1060.0" height="546.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="146.0" r="13" fill="#111827"/>
+<text x="46.0" y="150.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="151.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">How does one request reach the connector?</text>
+<text x="68.0" y="170.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">vLLM native code carries the request to the AFD runner; the plugin publishes metadata, then sends per layer.</text>
+<rect x="60.0" y="184.0" width="440.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="60.0" y="184.0" width="6.0" height="52.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="82.0" cy="201.0" r="10" fill="#2563eb"/>
+<text x="82.0" y="205.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="98.0" y="206.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">HTTP request -&gt; attention API server</text>
+<rect x="445.5" y="192.0" width="46.5" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="468.8" y="205.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">vLLM</text>
+<text x="98.0" y="226.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre"></text>
+<text x="132.0" y="226.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">requests go only here (README.md:258)</text>
+<rect x="60.0" y="262.0" width="440.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="60.0" y="262.0" width="6.0" height="52.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="82.0" cy="279.0" r="10" fill="#2563eb"/>
+<text x="82.0" y="283.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="98.0" y="284.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">EngineCore + scheduler</text>
+<rect x="445.5" y="270.0" width="46.5" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="468.8" y="283.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">vLLM</text>
+<text x="98.0" y="304.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre"></text>
+<text x="132.0" y="304.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention side only; no FFN scheduler</text>
+<line x1="280.0" y1="236.0" x2="280.0" y2="260.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-s2_request_attention-m0)"/>
+<rect x="60.0" y="340.0" width="440.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="60.0" y="340.0" width="6.0" height="52.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="82.0" cy="357.0" r="10" fill="#2563eb"/>
+<text x="82.0" y="361.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="98.0" y="362.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">executor -&gt; AFDAttentionWorker</text>
+<rect x="452.1" y="348.0" width="39.9" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="472.1" y="361.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">afd</text>
+<text x="98.0" y="382.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre"></text>
+<text x="132.0" y="382.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention_worker.py:60</text>
+<line x1="280.0" y1="314.0" x2="280.0" y2="338.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-s2_request_attention-m0)"/>
+<rect x="60.0" y="418.0" width="440.0" height="52.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="60.0" y="418.0" width="6.0" height="52.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="82.0" cy="435.0" r="10" fill="#2563eb"/>
+<text x="82.0" y="439.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">4</text>
+<text x="98.0" y="440.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">AFDAttentionModelRunnerV2.execute_model</text>
+<rect x="452.1" y="426.0" width="39.9" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="472.1" y="439.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">afd</text>
+<text x="98.0" y="460.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre"></text>
+<text x="132.0" y="460.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention_model_runner_v2.py:570</text>
+<line x1="280.0" y1="392.0" x2="280.0" y2="416.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-s2_request_attention-m0)"/>
+<rect x="60.0" y="496.0" width="440.0" height="52.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<rect x="60.0" y="496.0" width="6.0" height="52.0" rx="3" fill="#7c3aed" fill-opacity="1.0" stroke="none"/>
+<circle cx="82.0" cy="513.0" r="10" fill="#7c3aed"/>
+<text x="82.0" y="517.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">5</text>
+<text x="98.0" y="518.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">control-plane publish (DP metadata)</text>
+<rect x="452.1" y="504.0" width="39.9" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1"/>
+<text x="472.1" y="517.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#7c3aed" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">afd</text>
+<text x="98.0" y="538.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre"></text>
+<text x="132.0" y="538.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention_metadata.py:115-116</text>
+<line x1="280.0" y1="470.0" x2="280.0" y2="494.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-s2_request_attention-m0)"/>
+<rect x="60.0" y="574.0" width="440.0" height="52.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<rect x="60.0" y="574.0" width="6.0" height="52.0" rx="3" fill="#059669" fill-opacity="1.0" stroke="none"/>
+<circle cx="82.0" cy="591.0" r="10" fill="#059669"/>
+<text x="82.0" y="595.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">6</text>
+<text x="98.0" y="596.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">decoder layer: attention, then FFN proxy</text>
+<rect x="452.1" y="582.0" width="39.9" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#059669" stroke-width="1"/>
+<text x="472.1" y="595.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">afd</text>
+<text x="98.0" y="616.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre"></text>
+<text x="132.0" y="616.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">deepseek_v2.py:146,155</text>
+<line x1="280.0" y1="548.0" x2="280.0" y2="572.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-s2_request_attention-m0)"/>
+<line x1="502.0" y1="522.0" x2="568.0" y2="522.0" stroke="#7c3aed" stroke-width="1.6" marker-end="url(#dg-s2_request_attention-m1)"/>
+<rect x="570.0" y="505.0" width="440.0" height="34.0" rx="8" fill="#ffffff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="584.0" y="526.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">once per step:</text>
+<text x="681.2" y="526.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">before the layer loop, to the FFN server</text>
+<line x1="502.0" y1="600.0" x2="568.0" y2="600.0" stroke="#059669" stroke-width="1.6" marker-end="url(#dg-s2_request_attention-m2)"/>
+<rect x="570.0" y="583.0" width="440.0" height="34.0" rx="8" fill="#ffffff" fill-opacity="1.0" stroke="#059669" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="584.0" y="604.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">per layer and stage:</text>
+<text x="717.2" y="604.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">send hidden states, receive FFN output</text>
+<text x="570.0" y="636.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre" font-style="italic">With DBO there are two stages per layer.</text>
+<text x="570.0" y="654.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre" font-style="italic">The connector crosses to the FFN server.</text>
+<text x="30.0" y="699.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="688.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="699.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">vLLM native</text>
+<rect x="215.3" y="688.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="236.3" y="699.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">control plane (DP metadata)</text>
+<rect x="421.1" y="688.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="442.1" y="699.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">data plane (hidden states)</text>
+<text x="30.0" y="728.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Simplified: one attention rank (A0). Left out: KV cache, sampling (after the last layer), the per-peer split, CUDA graphs.</text>
+<text x="30.0" y="746.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Native logits and sampling run after the last layer, on the attention side (not shown here).</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: half 1. vLLM native code carries the request to the AFD runner. The plugin publishes DP metadata once per step, then sends hidden states per layer and stage. Sampling runs after the last layer on the attention side.</figcaption><a class="diagram-open" href="../diagrams/s2_request_attention.svg" target="_blank">Open full size ↗</a></div></figure>
+<figure class="diagram" id="fig-s2_request_ffn"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Two panels for the FFN side. Panel 1, what crosses the connector: an attention server box A0 on the left and an FFN server box F0 on the right. Three arrows between them: DP metadata on the control plane once per step in violet; hidden states on the data plane per layer and stage in emerald; and the FFN output back on the data plane. Panel 2, the FFN server loop: box one, no request and no scheduler, execute_model raises; arrow to box two, receive DP metadata once per step; arrow to box three, _ffn_forward over layers and stages. Below, a labelled inner loop: recv_attn_output, then FFN or MoE compute, then send_ffn_output. A legend marks control plane, data plane, and no AFD transport."><svg role="img" aria-label="Two panels for the FFN side. Panel 1, what crosses the connector: an attention server box A0 on the left and an FFN server box F0 on the right. Three arrows between them: DP metadata on the control plane once per step in violet; hidden states on the data plane per layer and stage in emerald; and the FFN output back on the data plane. Panel 2, the FFN server loop: box one, no request and no scheduler, execute_model raises; arrow to box two, receive DP metadata once per step; arrow to box three, _ffn_forward over layers and stages. Below, a labelled inner loop: recv_attn_output, then FFN or MoE compute, then send_ffn_output. A legend marks control plane, data plane, and no AFD transport." xmlns="http://www.w3.org/2000/svg" width="1100" height="668" viewBox="0 0 1100 668">
+<defs><marker id="dg-s2_request_ffn-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker><marker id="dg-s2_request_ffn-m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker><marker id="dg-s2_request_ffn-m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/></marker></defs>
+<rect width="1100" height="668" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Life of a request - the connector and the FFN server</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The FFN server runs no scheduler. A daemon loop waits for the attention side and answers per layer and stage.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_plugin/v1/worker/ffn_worker.py  ·  ffn_model_runner.py  ·  canvas 1100</text>
+<rect x="20.0" y="120.0" width="1060.0" height="196.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="146.0" r="13" fill="#111827"/>
+<text x="46.0" y="150.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="151.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">What crosses the connector, and how often?</text>
+<text x="68.0" y="170.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The control plane carries DP metadata once per step; the data plane carries tensors per layer and stage.</text>
+<rect x="60.0" y="206.0" width="300.0" height="64.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="210.0" y="226.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">Attention server (A0)</text>
+<text x="210.0" y="244.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">sends / receives</text>
+<text x="210.0" y="259.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">deepseek_v2.py:146,155</text>
+<rect x="740.0" y="206.0" width="300.0" height="64.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="890.0" y="226.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">FFN server (F0)</text>
+<text x="890.0" y="244.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">receives / sends</text>
+<text x="890.0" y="259.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">ffn_model_runner.py:236,268</text>
+<line x1="362.0" y1="220.0" x2="738.0" y2="220.0" stroke="#7c3aed" stroke-width="1.6" marker-end="url(#dg-s2_request_ffn-m0)"/>
+<text x="550.0" y="212.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#7c3aed" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">DP metadata  (control plane, once per step)</text>
+<line x1="362.0" y1="240.0" x2="738.0" y2="240.0" stroke="#059669" stroke-width="1.6" marker-end="url(#dg-s2_request_ffn-m1)"/>
+<text x="550.0" y="235.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">hidden states  (data plane, per layer x stage)</text>
+<line x1="738.0" y1="260.0" x2="362.0" y2="260.0" stroke="#059669" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#dg-s2_request_ffn-m1)"/>
+<text x="550.0" y="272.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">FFN output  (data plane, back)</text>
+<rect x="20.0" y="338.0" width="1060.0" height="236.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="364.0" r="13" fill="#111827"/>
+<text x="46.0" y="368.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="369.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">What does the FFN server loop do?</text>
+<text x="68.0" y="388.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">It has no API server and no real scheduler. A connector-driven thread runs each step.</text>
+<rect x="60.0" y="408.0" width="300.0" height="58.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="210.0" y="428.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">No request, no scheduler</text>
+<text x="210.0" y="446.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">execute_model raises</text>
+<text x="210.0" y="460.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">ffn_worker.py:122-131</text>
+<rect x="420.0" y="408.0" width="300.0" height="58.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="570.0" y="428.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">recv DP metadata</text>
+<text x="570.0" y="446.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">once per step</text>
+<text x="570.0" y="460.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">ffn_worker.py:176</text>
+<rect x="780.0" y="408.0" width="300.0" height="58.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="930.0" y="428.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">_ffn_forward</text>
+<text x="930.0" y="446.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">layers x stages</text>
+<text x="930.0" y="460.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">ffn_model_runner.py:186</text>
+<line x1="362.0" y1="437.0" x2="418.0" y2="437.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-s2_request_ffn-m2)"/>
+<line x1="722.0" y1="437.0" x2="778.0" y2="437.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-s2_request_ffn-m2)"/>
+<text x="60.0" y="492.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">For each layer, for each stage:</text>
+<rect x="60.0" y="504.0" width="300.0" height="52.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="210.0" y="524.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">recv_attn_output</text>
+<text x="210.0" y="542.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">ffn_model_runner.py:236</text>
+<rect x="420.0" y="504.0" width="300.0" height="52.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="570.0" y="524.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">FFN / MoE compute</text>
+<text x="570.0" y="542.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">ffn_model_runner.py:263</text>
+<rect x="780.0" y="504.0" width="300.0" height="52.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="930.0" y="524.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">send_ffn_output</text>
+<text x="930.0" y="542.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">ffn_model_runner.py:268</text>
+<line x1="362.0" y1="530.0" x2="418.0" y2="530.0" stroke="#059669" stroke-width="1.6" marker-end="url(#dg-s2_request_ffn-m1)"/>
+<line x1="722.0" y1="530.0" x2="778.0" y2="530.0" stroke="#059669" stroke-width="1.6" marker-end="url(#dg-s2_request_ffn-m1)"/>
+<text x="30.0" y="607.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="596.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="118.3" y="607.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">control plane</text>
+<rect x="218.7" y="596.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="239.7" y="607.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">data plane / FFN side</text>
+<rect x="386.7" y="596.0" width="14.0" height="14.0" rx="3" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<text x="407.7" y="607.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">no AFD transport</text>
+<text x="30.0" y="636.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Simplified: one FFN rank (F0). The loop also handles warm-up and CUDA graph capture (ffn_worker.py:182-196), left out here.</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: half 2. The FFN server runs no scheduler. A connector-driven thread waits for DP metadata, then answers each layer and stage with recv_attn_output, compute, send_ffn_output.</figcaption><a class="diagram-open" href="../diagrams/s2_request_ffn.svg" target="_blank">Open full size ↗</a></div></figure>
+
+<figure class="viz" id="viz-request-stepper"><div class="viz-head"><span class="viz-badge">Interactive</span><span class="viz-title">Step through the request</span></div><div class="viz-mount" data-viz="request-stepper" role="region" aria-label="Step through the request"><div class="viz-fallback"><p>This interactive visual steps through the stops of the tour. It needs JavaScript. The stops below say the
+same thing in text.</p></div></div><figcaption class="viz-caption">Click <em>Next</em>, or press Tab then Enter. Each stop shows the active server and process, what crosses the connector, and the file and function.</figcaption></figure>
+<aside class="callout callout-simplified"><p class="callout-title">Simplified</p><div class="callout-body"><p>The visual and the diagrams show one attention rank and one FFN rank. They leave out the KV
+cache, the per-peer split, CUDA graphs, and the second DBO stage. The stops and the deep dives give the full
+detail, with citations.</p></div></aside>
+
+<section class="stop" id="stop-1"><h2 id="1the-client-calls-the-attention-api-server" class="stop-title"><span class="stop-num">1</span>The client calls the attention API server<a class="h-anchor" href="#1the-client-calls-the-attention-api-server" aria-label="Link to this section">#</a></h2><p>A client sends an HTTP request to the attention server. Clients must send requests only there. The FFN
+server is connector-driven (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L258-L260" target="_blank" rel="noopener" title="README.md:258-260 at afd-plugin 7452d52"><code>README.md:258-260</code></a>).</p>
+<figure class="code-excerpt" data-lang="none"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L258-L260" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">README.md:258-260</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L258-L260" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">258</span><span class="ln">259</span><span class="ln">260</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-none">Attention and FFN may be started in either order. Send requests only to the
+Attention API server. FFN workers are connector-driven; scheduler-driven FFN
+`execute_model()` calls fail fast.</code></pre></div></div></div><figcaption class="code-caption">The README: send requests only to the attention API server.</figcaption></figure>
+<p>The API server is native vLLM (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/entrypoints/openai/api_server.py" target="_blank" rel="noopener">api_server.py</a>). AFD
+changes nothing here. The request now enters the engine.</p></section>
+
+<section class="stop" id="stop-2"><h2 id="2enginecore-and-the-scheduler-batch-the-request" class="stop-title"><span class="stop-num">2</span>EngineCore and the scheduler batch the request<a class="h-anchor" href="#2enginecore-and-the-scheduler-batch-the-request" aria-label="Link to this section">#</a></h2><p>The attention server's <a class="term" href="../reference/glossary.html#term-enginecore" data-term="EngineCore" data-def="The vLLM v1 engine core process. On the FFN role it returns early after the executor is built: no scheduler, no loop.">EngineCore</a> and scheduler are native vLLM
+(<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/engine/core.py#L589" target="_blank" rel="noopener" title="vllm:vllm/v1/engine/core.py:589 at vLLM ced6857">EngineCore.step</a>). The scheduler builds a step, then the executor
+runs it (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/engine/core.py#L600-L601" target="_blank" rel="noopener" title="vllm:vllm/v1/engine/core.py:600-601 at vLLM ced6857"><code>vllm:vllm/v1/engine/core.py:600-601</code></a>).</p>
+<p>The FFN server has no such loop for requests. Its worker runs a connector loop instead
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L32-L38" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:32-38 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:32-38</code></a>). So the scheduler lives on the attention side only. See
+<a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a>.</p></section>
+
+<section class="stop" id="stop-3"><h2 id="3the-executor-calls-the-afd-attention-worker" class="stop-title"><span class="stop-num">3</span>The executor calls the AFD attention worker<a class="h-anchor" href="#3the-executor-calls-the-afd-attention-worker" aria-label="Link to this section">#</a></h2><p>This is the first plugin code on the path. The <a class="term" href="../reference/glossary.html#term-worker-cls" data-term="worker_cls" data-def="The vLLM parallel-config field that names the worker class. The plugin rewrites it, but only when it is &quot;auto&quot;.">worker_cls</a> was rewritten to the AFD
+attention worker at start-up, so the native executor now builds and calls
+<code>AFDAttentionWorker</code>. Its <code>init_device</code> checks the stack, then constructs the AFD runner
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_worker.py#L60-L88" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_worker.py:60-88 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_worker.py:60-88</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_worker.py#L60-L88" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/attention_worker.py:60-88</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_worker.py#L60-L88" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">60</span><span class="ln">61</span><span class="ln">62</span><span class="ln">63</span><span class="ln hl">64</span><span class="ln">65</span><span class="ln">66</span><span class="ln">67</span><span class="ln">68</span><span class="ln">69</span><span class="ln">70</span><span class="ln">71</span><span class="ln">72</span><span class="ln">73</span><span class="ln">74</span><span class="ln">75</span><span class="ln">76</span><span class="ln">77</span><span class="ln">78</span><span class="ln">79</span><span class="ln">80</span><span class="ln">81</span><span class="ln hl">82</span><span class="ln hl">83</span><span class="ln">84</span><span class="ln">85</span><span class="ln">86</span><span class="ln">87</span><span class="ln">88</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(4 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(22 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(23 * var(--code-lh))"></span><pre><code class="language-python">    def init_device(self):
+        &quot;&quot;&quot;Initialize the native GPU worker with the selected AFD runner.&quot;&quot;&quot;
+
+        # ### PATCH START: select and directly construct the AFD runner.
+        assert_compatible_afd_stack(
+            self.vllm_config,
+            caller=&quot;AFDAttentionWorker.init_device&quot;,
+            expected_role=&quot;attention&quot;,
+        )
+        validate_gpu_model_runner_v2_config(
+            self.vllm_config,
+            expected_role=&quot;attention&quot;,
+            device_type=self.device_config.device_type,
+        )
+
+        afd_model_config = get_afd_model_config(
+            self.vllm_config.model_config,
+            device_type=&quot;cuda&quot;,
+        )
+        self.vllm_config.model_config = afd_model_config
+        self.model_config = afd_model_config
+
+        native_runner_cls = gpu_model_runner_v2.GPUModelRunner
+        gpu_model_runner_v2.GPUModelRunner = AFDAttentionModelRunnerV2
+        try:
+            super().init_device()
+        finally:
+            gpu_model_runner_v2.GPUModelRunner = native_runner_cls
+        # ### PATCH END: select and directly construct the AFD runner.</code></pre></div></div></div><figcaption class="code-caption">AFDAttentionWorker.init_device: validate, then swap the runner class in for native construction.</figcaption></figure>
+<p>The worker validates the role and the runner config (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_worker.py#L64-L73" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_worker.py:64-73 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_worker.py:64-73</code></a>),
+then substitutes <code>AFDAttentionModelRunnerV2</code> for the native runner class while the native setup runs
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_worker.py#L82-L87" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_worker.py:82-87 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_worker.py:82-87</code></a>). See <a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a>.</p></section>
+
+<section class="stop" id="stop-4"><h2 id="4the-afd-runner-wraps-native-execute-model" class="stop-title"><span class="stop-num">4</span>The AFD runner wraps native execute_model<a class="h-anchor" href="#4the-afd-runner-wraps-native-execute-model" aria-label="Link to this section">#</a></h2><p>For each step, the executor calls the runner's <code>execute_model</code>. The AFD runner does not copy the
+native method. It wraps it in an AFD execution context, then delegates
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L570-L594" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:570-594 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:570-594</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L580-L594" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/attention_model_runner_v2.py:580-594</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L580-L594" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">580</span><span class="ln">581</span><span class="ln hl">582</span><span class="ln">583</span><span class="ln">584</span><span class="ln">585</span><span class="ln hl">586</span><span class="ln">587</span><span class="ln">588</span><span class="ln">589</span><span class="ln">590</span><span class="ln">591</span><span class="ln">592</span><span class="ln">593</span><span class="ln">594</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><pre><code class="language-python">        # ### PATCH START: scope AFD metadata provider/replay and profiler step.
+        step_afd_gpu_profiler(self.prof)
+        with _use_afd_execution_context(
+            self,
+            int(scheduler_output.total_num_scheduled_tokens),
+        ):
+            return super().execute_model(
+                scheduler_output,
+                intermediate_tensors,
+                dummy_run=dummy_run,
+                skip_attn_for_dummy_run=skip_attn_for_dummy_run,
+                is_profile=is_profile,
+                context_len=context_len,
+                valid_dummy_state_slots=valid_dummy_state_slots,
+            )</code></pre></div></div></div><figcaption class="code-caption">execute_model: scope the AFD context, then call native execute_model.</figcaption></figure>
+<p>Native <code>execute_model</code> still does the request, attention and KV work. Sampling is a separate
+native call (stop 12). The wrapper only installs AFD state around it (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L555-L568" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:555-568 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:555-568</code></a>).</p></section>
+
+<section class="stop" id="stop-5"><h2 id="5the-execution-context-installs-the-metadata-provider" class="stop-title"><span class="stop-num">5</span>The execution context installs the metadata provider<a class="h-anchor" href="#5the-execution-context-installs-the-metadata-provider" aria-label="Link to this section">#</a></h2><p>The context sets up two things that matter for AFD: a metadata provider that binds AFD metadata to the
+forward context, and, for DBO, a prepare seam on the ubatch runner
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L317-L349" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:317-349 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:317-349</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L340-L349" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/attention_model_runner_v2.py:340-349</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L340-L349" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">340</span><span class="ln">341</span><span class="ln">342</span><span class="ln">343</span><span class="ln">344</span><span class="ln">345</span><span class="ln">346</span><span class="ln">347</span><span class="ln">348</span><span class="ln">349</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">    try:
+        with (
+            use_gpu_mrv2_dbo_dispatch(),
+            replay_scope,
+            _use_afd_ubatch_preparation(runner),
+            use_afd_metadata_provider(
+                runner.install_afd_metadata_on_forward_context,
+            ),
+        ):
+            yield</code></pre></div></div></div><figcaption class="code-caption">_use_afd_execution_context: the metadata provider and the ubatch prepare seam.</figcaption></figure>
+<p>The metadata provider is <code>install_afd_metadata_on_forward_context</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L345-L347" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:345-347 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:345-347</code></a>). It runs when native code builds the
+forward context, and it is where the control plane publish happens. See <a href="../concepts/attention-runtime.html">The attention runtime: a seam over Model Runner V2</a>.</p></section>
+
+<section class="stop" id="stop-6"><h2 id="6the-control-plane-publishes-dp-metadata-once-per-step" class="stop-title"><span class="stop-num">6</span>The control plane publishes DP metadata (once per step)<a class="h-anchor" href="#6the-control-plane-publishes-dp-metadata-once-per-step" aria-label="Link to this section">#</a></h2><p>Before the layer loop, the attention side sends the <a class="term" href="../reference/glossary.html#term-dp-metadata" data-term="DP metadata" data-def="The per-step data-parallel metadata the attention side sends to the FFN side on the control plane. It carries the per-stage token counts that set the tensor shapes.">DP metadata</a> to the FFN side. The
+prepare seam calls <code>send_dp_metadata</code> once (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L156-L157" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:156-157 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:156-157</code></a>).
+That call updates the local control state, then sends one payload
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_metadata.py#L115-L116" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_metadata.py:115-116 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_metadata.py:115-116</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_metadata.py#L108-L116" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/attention_metadata.py:108-116</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_metadata.py#L108-L116" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">108</span><span class="ln">109</span><span class="ln">110</span><span class="ln">111</span><span class="ln">112</span><span class="ln">113</span><span class="ln">114</span><span class="ln hl">115</span><span class="ln hl">116</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(7 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(8 * var(--code-lh))"></span><pre><code class="language-python">        payload = AFDControlPayload(
+            dp_metadata_list=dp_metadata_list,
+            is_graph_capturing=is_graph_capturing,
+            is_warmup=is_warmup,
+            is_graph_replaying=is_graph_replaying,
+            is_profile=self._afd_is_profile,
+        )
+        self.connector.control_plane.update_state_from_dp_metadata(payload)
+        self.connector.control_plane.send_dp_metadata_list(payload)</code></pre></div></div></div><figcaption class="code-caption">send_dp_metadata: update the control state, then send one payload per step.</figcaption></figure>
+<p>This payload is the first thing that crosses the connector each step. It carries the per-stage token counts
+that set the tensor shapes. See <a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a>.</p>
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="why-once-per-step-and-the-two-code-paths" class="dd-title">Why &#x27;once per step&#x27;, and the two code paths</h3></summary><div class="dd-body"><p>Accuracy note from the fact checks: a per-step call must not be folded into the per-layer sequence. The
+publish runs before any layer sends data.</p>
+<p>There are two paths to the same publish. With DBO, the ubatch prepare seam calls
+<code>send_dp_metadata</code> after it slices the step into stages
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L153-L157" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:153-157 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:153-157</code></a>). Without ubatching, the metadata provider
+calls it from <code>install_afd_metadata_on_forward_context</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_metadata.py#L252-L257" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_metadata.py:252-257 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_metadata.py:252-257</code></a>). Either way, one publish per step, before the
+layer loop.</p>
+<p>The FFN side waits for exactly one payload per step. Its server loop calls
+<code>recv_dp_metadata_list</code> once (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L176" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:176 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:176</code></a>), then applies it
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L194-L203" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:194-203 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:194-203</code></a>).</p></div></details></section>
+
+<section class="stop" id="stop-7"><h2 id="7the-native-model-forward-runs-the-decoder-layers" class="stop-title"><span class="stop-num">7</span>The native model forward runs the decoder layers<a class="h-anchor" href="#7the-native-model-forward-runs-the-decoder-layers" aria-label="Link to this section">#</a></h2><p>Native <code>execute_model</code> runs the model forward. The AFD <a class="term" href="../reference/glossary.html#term-model-wrapper" data-term="model wrapper" data-def="An AFD&lt;arch&gt; model class that makes a model role-aware. On the attention side the FFN stage becomes a remote proxy.">model wrapper</a>
+subclasses the native model (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L725" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:725 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:725</code></a>), and its decoder layer
+subclasses the native layer (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L375" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:375 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:375</code></a>). On the attention
+role, the layer builds the native attention module and replaces only the FFN stage
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L459-L517" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:459-517 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:459-517</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L117-L125" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/model_executor/models/deepseek_v2.py:117-125</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L117-L125" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">117</span><span class="ln">118</span><span class="ln">119</span><span class="ln">120</span><span class="ln">121</span><span class="ln">122</span><span class="ln">123</span><span class="ln">124</span><span class="ln">125</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">class RemoteFFNProxy(nn.Module):
+    &quot;&quot;&quot;Parameter-free FFN stage executed through the AFD connector.&quot;&quot;&quot;
+
+    def __init__(self, *, layer_idx: int) -&gt; None:
+        super().__init__()
+        self.layer_idx = layer_idx
+
+    def forward(self, hidden_states: torch.Tensor) -&gt; torch.Tensor:
+        return self._send_and_receive(hidden_states)</code></pre></div></div></div><figcaption class="code-caption">RemoteFFNProxy: a parameter-free module that stands in for the FFN stage.</figcaption></figure>
+<p>A dense layer gets a <a class="term" href="../reference/glossary.html#term-remote-ffn-proxy" data-term="RemoteFFNProxy" data-def="A parameter-free module on the attention side. It replaces the FFN stage of a decoder layer and uses the connector instead.">RemoteFFNProxy</a>, which holds no weights
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L516-L517" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:516-517 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:516-517</code></a>). A MoE layer gets a native MoE shell whose
+experts are the same proxy (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L493-L500" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:493-500 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:493-500</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L332-L335" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:332-335 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:332-335</code></a>). Either way, the proxy's <code>forward</code>
+sends and receives through the connector instead of computing the FFN. The loop over layers is native vLLM.</p></section>
+
+<section class="stop" id="stop-8"><h2 id="8the-attention-side-sends-hidden-states-per-layer-and-stage" class="stop-title"><span class="stop-num">8</span>The attention side sends hidden states (per layer and stage)<a class="h-anchor" href="#8the-attention-side-sends-hidden-states-per-layer-and-stage" aria-label="Link to this section">#</a></h2><p>Inside each layer, the proxy sends its hidden states to the FFN side, then waits for the result. This runs
+once per layer, and once per <a class="term" href="../reference/glossary.html#term-stage" data-term="stage" data-def="The DBO ubatch index of one transfer on the wire. A connector sends one transfer per layer and stage.">stage</a> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L127-L158" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:127-158 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:127-158</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L140-L158" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/model_executor/models/deepseek_v2.py:140-158</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L140-L158" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">140</span><span class="ln">141</span><span class="ln">142</span><span class="ln">143</span><span class="ln">144</span><span class="ln">145</span><span class="ln hl">146</span><span class="ln">147</span><span class="ln">148</span><span class="ln">149</span><span class="ln">150</span><span class="ln">151</span><span class="ln">152</span><span class="ln">153</span><span class="ln">154</span><span class="ln hl">155</span><span class="ln">156</span><span class="ln">157</span><span class="ln">158</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(15 * var(--code-lh))"></span><pre><code class="language-python">        metadata = AFDTransferMetadata.create_attention_metadata(
+            layer_idx=self.layer_idx,
+            stage_idx=stage_idx,
+            seq_len=int(hidden_states.shape[0]),
+        )
+        context = AFDTransferContext(metadata=metadata)
+        afd_metadata.connector.send_attn_output(
+            hidden_states,
+            context,
+            **send_kwargs,
+        )
+        hidden_states = maybe_apply_dbo_yield(
+            hidden_states,
+            role=&quot;attention&quot;,
+        )
+        return afd_metadata.connector.recv_ffn_output(
+            ref_tensor=hidden_states,
+            ubatch_idx=stage_idx,
+        )</code></pre></div></div></div><figcaption class="code-caption">_send_and_receive: send_attn_output, a DBO yield, then recv_ffn_output.</figcaption></figure>
+<p>The call to <code>send_attn_output</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L146" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:146 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:146</code></a>) is
+the hidden-state tensor crossing the connector (the data plane). The matching
+<code>recv_ffn_output</code> comes later in the same call
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L155" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:155 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:155</code></a>).</p>
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-shapes-on-the-wire" class="dd-title">The shapes on the wire</h3></summary><div class="dd-body"><p>The tensor is <code>hidden_states</code> of shape <code>[num_tokens, hidden_size]</code> in the model dtype
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L331-L335" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:331-335 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:331-335</code></a>). The transfer metadata records the layer index, the stage
+index and the sequence lengths (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L188-L190" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:188-190 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:188-190</code></a>). For DeepSeek-V2-Lite the
+hidden size is 2048, which is <em>inferred</em> from the checkpoint config. With 8 decode tokens the tensor is
+<code>[8, 2048]</code>. See <a href="../concepts/wire-data.html">Data on the wire: tensors per layer and stage</a>.</p></div></details></section>
+
+<section class="stop" id="stop-9"><h2 id="9the-ffn-server-loop-receives-the-step" class="stop-title"><span class="stop-num">9</span>The FFN server loop receives the step<a class="h-anchor" href="#9the-ffn-server-loop-receives-the-step" aria-label="Link to this section">#</a></h2><p>The FFN worker runs a daemon thread, the <a class="term" href="../reference/glossary.html#term-ffn-server-loop" data-term="FFN server loop" data-def="The connector-driven daemon thread on the FFN worker. It waits for DP metadata, then runs the FFN compute for one step. No scheduler drives it.">FFN server loop</a>. No scheduler drives it.
+The loop waits for one DP-metadata payload, then runs the model
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L160-L196" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:160-196 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:160-196</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L168-L196" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/ffn_worker.py:168-196</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L168-L196" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">168</span><span class="ln">169</span><span class="ln">170</span><span class="ln">171</span><span class="ln">172</span><span class="ln">173</span><span class="ln">174</span><span class="ln">175</span><span class="ln hl">176</span><span class="ln">177</span><span class="ln">178</span><span class="ln">179</span><span class="ln">180</span><span class="ln">181</span><span class="ln">182</span><span class="ln">183</span><span class="ln">184</span><span class="ln">185</span><span class="ln">186</span><span class="ln">187</span><span class="ln">188</span><span class="ln">189</span><span class="ln">190</span><span class="ln hl">191</span><span class="ln">192</span><span class="ln">193</span><span class="ln">194</span><span class="ln">195</span><span class="ln">196</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(8 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(23 * var(--code-lh))"></span><pre><code class="language-python">        while not event.is_set():
+            if self.model_runner.connector.control_plane is None:
+                raise NotImplementedError(
+                    &quot;GPU FFN only supports control-plane-driven connectors; &quot;
+                    &quot;connectors without a control plane (control_plane is None) &quot;
+                    &quot;are not supported.&quot;,
+                )
+
+            payload = self.model_runner.connector.control_plane.recv_dp_metadata_list()
+            dp_metadata_list = payload.dp_metadata_list
+            is_attn_graph_capturing = payload.is_graph_capturing
+            is_warmup = payload.is_warmup
+            is_graph_replaying = payload.is_graph_replaying
+
+            if self.model_runner.use_cuda_graph and (
+                is_warmup or is_attn_graph_capturing
+            ):
+                self.model_runner.capture_model(
+                    dp_metadata_list=dp_metadata_list,
+                    is_warmup=is_warmup,
+                    is_attn_graph_capturing=is_attn_graph_capturing,
+                )
+            else:
+                self.model_runner.execute_model(
+                    dp_metadata_list=dp_metadata_list,
+                    is_graph_capturing=is_attn_graph_capturing,
+                    is_warmup=is_warmup,
+                    is_graph_replaying=is_graph_replaying,
+                )</code></pre></div></div></div><figcaption class="code-caption">_run_ffn_server_loop: receive DP metadata, then execute the model (or capture a graph).</figcaption></figure>
+<p>If the native scheduler ever calls the FFN worker's <code>execute_model</code>, it raises at once, so a
+misrouted request fails fast (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L122-L131" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:122-131 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:122-131</code></a>). The GPU FFN side also
+needs a control plane; a connector without one is rejected here
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L169-L174" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:169-174 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:169-174</code></a>).</p></section>
+
+<section class="stop" id="stop-10"><h2 id="10the-ffn-runner-computes-each-layer-and-stage" class="stop-title"><span class="stop-num">10</span>The FFN runner computes each layer and stage<a class="h-anchor" href="#10the-ffn-runner-computes-each-layer-and-stage" aria-label="Link to this section">#</a></h2><p><code>_ffn_forward</code> loops over the layers, and over the stages inside each layer. For each pair it
+receives the hidden states, runs the FFN or MoE compute, and sends the result back
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L222-L269" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:222-269 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:222-269</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L230-L269" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/ffn_model_runner.py:230-269</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L230-L269" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">230</span><span class="ln">231</span><span class="ln">232</span><span class="ln">233</span><span class="ln">234</span><span class="ln">235</span><span class="ln hl">236</span><span class="ln">237</span><span class="ln">238</span><span class="ln">239</span><span class="ln">240</span><span class="ln">241</span><span class="ln">242</span><span class="ln">243</span><span class="ln">244</span><span class="ln">245</span><span class="ln">246</span><span class="ln">247</span><span class="ln">248</span><span class="ln">249</span><span class="ln">250</span><span class="ln">251</span><span class="ln">252</span><span class="ln">253</span><span class="ln">254</span><span class="ln">255</span><span class="ln">256</span><span class="ln">257</span><span class="ln">258</span><span class="ln">259</span><span class="ln">260</span><span class="ln">261</span><span class="ln">262</span><span class="ln hl">263</span><span class="ln">264</span><span class="ln">265</span><span class="ln">266</span><span class="ln">267</span><span class="ln hl">268</span><span class="ln">269</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(33 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(38 * var(--code-lh))"></span><pre><code class="language-python">                for stage_idx in stage_ids:
+                    recv_kwargs: dict[str, Any] = {}
+                    if routing_spec is not None:
+                        recv_kwargs[&quot;routing_spec&quot;] = routing_spec
+                    if recv_input_ids:
+                        recv_kwargs[&quot;recv_input_ids&quot;] = True
+                    payload = self.connector.recv_attn_output(
+                        ubatch_idx=stage_idx,
+                        **recv_kwargs,
+                    )
+                    hidden_states = payload.hidden_states
+                    context = payload.context
+                    metadata = context.metadata
+                    metadata.layer_idx = layer_idx
+                    metadata.stage_idx = stage_idx
+                    if forward_context is not None:
+                        forward_context.dp_metadata = ffn_dp_metadata_list[
+                            metadata.stage_idx
+                        ]
+                        forward_context.additional_kwargs[&quot;afd_metadata&quot;] = metadata
+                        _set_moe_layer_index(forward_context, layer_idx)
+                    if (
+                        uses_remote_experts
+                        and self.afd_config.compute_gate_on_attention
+                    ):
+                        router_logits = payload.router_logits
+                        assert router_logits is not None
+                        rank_ffn_output = model.compute_experts_output(
+                            hidden_states,
+                            layer_idx,
+                            router_logits,
+                        )
+                    else:
+                        rank_ffn_output = self._execute_eager_mode(
+                            hidden_states,
+                            layer_idx,
+                            input_ids=payload.input_ids,
+                        )
+                    self.connector.send_ffn_output(rank_ffn_output, context)
+        return rank_ffn_output</code></pre></div></div></div><figcaption class="code-caption">The inner loop: recv_attn_output, FFN/MoE compute, send_ffn_output.</figcaption></figure>
+<ol>
+  <li><strong>Line 236.</strong> <code>recv_attn_output</code> returns the hidden states and the transfer
+    context (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L236" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:236 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:236</code></a>).</li>
+  <li><strong>Line 263.</strong> <code>_execute_eager_mode</code> runs the FFN and MoE for this layer
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L263" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:263 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:263</code></a>).</li>
+  <li><strong>Line 268.</strong> <code>send_ffn_output</code> sends the result back to the attention side
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L268" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:268 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:268</code></a>).</li>
+</ol></section>
+
+<section class="stop" id="stop-11"><h2 id="11the-attention-side-receives-the-ffn-output-and-continues-the-layer" class="stop-title"><span class="stop-num">11</span>The attention side receives the FFN output and continues the layer<a class="h-anchor" href="#11the-attention-side-receives-the-ffn-output-and-continues-the-layer" aria-label="Link to this section">#</a></h2><p>Back on the attention side, <code>recv_ffn_output</code> returns the FFN result into the proxy's output
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L155-L158" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:155-158 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:155-158</code></a>). The native layer then adds the residual
+and goes to the next layer.</p>
+<p>Stops 8 to 11 repeat for every decoder layer. With DBO they repeat for both stages of each layer. The
+control plane does not publish again inside this loop.</p></section>
+
+<section class="stop" id="stop-12"><h2 id="12the-attention-side-samples-the-token-and-returns-it" class="stop-title"><span class="stop-num">12</span>The attention side samples the token and returns it<a class="h-anchor" href="#12the-attention-side-samples-the-token-and-returns-it" aria-label="Link to this section">#</a></h2><p>After the forward pass, the worker makes a second call, <code>sample_tokens</code>
+(<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/gpu_worker.py#L1142-L1147" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/gpu_worker.py:1142-1147 at vLLM ced6857"><code>vllm:vllm/v1/worker/gpu_worker.py:1142-1147</code></a>). Native Model Runner V2 computes the logits and samples
+there (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/gpu/model_runner.py#L2048-L2050" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050 at vLLM ced6857"><code>vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050</code></a>). The AFD attention runner does not override
+this method, so it samples natively. So sampling runs on the attention side, once per step.</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L405-L406" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/ffn_model_runner.py:405-406</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L405-L406" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">405</span><span class="ln">406</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">    def sample_tokens(self, grammar_output: Any = None) -&gt; Any:
+        raise RuntimeError(&quot;FFN runners do not sample tokens&quot;)</code></pre></div></div></div><figcaption class="code-caption">The FFN runner never samples: sample_tokens raises.</figcaption></figure>
+<p>The FFN runner has no sampler; its <code>sample_tokens</code> raises
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L405-L406" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:405-406 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:405-406</code></a>). The attention server returns the token to the
+client over the same HTTP response. The request is done for this step.</p></section>
+
+<h2 id="the-loop">The loop<a class="h-anchor" href="#the-loop" aria-label="Link to this section">#</a></h2>
+<p>One request is many steps. Prefill runs one step for the prompt. Then decode runs one step per new token.
+Each step runs the whole path again: one control-plane publish, then every layer and stage of send and receive.</p>
+<table>
+  <thead><tr><th>Frequency</th><th>What runs</th><th>Where</th></tr></thead>
+  <tbody>
+    <tr><td>Once per step</td><td>control-plane publish of DP metadata</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_metadata.py#L115-L116" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_metadata.py:115-116 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_metadata.py:115-116</code></a> / <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L176" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:176 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:176</code></a></td></tr>
+    <tr><td>Once per layer and stage</td><td>send_attn_output, recv_ffn_output</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L146" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:146 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:146</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L155" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:155 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:155</code></a></td></tr>
+    <tr><td>Once per layer and stage</td><td>recv_attn_output, FFN compute, send_ffn_output</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L236" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:236 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:236</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L268" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:268 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:268</code></a></td></tr>
+    <tr><td>Once per step (after the last layer)</td><td>logits and sampling (attention side)</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L586-L594" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:586-594 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:586-594</code></a></td></tr>
+  </tbody>
+</table>
+
+<h2 id="what-can-go-wrong">What can go wrong<a class="h-anchor" href="#what-can-go-wrong" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li><strong>Requests sent to the FFN server.</strong> The FFN worker is connector-driven. A
+    scheduler-driven <code>execute_model</code> raises at once
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L122-L131" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:122-131 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:122-131</code></a>).</li>
+  <li><strong>A connector with no control plane on GPU.</strong> The GPU FFN loop supports only
+    control-plane-driven connectors, and raises otherwise
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L169-L174" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:169-174 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:169-174</code></a>).</li>
+  <li><strong>A shape that does not match the metadata.</strong> The send call checks the leading dimension
+    against the token count, and raises when it differs (skipped while <code>torch.compile</code> traces)
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L347-L353" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:347-353 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:347-353</code></a>).</li>
+  <li><strong>A host or port mismatch between the two servers.</strong> Both roles meet at the same
+    <a class="term" href="../reference/glossary.html#term-rendezvous" data-term="rendezvous" data-def="The host and port where the two roles meet to set up the connector process groups. Both servers use the same host and port.">rendezvous</a> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L271" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:271 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:271</code></a>). Different values make the group setup
+    hang until the timeout (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L275" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:275 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:275</code></a>).</li>
+</ul>
+<p><strong>Why it matters.</strong> The attention side owns the request, and the FFN side answers only pieces of
+each layer. If a request reaches the FFN server, or the two roles do not meet, the step cannot complete.</p>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>Which server do clients send requests to, and why not the other one?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The attention API server. The FFN server is connector-driven and has no request path; a
+      scheduler-driven FFN <code>execute_model</code> fails fast (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L258-L260" target="_blank" rel="noopener" title="README.md:258-260 at afd-plugin 7452d52"><code>README.md:258-260</code></a>,
+      <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L122-L131" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:122-131 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:122-131</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>What drives the model on the FFN server?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>A connector-driven daemon loop, the FFN server loop, not a scheduler. It waits for DP metadata, then
+      runs the model (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L160-L196" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:160-196 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:160-196</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>How many times does the control plane publish per step, and when?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Once, before the layer loop. The attention side sends one DP-metadata payload
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_metadata.py#L115-L116" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_metadata.py:115-116 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_metadata.py:115-116</code></a>); the FFN loop receives one
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L176" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:176 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:176</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>Which side samples the token?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The attention side. The AFD attention runner inherits the native <code>sample_tokens</code>, which
+      computes the logits and samples (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/gpu/model_runner.py#L2048-L2050" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050 at vLLM ced6857"><code>vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050</code></a>). The FFN runner's
+      <code>sample_tokens</code> raises (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L405-L406" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:405-406 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:405-406</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>List the data-plane calls for one layer and stage, in order, across both servers.</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Attention <code>send_attn_output</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L146" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:146 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:146</code></a>);
+      FFN <code>recv_attn_output</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L236" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:236 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:236</code></a>); FFN compute;
+      FFN <code>send_ffn_output</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L268" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:268 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:268</code></a>); attention
+      <code>recv_ffn_output</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L155" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:155 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:155</code></a>). The data
+      plane runs once per layer and stage; the control plane ran once before the loop.</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/attention-runtime.html">The attention runtime: a seam over Model Runner V2</a><span class="rel-sum">The attention runner is a thin subclass of the native vLLM GPU Model Runner V2. It overrides a few seams for the connector and the control plane, and delegates the model forward, sampling and output to the native class.</span></li><li><a href="../concepts/ffn-runtime.html">The FFN runtime: a connector-driven server loop</a><span class="rel-sum">The FFN side has no real scheduler (a no-op stand-in) and no KV cache. A daemon thread reads one control payload per step and drives the FFN model runner, which runs the FFN or experts for each layer and stage.</span></li><li><a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a><span class="rel-sum">Before each layer loop, the attention side sends per-stage token counts to the FFN side. This page shows what the control plane carries, both publish paths, the wire format and the receive side.</span></li><li><a href="../reference/afd-config.html">AFD config reference: the additional_config[&quot;afd&quot;] keys</a><span class="rel-sum">Every key of --additional-config &quot;afd&quot;, with its alias, type, default and validation, plus the connector_extra_config keys per connector and a worked example from a real recipe.</span></li><li><a href="../code/ffn-worker.html">v1/worker: the FFN worker and runner</a><span class="rel-sum">Three files run the FFN role: the worker that starts the daemon loop, the stand-alone connector-driven runner, and the CPU-safe token-count helpers that map attention counts to FFN ranks.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../tours/start-up.html"><span class="pn-dir">← Previous</span><span class="pn-title">Tour: Start-up</span></a><a class="pn pn-next" href="../tours/one-decode-step.html"><span class="pn-dir">Next →</span><span class="pn-title">Tour: One decode step</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#1the-client-calls-the-attention-api-server">1The client calls the attention API server</a></li><li class="toc-l2"><a href="#2enginecore-and-the-scheduler-batch-the-request">2EngineCore and the scheduler batch the request</a></li><li class="toc-l2"><a href="#3the-executor-calls-the-afd-attention-worker">3The executor calls the AFD attention worker</a></li><li class="toc-l2"><a href="#4the-afd-runner-wraps-native-execute-model">4The AFD runner wraps native execute_model</a></li><li class="toc-l2"><a href="#5the-execution-context-installs-the-metadata-provider">5The execution context installs the metadata provider</a></li><li class="toc-l2"><a href="#6the-control-plane-publishes-dp-metadata-once-per-step">6The control plane publishes DP metadata (once per step)</a></li><li class="toc-l3"><a href="#why-once-per-step-and-the-two-code-paths">Why &#x27;once per step&#x27;, and the two code paths</a></li><li class="toc-l2"><a href="#7the-native-model-forward-runs-the-decoder-layers">7The native model forward runs the decoder layers</a></li><li class="toc-l2"><a href="#8the-attention-side-sends-hidden-states-per-layer-and-stage">8The attention side sends hidden states (per layer and stage)</a></li><li class="toc-l3"><a href="#the-shapes-on-the-wire">The shapes on the wire</a></li><li class="toc-l2"><a href="#9the-ffn-server-loop-receives-the-step">9The FFN server loop receives the step</a></li><li class="toc-l2"><a href="#10the-ffn-runner-computes-each-layer-and-stage">10The FFN runner computes each layer and stage</a></li><li class="toc-l2"><a href="#11the-attention-side-receives-the-ffn-output-and-continues-the-layer">11The attention side receives the FFN output and continues the layer</a></li><li class="toc-l2"><a href="#12the-attention-side-samples-the-token-and-returns-it">12The attention side samples the token and returns it</a></li><li class="toc-l2"><a href="#the-loop">The loop</a></li><li class="toc-l2"><a href="#what-can-go-wrong">What can go wrong</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="../assets/viz/request-stepper.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

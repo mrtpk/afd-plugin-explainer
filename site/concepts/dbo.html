@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dual-batch overlap (DBO): two stages per step · AFD Plugin Explained</title>
+<meta name="description" content="DBO splits one step into exactly two stages. While one stage waits on the FFN side, the other computes attention, so the two roles stay busy. AFD adds a yield op and scoped patches for DP1.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/viz/viz.css">
+</head>
+<body data-root="../" data-page="concepts/dbo">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a class="current" aria-current="page" href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>AFD concepts</span><span class="sep">›</span><span>Execution</span><span class="sep">›</span><span aria-current="page">Dual-batch overlap</span></nav>
+<h1 class="page-title">Dual-batch overlap (DBO): two stages per step</h1>
+<div class="page-meta"><span class="level level-advanced" title="Level">Advanced</span><span class="meta-sec">AFD concepts</span><span class="meta-time">about 6 min read + 3 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../concepts/attention-runtime.html">The attention runtime: a seam over Model Runner V2</a> <span class="level level-advanced level-sm">Advanced</span></li><li><a href="../concepts/ffn-runtime.html">The FFN runtime: a connector-driven server loop</a> <span class="level level-advanced level-sm">Advanced</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text"><a class="term" href="../reference/glossary.html#term-dbo" data-term="DBO" data-def="Dual-batch overlap. The step is split into two microbatches so compute and communication overlap. AFD uses exactly two.">Dual-batch overlap</a> splits one <a class="term" href="../reference/glossary.html#term-step" data-term="step" data-def="One engine iteration on the attention server: the scheduler picks a batch, the model runs all layers once, and vLLM samples. The FFN server follows each step.">step</a> into exactly two <a class="term" href="../reference/glossary.html#term-stage" data-term="stage" data-def="The DBO ubatch index of one transfer on the wire. A connector sends one transfer per layer and stage.">stages</a>. While one stage waits on the <a class="term" href="../reference/glossary.html#term-ffn-role" data-term="FFN role" data-def="The side that runs the feed-forward and MoE experts. It receives hidden states, computes, and sends the result back.">FFN side</a>, the other computes attention.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p>In AFD the attention side sends hidden states to the FFN side and waits for the result. If it waited with
+nothing else to do, the GPU would idle. <a class="term" href="../reference/glossary.html#term-dbo" data-term="DBO" data-def="Dual-batch overlap. The step is split into two microbatches so compute and communication overlap. AFD uses exactly two.">Dual-batch overlap</a> (DBO) cuts each step into two
+<a class="term" href="../reference/glossary.html#term-stage" data-term="stage" data-def="The DBO ubatch index of one transfer on the wire. A connector sends one transfer per layer and stage.">stages</a>. The attention side sends stage 0, then works on stage 1 while the FFN side computes
+stage 0. The two roles overlap.</p>
+<p>DBO is a native vLLM feature. The plugin reuses it and adds two things: a <a class="term" href="../reference/glossary.html#term-dbo-yield" data-term="DBO yield" data-def="A custom op that hands control to the other ubatch thread. The AFD proxy calls it between the send and the receive, so the second stage runs while the first waits.">yield</a> op that
+hands control to the other stage between send and receive, and scoped <a class="term" href="../reference/glossary.html#term-patch" data-term="patch" data-def="A compat module that replaces a vLLM function at load time. The plugin applies a small set of patches.">patches</a> that let DBO run
+even with one data-parallel rank.</p>
+<p><strong>An everyday comparison.</strong> Think of a cook with two pans. They start pan 1, and while it
+simmers they start pan 2, instead of standing and watching pan 1. The comparison stops here: AFD always uses
+exactly two pans, never three, and a validator enforces that.</p>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<figure class="diagram" id="fig-b4_dbo"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Two panels. Panel 1, two stages overlap on one layer. An attention lane shows: attn stage 0 compute, send stage 0, attn stage 1 while stage 0 waits, send stage 1, then recv stage 0 and recv stage 1. A violet marker reads DBO yield between send and receive. An FFN lane below shows ffn stage 0 and ffn stage 1, each doing recv, compute, send, lined up under the sends. Panel 2, DP1 DBO: two boxes, use_gpu_mrv2_ubatch_factory scoped in initialize_kv_cache, and use_gpu_mrv2_dbo_dispatch scoped in the execute_model context. A legend marks attention stage, FFN stage, and DBO yield or scoped patch."><svg role="img" aria-label="Two panels. Panel 1, two stages overlap on one layer. An attention lane shows: attn stage 0 compute, send stage 0, attn stage 1 while stage 0 waits, send stage 1, then recv stage 0 and recv stage 1. A violet marker reads DBO yield between send and receive. An FFN lane below shows ffn stage 0 and ffn stage 1, each doing recv, compute, send, lined up under the sends. Panel 2, DP1 DBO: two boxes, use_gpu_mrv2_ubatch_factory scoped in initialize_kv_cache, and use_gpu_mrv2_dbo_dispatch scoped in the execute_model context. A legend marks attention stage, FFN stage, and DBO yield or scoped patch." xmlns="http://www.w3.org/2000/svg" width="1100" height="592" viewBox="0 0 1100 592">
+<defs><marker id="dg-b4_dbo-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker></defs>
+<rect width="1100" height="592" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Dual-batch overlap (DBO)</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">One step is split into exactly two stages. While stage 0 waits on the FFN side, stage 1 computes attention.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">dbo.py  ·  deepseek_v2.py  ·  gpu_mrv2_ubatching.py  ·  canvas 1100</text>
+<rect x="20.0" y="124.0" width="1060.0" height="226.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="150.0" r="13" fill="#111827"/>
+<text x="46.0" y="154.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="155.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Two stages overlap on one layer</text>
+<text x="68.0" y="174.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The proxy sends stage 0, yields, then stage 1 runs; the FFN side answers each stage (deepseek_v2.py:146-158).</text>
+<text x="46.0" y="194.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">attention</text>
+<rect x="46.0" y="200.0" width="150.0" height="40.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="58.0" y="220.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">attn s0</text>
+<text x="58.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">compute</text>
+<rect x="206.0" y="200.0" width="120.0" height="40.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="218.0" y="220.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">send s0</text>
+<text x="218.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">:146</text>
+<rect x="336.0" y="200.0" width="150.0" height="40.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="348.0" y="220.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">attn s1</text>
+<text x="348.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">while s0 waits</text>
+<rect x="496.0" y="200.0" width="120.0" height="40.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="508.0" y="220.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">send s1</text>
+<text x="508.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">:146</text>
+<rect x="626.0" y="200.0" width="130.0" height="40.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="638.0" y="220.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">recv s0</text>
+<text x="638.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">:155</text>
+<rect x="766.0" y="200.0" width="130.0" height="40.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="778.0" y="220.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">recv s1</text>
+<text x="778.0" y="234.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">:155</text>
+<text x="326.0" y="264.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#7c3aed" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">DBO yield between send and recv (dbo.py)</text>
+<line x1="266.0" y1="240.0" x2="266.0" y2="252.0" stroke="#7c3aed" stroke-width="1.4" stroke-dasharray="3 3"/>
+<text x="46.0" y="286.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN</text>
+<rect x="206.0" y="292.0" width="150.0" height="40.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="218.0" y="312.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">ffn s0</text>
+<text x="218.0" y="326.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">recv/compute/send</text>
+<rect x="496.0" y="292.0" width="150.0" height="40.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="508.0" y="312.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">ffn s1</text>
+<text x="508.0" y="326.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">recv/compute/send</text>
+<line x1="266.0" y1="240.0" x2="266.0" y2="290.0" stroke="#059669" stroke-width="1.6" marker-end="url(#dg-b4_dbo-m0)"/>
+<line x1="556.0" y1="240.0" x2="556.0" y2="290.0" stroke="#059669" stroke-width="1.6" marker-end="url(#dg-b4_dbo-m0)"/>
+<line x1="356.0" y1="312.0" x2="686.0" y2="242.0" stroke="#059669" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#dg-b4_dbo-m0)"/>
+<rect x="20.0" y="370.0" width="1060.0" height="120.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="396.0" r="13" fill="#111827"/>
+<text x="46.0" y="400.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="401.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">DP1 DBO: scoped patches re-enable what native vLLM excludes</text>
+<text x="68.0" y="420.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Native vLLM builds no ubatch runner at DP1. The patch does, only inside AFD&#x27;s own calls (gpu_mrv2_ubatching.py).</text>
+<rect x="46.0" y="436.0" width="480.0" height="40.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="58.0" y="456.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">use_gpu_mrv2_ubatch_factory</text>
+<text x="58.0" y="470.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">scoped in initialize_kv_cache  (:263-271, :480)</text>
+<rect x="560.0" y="436.0" width="494.0" height="40.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="572.0" y="456.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">use_gpu_mrv2_dbo_dispatch</text>
+<text x="572.0" y="470.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">scoped in execute_model context  (:274-282, :342)</text>
+<text x="30.0" y="519.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="508.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="519.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention stage</text>
+<rect x="234.2" y="508.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="255.2" y="519.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN stage</text>
+<rect x="339.7" y="508.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="360.7" y="519.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">DBO yield / scoped patch</text>
+<text x="30.0" y="542.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Exactly two stages: enable_dbo sets num_ubatches = 2; the validator rejects any other count (validation.py:126-131).</text>
+<text x="30.0" y="560.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Times here are illustrative, not measured. Thresholds (--dbo-decode-token-threshold / --dbo-prefill-token-threshold) decide when a step splits.</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: one layer runs two stages. The yield between send and receive lets stage 1 run while the FFN side works on stage 0. Times are illustrative.</figcaption><a class="diagram-open" href="../diagrams/b4_dbo.svg" target="_blank">Open full size ↗</a></div></figure>
+<p>Read the top panel left to right. The overlap is the point: stage 1 of the attention side runs at the same
+time as stage 0 on the FFN side. The yield is what hands control across. The visual below lets you step through
+the same events.</p>
+
+<figure class="viz" id="viz-dbo-timeline"><div class="viz-head"><span class="viz-badge">Interactive</span><span class="viz-title">Step through a DBO step</span></div><div class="viz-mount" data-viz="dbo-timeline" role="region" aria-label="Step through a DBO step"><div class="viz-fallback"><p>This interactive visual steps through the send, yield, FFN compute and receive events of one step. It needs
+JavaScript. The steps and deep dives below say the same thing in text.</p></div></div><figcaption class="viz-caption">Pick the number of layers, then press <em>Step</em>, or press Tab then Enter. Watch columns t2 and t3, where attention and FFN work overlap.</figcaption></figure>
+<aside class="callout callout-simplified"><p class="callout-title">Simplified</p><div class="callout-body"><p>The visual shows the event order from the code, not real timing. It leaves out the
+control-plane publish before the loop, CUDA graphs, the per-peer split, and the rank mapping. The deep dives
+give those, with citations.</p></div></aside>
+
+<h2 id="in-the-code">In the code<a class="h-anchor" href="#in-the-code" aria-label="Link to this section">#</a></h2>
+
+<h3 id="step-1-exactly-two-stages">Step 1: Exactly two stages<a class="h-anchor" href="#step-1-exactly-two-stages" aria-label="Link to this section">#</a></h3>
+<p>DBO turns on with <code>--enable-dbo</code>. In vLLM that sets the number of microbatches to two
+(<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/parallel.py#L599-L601" target="_blank" rel="noopener" title="vllm:vllm/config/parallel.py:599-601 at vLLM ced6857"><code>vllm:vllm/config/parallel.py:599-601</code></a>). AFD requires exactly two. The GPU validator raises for any
+other count (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L126-L131" target="_blank" rel="noopener" title="afd_plugin/validation.py:126-131 at afd-plugin 7452d52"><code>afd_plugin/validation.py:126-131</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L126-L132" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/validation.py:126-132</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L126-L132" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">126</span><span class="ln">127</span><span class="ln hl">128</span><span class="ln hl">129</span><span class="ln">130</span><span class="ln">131</span><span class="ln">132</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(3 * var(--code-lh))"></span><pre><code class="language-python">    if (
+        parallel.enable_dbo or parallel.use_ubatching
+    ) and parallel.num_ubatches != GPU_MRV2_NUM_UBATCHES:
+        raise RuntimeError(
+            &quot;AFD ModelRunnerV2 DBO/ubatching requires exactly two microbatches&quot;,
+        )
+</code></pre></div></div></div><figcaption class="code-caption">The GPU validator: DBO or ubatching needs exactly two microbatches.</figcaption></figure>
+
+<h3 id="step-2-each-stage-carries-a-stage-index-on-the-wire">Step 2: Each stage carries a stage index on the wire<a class="h-anchor" href="#step-2-each-stage-carries-a-stage-index-on-the-wire" aria-label="Link to this section">#</a></h3>
+<p>Each stage gets a <a class="term" href="../reference/glossary.html#term-stage" data-term="stage" data-def="The DBO ubatch index of one transfer on the wire. A connector sends one transfer per layer and stage.">stage index</a>, 0 or 1. The ubatch helper clones the parent AFD metadata per
+stage and sets the index and the stage count
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ubatch_wrapper.py#L26-L36" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ubatch_wrapper.py:26-36 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ubatch_wrapper.py:26-36</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ubatch_wrapper.py#L26-L36" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/ubatch_wrapper.py:26-36</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ubatch_wrapper.py#L26-L36" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">26</span><span class="ln">27</span><span class="ln hl">28</span><span class="ln hl">29</span><span class="ln">30</span><span class="ln">31</span><span class="ln">32</span><span class="ln">33</span><span class="ln">34</span><span class="ln">35</span><span class="ln">36</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(3 * var(--code-lh))"></span><pre><code class="language-python">    ubatch_slice = ubatch_slices[ubatch_idx]
+    clone = afd_metadata.clone()
+    clone.stage_idx = ubatch_idx
+    clone.num_stages = len(ubatch_slices)
+    clone.tokens_start_loc = [int(ubatch_slice.token_slice.start)]
+    clone.requests_start_loc = [int(ubatch_slice.request_slice.start)]
+    clone.tokens_lens = [int(ubatch_slice.num_tokens)]
+    clone.tokens_unpadded_lens = [
+        _resolve_ubatch_unpadded_tokens(afd_metadata, ubatch_slice, ubatch_idx),
+    ]
+    return clone</code></pre></div></div></div><figcaption class="code-caption">build_ubatch_afd_metadata: set stage_idx and num_stages for one ubatch.</figcaption></figure>
+<p>The <a class="term" href="../reference/glossary.html#term-remote-ffn-proxy" data-term="RemoteFFNProxy" data-def="A parameter-free module on the attention side. It replaces the FFN stage of a decoder layer and uses the connector instead.">RemoteFFNProxy</a> reads the stage index from the forward context and records it
+in the transfer metadata (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L136-L143" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:136-143 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:136-143</code></a>). So the FFN side
+knows which stage each tensor belongs to.</p>
+
+<h3 id="step-3-the-proxy-yields-between-send-and-receive">Step 3: The proxy yields between send and receive<a class="h-anchor" href="#step-3-the-proxy-yields-between-send-and-receive" aria-label="Link to this section">#</a></h3>
+<p>Inside the proxy, the order is: send the hidden states, <a class="term" href="../reference/glossary.html#term-dbo-yield" data-term="DBO yield" data-def="A custom op that hands control to the other ubatch thread. The AFD proxy calls it between the send and the receive, so the second stage runs while the first waits.">yield</a>, then receive the FFN
+output (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L146-L158" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:146-158 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:146-158</code></a>). The yield is what lets the other
+stage run while this one waits.</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L146-L158" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/model_executor/models/deepseek_v2.py:146-158</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L146-L158" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">146</span><span class="ln">147</span><span class="ln">148</span><span class="ln">149</span><span class="ln">150</span><span class="ln hl">151</span><span class="ln">152</span><span class="ln">153</span><span class="ln">154</span><span class="ln hl">155</span><span class="ln">156</span><span class="ln">157</span><span class="ln">158</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(5 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(9 * var(--code-lh))"></span><pre><code class="language-python">        afd_metadata.connector.send_attn_output(
+            hidden_states,
+            context,
+            **send_kwargs,
+        )
+        hidden_states = maybe_apply_dbo_yield(
+            hidden_states,
+            role=&quot;attention&quot;,
+        )
+        return afd_metadata.connector.recv_ffn_output(
+            ref_tensor=hidden_states,
+            ubatch_idx=stage_idx,
+        )</code></pre></div></div></div><figcaption class="code-caption">_send_and_receive: send, then maybe_apply_dbo_yield, then recv.</figcaption></figure>
+<p>The yield calls a <a class="term" href="../reference/glossary.html#term-custom-op" data-term="custom op" data-def="A function registered as torch.ops.vllm.* so torch.compile and CUDA graphs can trace it. The P2P sends and receives are custom ops.">custom op</a>, <code>manual_dbo_yield</code>, registered once per process
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/dbo.py#L27-L49" target="_blank" rel="noopener" title="afd_plugin/v1/worker/dbo.py:27-49 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/dbo.py:27-49</code></a>). The op yields only when vLLM DBO is active; otherwise it does
+nothing (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/dbo.py#L52-L54" target="_blank" rel="noopener" title="afd_plugin/v1/worker/dbo.py:52-54 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/dbo.py:52-54</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/dbo.py#L12-L24" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/dbo.py:12-24</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/dbo.py#L12-L24" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">12</span><span class="ln">13</span><span class="ln">14</span><span class="ln">15</span><span class="ln">16</span><span class="ln">17</span><span class="ln">18</span><span class="ln">19</span><span class="ln">20</span><span class="ln">21</span><span class="ln">22</span><span class="ln hl">23</span><span class="ln">24</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(11 * var(--code-lh))"></span><pre><code class="language-python">def maybe_apply_dbo_yield(
+    tensor: torch.Tensor,
+    *,
+    role: str,
+) -&gt; torch.Tensor:
+    &quot;&quot;&quot;Yield to the peer ubatch thread when vLLM DBO is active.&quot;&quot;&quot;
+    try:
+        register_dbo_yield_custom_op()
+    except ImportError:
+        return tensor
+
+    torch.ops.vllm.manual_dbo_yield(tensor)
+    return tensor</code></pre></div></div></div><figcaption class="code-caption">maybe_apply_dbo_yield: call the custom op, which yields when DBO is on.</figcaption></figure>
+
+<h3 id="step-4-the-thresholds-decide-when-a-step-splits">Step 4: The thresholds decide when a step splits<a class="h-anchor" href="#step-4-the-thresholds-decide-when-a-step-splits" aria-label="Link to this section">#</a></h3>
+<p>A step splits into two stages only when it is large enough. The recipes set two thresholds:
+<code>--dbo-decode-token-threshold</code> and <code>--dbo-prefill-token-threshold</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L23-L25" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:23-25 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:23-25</code></a>).</p>
+<figure class="code-excerpt" data-lang="bash"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L23-L25" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:23-25</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L23-L25" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">23</span><span class="ln">24</span><span class="ln">25</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-bash">    --enable-dbo \
+    --dbo-decode-token-threshold 2 \
+    --dbo-prefill-token-threshold 12 \</code></pre></div></div></div><figcaption class="code-caption">The graph recipe turns on DBO and sets both thresholds.</figcaption></figure>
+<p>vLLM reads these in <code>check_ubatch_thresholds</code>: a decode batch splits when its token count reaches
+the decode threshold, a batch with a prefill when it reaches the prefill threshold
+(<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/ubatch_utils.py#L141-L149" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/ubatch_utils.py:141-149 at vLLM ced6857"><code>vllm:vllm/v1/worker/ubatch_utils.py:141-149</code></a>).</p>
+
+<h3 id="step-5-dp1-dbo-through-scoped-patches">Step 5: DP1 DBO through scoped patches<a class="h-anchor" href="#step-5-dp1-dbo-through-scoped-patches" aria-label="Link to this section">#</a></h3>
+<p>Native vLLM builds no ubatch runner when the data-parallel size is one. AFD coordinates the two stages
+locally, so it re-enables DP1 with two <a class="term" href="../reference/glossary.html#term-scoped-patch" data-term="scoped patch" data-def="A patch that is active only inside a context manager, for the time of one AFD call. The code restores the original function on exit.">scoped patches</a>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L263-L282" target="_blank" rel="noopener" title="afd_plugin/compat/patches/gpu_mrv2_ubatching.py:263-282 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/gpu_mrv2_ubatching.py:263-282</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L263-L282" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/compat/patches/gpu_mrv2_ubatching.py:263-282</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L263-L282" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">263</span><span class="ln">264</span><span class="ln">265</span><span class="ln">266</span><span class="ln">267</span><span class="ln">268</span><span class="ln">269</span><span class="ln">270</span><span class="ln">271</span><span class="ln">272</span><span class="ln">273</span><span class="ln">274</span><span class="ln">275</span><span class="ln">276</span><span class="ln">277</span><span class="ln">278</span><span class="ln">279</span><span class="ln">280</span><span class="ln">281</span><span class="ln">282</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">@contextmanager
+def use_gpu_mrv2_ubatch_factory() -&gt; Iterator[None]:
+    &quot;&quot;&quot;Scope the DP1 factory to AFD&#x27;s native KV initialization call.&quot;&quot;&quot;
+    original_factory = model_runner.maybe_build_ubatch_runner
+    model_runner.maybe_build_ubatch_runner = maybe_build_ubatch_runner
+    try:
+        yield
+    finally:
+        model_runner.maybe_build_ubatch_runner = original_factory
+
+
+@contextmanager
+def use_gpu_mrv2_dbo_dispatch() -&gt; Iterator[None]:
+    &quot;&quot;&quot;Scope DP1 eligibility to one AFD native execute_model call.&quot;&quot;&quot;
+    original_dispatch = model_runner.dispatch_cg_and_sync_dp
+    model_runner.dispatch_cg_and_sync_dp = dispatch_cg_and_sync_dp
+    try:
+        yield
+    finally:
+        model_runner.dispatch_cg_and_sync_dp = original_dispatch</code></pre></div></div></div><figcaption class="code-caption">Two context managers scope the DP1 DBO seams to AFD's own calls.</figcaption></figure>
+
+<h2 id="deep-dive">Deep dive<a class="h-anchor" href="#deep-dive" aria-label="Link to this section">#</a></h2>
+<p>The blocks below give the two scoped patches, the threshold logic with numbers, and the yield mechanism.</p>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-two-scoped-patches-in-detail" class="dd-title">The two scoped patches, in detail</h3></summary><div class="dd-body"><p>AFD never edits vLLM. It swaps two module functions only for the time of one AFD call, then restores them.</p>
+<p><strong>The factory seam.</strong> <code>use_gpu_mrv2_ubatch_factory</code> replaces
+<code>maybe_build_ubatch_runner</code> while the attention runner initializes its KV cache
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L473-L486" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:473-486 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:473-486</code></a>). Native code returns None at DP1; the
+patched factory builds the native <code>UBatchRunner</code> and binds a DP1 child-context metadata factory
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L47-L73" target="_blank" rel="noopener" title="afd_plugin/compat/patches/gpu_mrv2_ubatching.py:47-73 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/gpu_mrv2_ubatching.py:47-73</code></a>).</p>
+<p><strong>The dispatch seam.</strong> <code>use_gpu_mrv2_dbo_dispatch</code> replaces
+<code>dispatch_cg_and_sync_dp</code> for one <code>execute_model</code> call
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L340-L349" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:340-349 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:340-349</code></a>). Native DP1 dispatch returns before the
+DBO threshold decision; the patch applies the native threshold and ubatch policy locally, with no DP handshake
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L194-L226" target="_blank" rel="noopener" title="afd_plugin/compat/patches/gpu_mrv2_ubatching.py:194-226 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/gpu_mrv2_ubatching.py:194-226</code></a>).</p>
+<p><strong>The child metadata.</strong> At DP1 the native <code>DPMetadata.make</code> asserts DP greater than
+one. The patch builds the same metadata directly, one forward context per microbatch
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L83-L115" target="_blank" rel="noopener" title="afd_plugin/compat/patches/gpu_mrv2_ubatching.py:83-115 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/gpu_mrv2_ubatching.py:83-115</code></a>).</p>
+<p>Both seams restore the original function in a <code>finally</code> block, so they affect only AFD's own
+calls (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L268-L271" target="_blank" rel="noopener" title="afd_plugin/compat/patches/gpu_mrv2_ubatching.py:268-271 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/gpu_mrv2_ubatching.py:268-271</code></a>,
+<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L279-L282" target="_blank" rel="noopener" title="afd_plugin/compat/patches/gpu_mrv2_ubatching.py:279-282 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/gpu_mrv2_ubatching.py:279-282</code></a>).</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-thresholds-with-defaults-and-numbers" class="dd-title">The thresholds, with defaults and numbers</h3></summary><div class="dd-body"><p>The thresholds are fields on the vLLM parallel config. Their defaults are large:</p>
+<table>
+  <thead><tr><th>Field</th><th>Default</th><th>Set in the recipe</th></tr></thead>
+  <tbody>
+    <tr><td><code>dbo_decode_token_threshold</code></td><td>32 (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/parallel.py#L227" target="_blank" rel="noopener" title="vllm:vllm/config/parallel.py:227 at vLLM ced6857"><code>vllm:vllm/config/parallel.py:227</code></a>)</td><td>2</td></tr>
+    <tr><td><code>dbo_prefill_token_threshold</code></td><td>512 (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/parallel.py#L232" target="_blank" rel="noopener" title="vllm:vllm/config/parallel.py:232 at vLLM ced6857"><code>vllm:vllm/config/parallel.py:232</code></a>)</td><td>12</td></tr>
+  </tbody>
+</table>
+<p>The recipe lowers both so small test batches still split
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L24-L25" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:24-25 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:24-25</code></a>).
+The check is simple (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/ubatch_utils.py#L141-L149" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/ubatch_utils.py:141-149 at vLLM ced6857"><code>vllm:vllm/v1/worker/ubatch_utils.py:141-149</code></a>):</p>
+<ol>
+  <li>If ubatching is off, do not split.</li>
+  <li>For a uniform decode batch, split when the token count reaches the decode threshold.</li>
+  <li>Otherwise, split when the token count reaches the prefill threshold.</li>
+</ol>
+<p><strong>A worked example.</strong> With the recipe values and a pure-decode step of 8 tokens, 8 is at least
+2, so the step splits into two stages of 4. A decode step of 1 token does not reach 2, so it runs as a single
+batch, with no DBO.</p>
+<p>At DP1 this decision runs inside the patched dispatch, which also guards against an empty trailing stage
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L213-L215" target="_blank" rel="noopener" title="afd_plugin/compat/patches/gpu_mrv2_ubatching.py:213-215 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/gpu_mrv2_ubatching.py:213-215</code></a>). At DP greater than one, native code makes
+the decision across ranks.</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-yield-mechanism" class="dd-title">The yield mechanism</h3></summary><div class="dd-body"><p>The yield is a no-return custom op, <code>torch.ops.vllm.manual_dbo_yield</code>. Its real implementation
+calls <code>dbo_yield</code> only when <code>dbo_enabled</code> is true
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/dbo.py#L33-L34" target="_blank" rel="noopener" title="afd_plugin/v1/worker/dbo.py:33-34 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/dbo.py:33-34</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/dbo.py#L52-L54" target="_blank" rel="noopener" title="afd_plugin/v1/worker/dbo.py:52-54 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/dbo.py:52-54</code></a>). Its fake
+implementation does nothing, so <code>torch.compile</code> can trace through it
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/dbo.py#L36-L37" target="_blank" rel="noopener" title="afd_plugin/v1/worker/dbo.py:36-37 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/dbo.py:36-37</code></a>).</p>
+<p>Registration is idempotent. A second call returns early, and a RuntimeError that says the op is already
+registered is swallowed (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/dbo.py#L30-L49" target="_blank" rel="noopener" title="afd_plugin/v1/worker/dbo.py:30-49 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/dbo.py:30-49</code></a>). The op is registered once at plugin
+start-up (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L190-L192" target="_blank" rel="noopener" title="afd_plugin/__init__.py:190-192 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:190-192</code></a>).</p>
+<p>The op takes the hidden-state tensor as its argument and marks it as mutated, so the compiler keeps the yield
+in the right place relative to the send and the receive
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/dbo.py#L40-L45" target="_blank" rel="noopener" title="afd_plugin/v1/worker/dbo.py:40-45 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/dbo.py:40-45</code></a>). The tensor value is not changed.</p></div></details>
+
+<h2 id="what-can-go-wrong">What can go wrong<a class="h-anchor" href="#what-can-go-wrong" aria-label="Link to this section">#</a></h2>
+<aside class="callout callout-simplified"><p class="callout-title">Simplified</p><div class="callout-body"><p>This page shows the two-stage model and the AFD additions. It does not show the native
+microbatch slicing and thread handoff inside vLLM; those stay in vLLM and are cited where AFD scopes them.</p></div></aside>
+<ul>
+  <li><strong>The wrong number of ubatches.</strong> Any count other than two raises at config validation
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L126-L131" target="_blank" rel="noopener" title="afd_plugin/validation.py:126-131 at afd-plugin 7452d52"><code>afd_plugin/validation.py:126-131</code></a>).</li>
+  <li><strong>Thresholds set below the microbatch count.</strong> vLLM requires each threshold to be at least
+    the number of microbatches (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/parallel.py#L1093-L1099" target="_blank" rel="noopener" title="vllm:vllm/config/parallel.py:1093-1099 at vLLM ced6857"><code>vllm:vllm/config/parallel.py:1093-1099</code></a>).</li>
+  <li><strong>A step that is too small.</strong> A step under the threshold does not split, so it runs with no
+    overlap (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/ubatch_utils.py#L144-L149" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/ubatch_utils.py:144-149 at vLLM ced6857"><code>vllm:vllm/v1/worker/ubatch_utils.py:144-149</code></a>). This is expected, not an error.</li>
+  <li><strong>DBO with a graph but not two ubatches.</strong> The graph policy raises when ubatching is on with
+    any count other than two (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L72-L77" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:72-77 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:72-77</code></a>).</li>
+</ul>
+<p><strong>Why it matters.</strong> DBO keeps both roles busy. The attention side does useful work on one stage
+while the FFN side works on the other, instead of waiting. The two-stage limit and the yield placement are what
+make the overlap correct.</p>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>How many stages does DBO split a step into?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Exactly two. <code>--enable-dbo</code> sets the microbatch count to two
+      (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/parallel.py#L599-L601" target="_blank" rel="noopener" title="vllm:vllm/config/parallel.py:599-601 at vLLM ced6857"><code>vllm:vllm/config/parallel.py:599-601</code></a>), and the validator rejects any other count
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L126-L131" target="_blank" rel="noopener" title="afd_plugin/validation.py:126-131 at afd-plugin 7452d52"><code>afd_plugin/validation.py:126-131</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>What does the proxy do between the send and the receive?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>It calls the DBO yield op, <code>manual_dbo_yield</code>, which hands control to the other stage
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L151-L154" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:151-154 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:151-154</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/dbo.py#L33-L34" target="_blank" rel="noopener" title="afd_plugin/v1/worker/dbo.py:33-34 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/dbo.py:33-34</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>A pure-decode step has 1 token, with the recipe thresholds. Does it use DBO?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>No. 1 is below the decode threshold of 2, so <code>check_ubatch_thresholds</code> returns false and
+      the step runs as a single batch (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/ubatch_utils.py#L144-L149" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/ubatch_utils.py:144-149 at vLLM ced6857"><code>vllm:vllm/v1/worker/ubatch_utils.py:144-149</code></a>,
+      <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L24" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:24 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:24</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>Why does the yield op have a fake implementation that does nothing?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>So <code>torch.compile</code> can trace through it. The real op yields only when DBO is active; the
+      fake op returns None (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/dbo.py#L36-L37" target="_blank" rel="noopener" title="afd_plugin/v1/worker/dbo.py:36-37 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/dbo.py:36-37</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/dbo.py#L52-L54" target="_blank" rel="noopener" title="afd_plugin/v1/worker/dbo.py:52-54 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/dbo.py:52-54</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>Native vLLM does not build a ubatch runner at DP1. How does AFD run DBO there without editing
+    vLLM?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>It installs two scoped patches. <code>use_gpu_mrv2_ubatch_factory</code> builds the runner at DP1
+      during KV initialization; <code>use_gpu_mrv2_dbo_dispatch</code> applies the threshold policy locally
+      during one <code>execute_model</code> call. Both restore the original on exit
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L47-L73" target="_blank" rel="noopener" title="afd_plugin/compat/patches/gpu_mrv2_ubatching.py:47-73 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/gpu_mrv2_ubatching.py:47-73</code></a>,
+      <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L194-L226" target="_blank" rel="noopener" title="afd_plugin/compat/patches/gpu_mrv2_ubatching.py:194-226 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/gpu_mrv2_ubatching.py:194-226</code></a>).</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/cuda-graphs.html">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</a><span class="rel-sum">AFD supports one CUDA graph mode, FULL_DECODE_ONLY. The attention side wraps native capture and replay to publish control; the FFN side keeps its own graph per token shape.</span></li><li><a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a><span class="rel-sum">Before each layer loop, the attention side sends per-stage token counts to the FFN side. This page shows what the control plane carries, both publish paths, the wire format and the receive side.</span></li><li><a href="../concepts/compat-patches.html">Compat patches: how AFD changes vLLM without editing it</a><span class="rel-sum">AFD edits no vLLM source. It imports patch modules that replace vLLM functions in place, behind a version gate. This page covers the discipline, the gates, and what each GPU patch changes.</span></li><li><a href="../tours/one-decode-step.html">Tour: One decode step</a><span class="rel-sum">Follow one decode step on 2A2F with DBO and FULL_DECODE_ONLY graphs: one control-plane publish, graph replay on both sides, two stages of send and receive per layer, then one native sampling call.</span></li><li><a href="../code/attention-worker.html">v1/worker: the attention worker and runner</a><span class="rel-sum">Three files run the attention role: the worker that swaps in the AFD runner, the runner that wraps native Model Runner V2, and the shared metadata mixin that publishes the control plane.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../concepts/cuda-graphs.html"><span class="pn-dir">← Previous</span><span class="pn-title">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</span></a><a class="pn pn-next" href="../concepts/deployment-topologies.html"><span class="pn-dir">Next →</span><span class="pn-title">Deployment topologies: how to place the roles</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#in-the-code">In the code</a></li><li class="toc-l3"><a href="#step-1-exactly-two-stages">Step 1: Exactly two stages</a></li><li class="toc-l3"><a href="#step-2-each-stage-carries-a-stage-index-on-the-wire">Step 2: Each stage carries a stage index on the wire</a></li><li class="toc-l3"><a href="#step-3-the-proxy-yields-between-send-and-receive">Step 3: The proxy yields between send and receive</a></li><li class="toc-l3"><a href="#step-4-the-thresholds-decide-when-a-step-splits">Step 4: The thresholds decide when a step splits</a></li><li class="toc-l3"><a href="#step-5-dp1-dbo-through-scoped-patches">Step 5: DP1 DBO through scoped patches</a></li><li class="toc-l2"><a href="#deep-dive">Deep dive</a></li><li class="toc-l3"><a href="#the-two-scoped-patches-in-detail">The two scoped patches, in detail</a></li><li class="toc-l3"><a href="#the-thresholds-with-defaults-and-numbers">The thresholds, with defaults and numbers</a></li><li class="toc-l3"><a href="#the-yield-mechanism">The yield mechanism</a></li><li class="toc-l2"><a href="#what-can-go-wrong">What can go wrong</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="../assets/viz/dbo-timeline.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

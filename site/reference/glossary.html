@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glossary · AFD Plugin Explained</title>
+<meta name="description" content="Short definitions of every technical term on this site, with links to the pages that explain them.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="reference/glossary">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a class="current" aria-current="page" href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>Reference</span><span class="sep">›</span><span aria-current="page">Glossary</span></nav>
+<h1 class="page-title">Glossary</h1>
+<div class="page-meta"><span class="meta-sec">Reference</span><span class="meta-time">about 12 min read</span></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+
+<p>This page lists every term that has a tooltip on this site. Each entry gives a short definition. Many entries link to a page with the full explanation.</p>
+<p class="glossary-jump"><a href="#letter-a">A</a> <a href="#letter-b">B</a> <a href="#letter-c">C</a> <a href="#letter-d">D</a> <a href="#letter-e">E</a> <a href="#letter-f">F</a> <a href="#letter-g">G</a> <a href="#letter-h">H</a> <a href="#letter-l">L</a> <a href="#letter-m">M</a> <a href="#letter-p">P</a> <a href="#letter-r">R</a> <a href="#letter-s">S</a> <a href="#letter-u">U</a> <a href="#letter-v">V</a> <a href="#letter-w">W</a> <a href="#letter-x">X</a></p>
+<h2 id="letter-a">A<a class="h-anchor" href="#letter-a" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-acl-graph">ACL graph <span class="g-alias">also: ACL graph mode, Ascend graph</span></dt><dd><p class="g-short">The Ascend NPU form of a captured graph, the NPU counterpart of a CUDA graph. The NPU validator accepts the FULL and FULL_DECODE_ONLY modes.</p><p>The NPU runtime is covered on <a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a>. The mode check is <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L233-L239" target="_blank" rel="noopener" title="afd_plugin/validation.py:233-239 at afd-plugin 7452d52"><code>afd_plugin/validation.py:233-239</code></a>.</p><p class="g-more">Read more: <a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a></p></dd>
+<dt id="term-additional-config">additional_config <span class="g-alias">also: --additional-config</span></dt><dd><p class="g-short">A vLLM config field. The plugin reads its &quot;afd&quot; key for the role, the connector, the topology sizes and the host/port.</p><p class="g-more">Read more: <a href="../concepts/afd-config.html">AFD configuration: additional_config[&quot;afd&quot;]</a></p></dd>
+<dt id="term-afd">AFD <span class="g-alias">also: Attention-FFN Disaggregation, attention-ffn disaggregation</span></dt><dd><p class="g-short">Attention-FFN Disaggregation. The attention part and the feed-forward (FFN/MoE) part of a model run in separate server processes and exchange hidden states.</p><p class="g-more">Read more: <a href="../learn/what-is-afd.html">What is AFD?</a></p></dd>
+<dt id="term-afd-forward-metadata">AFD forward metadata <span class="g-alias">also: AFDForwardContextMetadata, afd_metadata, forward-context sidecar</span></dt><dd><p class="g-short">A sidecar object that AFD attaches to the vLLM forward context. It holds the connector, the stage index and count, the transaction id, and the token offsets and lengths.</p><p>Model wrappers read it with <code>get_afd_metadata_from_forward_context</code>; the runner installs it as vLLM makes each forward context (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/forward_context.py#L18-L67" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/forward_context.py:18-67 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/forward_context.py:18-67</code></a>).</p><p class="g-more">Read more: <a href="../concepts/attention-runtime.html">The attention runtime: a seam over Model Runner V2</a></p></dd>
+<dt id="term-afd-world">AFD world <span class="g-alias">also: AFD NCCL world, afd world, AFD world group</span></dt><dd><p class="g-short">The connector&#x27;s process group across both roles. The P2P connector orders it [F0..A0..]: FFN ranks first, then attention ranks.</p><p>The GPU connector creates it as the <code>"afd"</code> NCCL group with world size <code>ffn_size + attention_size</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L269-L276" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:269-276 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:269-276</code></a>).</p><p class="g-more">Read more: <a href="../concepts/topology.html">Topology and role ranks: the AFD world</a></p></dd>
+<dt id="term-plugin">afd-plugin <span class="g-alias">also: the plugin, afd plugin</span></dt><dd><p class="g-short">The vLLM external plugin that adds AFD. vLLM loads it; it changes no vLLM source file.</p><p class="g-more">Read more: <a href="../index.html">AFD Plugin Explained</a></p></dd>
+<dt id="term-afd-balanced">afd_balanced routing <span class="g-alias">also: AFDBalancedRoutingStrategy, routing simulator</span></dt><dd><p class="g-short">A deterministic, EP-balanced MoE routing strategy for benchmarks. It returns uniform weights and fixed expert ids, so it changes model outputs.</p><p>Opt in with vLLM's <code>VLLM_MOE_ROUTING_SIMULATION_STRATEGY</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/routing_simulator.py#L122-L171" target="_blank" rel="noopener" title="afd_plugin/model_executor/routing_simulator.py:122-171 at afd-plugin 7452d52"><code>afd_plugin/model_executor/routing_simulator.py:122-171</code></a>). It is for benchmark and profiling runs only.</p><p class="g-more">Read more: <a href="../concepts/moe-handoff.html">The MoE handoff: where the gate runs</a></p></dd>
+<dt id="term-afd-config">AFDConfig </dt><dd><p class="g-short">The plugin&#x27;s own configuration object. It holds the role, the connector name, the topology sizes and the rendezvous host/port.</p><p>A dataclass defined in <code>config.py</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L42" target="_blank" rel="noopener" title="afd_plugin/config.py:42 at afd-plugin 7452d52"><code>afd_plugin/config.py:42</code></a>).</p><p class="g-more">Read more: <a href="../concepts/afd-config.html">AFD configuration: additional_config[&quot;afd&quot;]</a></p></dd>
+<dt id="term-async-dp">async_dp </dt><dd><p class="g-short">An AFD config flag. It is NPU-only: it turns on the async data-parallel patches, is gated at run time, and must be false on GPU.</p><p>Read by <code>is_afd_async_dp</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L295-L308" target="_blank" rel="noopener" title="afd_plugin/config.py:295-308 at afd-plugin 7452d52"><code>afd_plugin/config.py:295-308</code></a>); it needs the async CAM connector.</p><p class="g-more">Read more: <a href="../concepts/afd-config.html">AFD configuration: additional_config[&quot;afd&quot;]</a></p></dd>
+<dt id="term-attention-role">attention role <span class="g-alias">also: attention side</span></dt><dd><p class="g-short">The side that runs attention and sends hidden states to the FFN side. The default role of a process.</p><p>The role is set in <code>AFDConfig.role</code>; the default is <code>"attention"</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L56" target="_blank" rel="noopener" title="afd_plugin/config.py:56 at afd-plugin 7452d52"><code>afd_plugin/config.py:56</code></a>).</p><p class="g-more">Read more: <a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a></p></dd>
+<dt id="term-attention-server">attention server </dt><dd><p class="g-short">The vllm serve process that plays the attention role. It owns the API server, the scheduler and the KV cache.</p><p class="g-more">Read more: <a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a></p></dd>
+</dl>
+<h2 id="letter-b">B<a class="h-anchor" href="#letter-b" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-batch-size-factor">BATCH_SIZE_FACTOR <span class="g-alias">also: CAM receive capacity</span></dt><dd><p class="g-short">An Ascend NPU environment variable that multiplies the CAM receive capacity (base 262144 tokens), with native float rounding. Default 1.</p><p>Read in <code>afd_plugin/validation.py:45-54</code> and <code>afd_plugin/compat/npu/feature_validation.py:245-249</code>. It has no effect on GPU.</p><p class="g-more">Read more: <a href="../concepts/tuning.html">Tuning: the knobs the repo exposes</a></p></dd>
+</dl>
+<h2 id="letter-c">C<a class="h-anchor" href="#letter-c" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-cam">CAM </dt><dd><p class="g-short">The Ascend NPU communication operators used by the NPU connectors. One connector is synchronous, the other asynchronous.</p><p class="g-more">Read more: <a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a></p></dd>
+<dt id="term-citation">citation </dt><dd><p class="g-short">A link to a file and line in the code. Every claim about the code on this site has one.</p><p class="g-more">Read more: <a href="../index.html">AFD Plugin Explained</a></p></dd>
+<dt id="term-commit">commit </dt><dd><p class="g-short">One saved version of a git repository. A 40-character id names it. This site explains one pinned commit of each repository.</p><p class="g-more">Read more: <a href="../index.html">AFD Plugin Explained</a></p></dd>
+<dt id="term-compute-gate-on-attention">compute_gate_on_attention </dt><dd><p class="g-short">An AFD config flag. When true, the attention side computes the MoE gate and sends the router logits to the FFN side.</p><p>The flag defaults to false (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L66" target="_blank" rel="noopener" title="afd_plugin/config.py:66 at afd-plugin 7452d52"><code>afd_plugin/config.py:66</code></a>).</p><p class="g-more">Read more: <a href="../concepts/moe-handoff.html">The MoE handoff: where the gate runs</a></p></dd>
+<dt id="term-connector">connector <span class="g-alias">also: AFD connector</span></dt><dd><p class="g-short">The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.</p><p>Connectors subclass <code>AFDConnectorBase</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L37" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:37 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:37</code></a>).</p><p class="g-more">Read more: <a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a></p></dd>
+<dt id="term-connector-extra-config">connector_extra_config <span class="g-alias">also: connector extra config</span></dt><dd><p class="g-short">A mapping of connector-specific options inside the AFD config. Each connector declares which keys it accepts, and rejects the rest.</p><p>Parsed by each connector's <code>parse_extra_config</code> class method (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L64-L72" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:64-72 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:64-72</code></a>).</p><p class="g-more">Read more: <a href="../reference/afd-config.html">AFD config reference: the additional_config[&quot;afd&quot;] keys</a></p></dd>
+<dt id="term-control-plane">control plane </dt><dd><p class="g-short">The path that carries DP metadata (per-stage token counts) from the attention side to the FFN side. It is optional.</p><p>The control plane is an <code>AFDControlPlane</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L258" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:258 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:258</code></a>); a connector exposes it as <code>control_plane</code>, or sets it to <code>None</code>.</p><p class="g-more">Read more: <a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a></p></dd>
+<dt id="term-custom-op">custom op </dt><dd><p class="g-short">A function registered as torch.ops.vllm.* so torch.compile and CUDA graphs can trace it. The P2P sends and receives are custom ops.</p><p class="g-more">Read more: <a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a></p></dd>
+</dl>
+<h2 id="letter-d">D<a class="h-anchor" href="#letter-d" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-data-plane">data plane </dt><dd><p class="g-short">The path that carries the hidden-state tensors between the two roles. It is the connector&#x27;s send and receive calls.</p><p class="g-more">Read more: <a href="../concepts/wire-data.html">Data on the wire: tensors per layer and stage</a></p></dd>
+<dt id="term-dbo">DBO <span class="g-alias">also: dual-batch overlap</span></dt><dd><p class="g-short">Dual-batch overlap. The step is split into two microbatches so compute and communication overlap. AFD uses exactly two.</p><p class="g-more">Read more: <a href="../concepts/dbo.html">Dual-batch overlap (DBO): two stages per step</a></p></dd>
+<dt id="term-dbo-yield">DBO yield <span class="g-alias">also: manual_dbo_yield, dbo yield</span></dt><dd><p class="g-short">A custom op that hands control to the other ubatch thread. The AFD proxy calls it between the send and the receive, so the second stage runs while the first waits.</p><p>Registered as <code>torch.ops.vllm.manual_dbo_yield</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/dbo.py#L27-L49" target="_blank" rel="noopener" title="afd_plugin/v1/worker/dbo.py:27-49 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/dbo.py:27-49</code></a>). It yields only when vLLM DBO is active (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/dbo.py#L52-L54" target="_blank" rel="noopener" title="afd_plugin/v1/worker/dbo.py:52-54 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/dbo.py:52-54</code></a>).</p><p class="g-more">Read more: <a href="../concepts/dbo.html">Dual-batch overlap (DBO): two stages per step</a></p></dd>
+<dt id="term-dp-metadata">DP metadata <span class="g-alias">also: data-parallel metadata</span></dt><dd><p class="g-short">The per-step data-parallel metadata the attention side sends to the FFN side on the control plane. It carries the per-stage token counts that set the tensor shapes.</p><p class="g-more">Read more: <a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a></p></dd>
+</dl>
+<h2 id="letter-e">E<a class="h-anchor" href="#letter-e" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-enginecore">EngineCore </dt><dd><p class="g-short">The vLLM v1 engine core process. On the FFN role it returns early after the executor is built: no scheduler, no loop.</p><p class="g-more">Read more: <a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a></p></dd>
+<dt id="term-entry-point">entry point </dt><dd><p class="g-short">A Python packaging hook. vLLM reads the vllm.general_plugins entry points and calls each one at start-up.</p><p>afd-plugin declares <code>afd = "afd_plugin:register_afd"</code> under <code>vllm.general_plugins</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/pyproject.toml#L45-L46" target="_blank" rel="noopener" title="pyproject.toml:45-46 at afd-plugin 7452d52"><code>pyproject.toml:45-46</code></a>).</p><p class="g-more">Read more: <a href="../learn/vllm-plugins.html">How vLLM plugins work</a></p></dd>
+</dl>
+<h2 id="letter-f">F<a class="h-anchor" href="#letter-f" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-ffn-graph-key">FFN graph key <span class="g-alias">also: make_ffn_graph_key, graph key</span></dt><dd><p class="g-short">A hashable key built from the per-stage DP metadata. The FFN runner uses it to store and look up one captured CUDA graph per token shape.</p><p>Built by <code>make_ffn_graph_key</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L104-L133" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:104-133 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:104-133</code></a>).</p><p class="g-more">Read more: <a href="../concepts/cuda-graphs.html">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</a></p></dd>
+<dt id="term-ffn-role">FFN role <span class="g-alias">also: FFN side</span></dt><dd><p class="g-short">The side that runs the feed-forward and MoE experts. It receives hidden states, computes, and sends the result back.</p><p class="g-more">Read more: <a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a></p></dd>
+<dt id="term-ffn-server">FFN server </dt><dd><p class="g-short">The vllm serve process that plays the FFN role. It has no API server, no scheduler and no KV cache; a connector loop drives it.</p><p class="g-more">Read more: <a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a></p></dd>
+<dt id="term-ffn-server-loop">FFN server loop <span class="g-alias">also: FFN loop, server loop</span></dt><dd><p class="g-short">The connector-driven daemon thread on the FFN worker. It waits for DP metadata, then runs the FFN compute for one step. No scheduler drives it.</p><p>Started in <code>AFDFFNWorker.start_ffn_server_loop</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L133" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:133 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:133</code></a>); the loop body is <code>_run_ffn_server_loop</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L160" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:160 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:160</code></a>).</p><p class="g-more">Read more: <a href="../tours/life-of-a-request.html">Tour: Life of a request</a></p></dd>
+<dt id="term-full-decode-only">FULL_DECODE_ONLY </dt><dd><p class="g-short">The only CUDA graph mode that AFD supports on GPU. Graphs capture decode steps only; other batches run eager.</p><p>The GPU set of supported modes has this one member (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L20-L21" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:20-21 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:20-21</code></a>). The NPU runner accepts FULL and FULL_DECODE_ONLY (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L235-L238" target="_blank" rel="noopener" title="afd_plugin/validation.py:235-238 at afd-plugin 7452d52"><code>afd_plugin/validation.py:235-238</code></a>).</p><p class="g-more">Read more: <a href="../concepts/cuda-graphs.html">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</a></p></dd>
+</dl>
+<h2 id="letter-g">G<a class="h-anchor" href="#letter-g" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-general-plugin">general plugin </dt><dd><p class="g-short">A vLLM plugin in the vllm.general_plugins group. vLLM loads it with load_general_plugins in several processes.</p><p class="g-more">Read more: <a href="../learn/vllm-plugins.html">How vLLM plugins work</a></p></dd>
+</dl>
+<h2 id="letter-h">H<a class="h-anchor" href="#letter-h" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-hccl">HCCL <span class="g-alias">also: Huawei Collective Communication Library</span></dt><dd><p class="g-short">Huawei Collective Communication Library, the Ascend NPU collective transport. The CAMP2p connector carries hidden states over HCCL and DP metadata over a smaller Gloo group.</p><p class="g-more">Read more: <a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a></p></dd>
+</dl>
+<h2 id="letter-l">L<a class="h-anchor" href="#letter-l" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-load-general-plugins">load_general_plugins <span class="g-alias">also: load_general_plugins()</span></dt><dd><p class="g-short">The vLLM function that loads every plugin in the vllm.general_plugins group, then calls each one. It runs once per process.</p><p>Defined in vLLM (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/plugins/__init__.py#L77-L90" target="_blank" rel="noopener" title="vllm:vllm/plugins/__init__.py:77-90 at vLLM ced6857"><code>vllm:vllm/plugins/__init__.py:77-90</code></a>); a guard stops a second run in the same process.</p><p class="g-more">Read more: <a href="../learn/vllm-plugins.html">How vLLM plugins work</a></p></dd>
+</dl>
+<h2 id="letter-m">M<a class="h-anchor" href="#letter-m" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-model-runner-v2">Model Runner V2 </dt><dd><p class="g-short">The vLLM v1 model runner, version 2. Both AFD roles need it on; the README sets VLLM_USE_V2_MODEL_RUNNER=1. AFD adds a seam over it.</p><p class="g-more">Read more: <a href="../concepts/attention-runtime.html">The attention runtime: a seam over Model Runner V2</a></p></dd>
+<dt id="term-model-wrapper">model wrapper </dt><dd><p class="g-short">An AFD&lt;arch&gt; model class that makes a model role-aware. On the attention side the FFN stage becomes a remote proxy.</p><p class="g-more">Read more: <a href="../concepts/model-wrappers.html">Model wrappers: the role-aware decoder layer</a></p></dd>
+<dt id="term-model-registry">ModelRegistry <span class="g-alias">also: ModelRegistry.register_model</span></dt><dd><p class="g-short">vLLM&#x27;s registry of model architectures. A plugin adds a model with register_model, using a lazy &quot;module:Class&quot; string.</p><p>The singleton is defined in vLLM (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/model_executor/models/registry.py#L1523-L1531" target="_blank" rel="noopener" title="vllm:vllm/model_executor/models/registry.py:1523-1531 at vLLM ced6857"><code>vllm:vllm/model_executor/models/registry.py:1523-1531</code></a>); register_afd calls it for each AFD model (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L211-L214" target="_blank" rel="noopener" title="afd_plugin/__init__.py:211-214 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:211-214</code></a>).</p><p class="g-more">Read more: <a href="../concepts/model-registration.html">Model registration: the AFD&lt;arch&gt; wrappers</a></p></dd>
+<dt id="term-multipod">multipod <span class="g-alias">also: multi-pod, multipod deployment</span></dt><dd><p class="g-short">A Kubernetes deployment that puts one AFD role per pod. Each vllm serve is gated on a POD environment variable, so with POD unset nothing runs.</p><p class="g-more">Read more: <a href="../concepts/deployment-topologies.html">Deployment topologies: how to place the roles</a></p></dd>
+</dl>
+<h2 id="letter-p">P<a class="h-anchor" href="#letter-p" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-p2p-subgroup">P2P subgroup </dt><dd><p class="g-short">In the GPU P2P connector, one FFN rank plus the attention ranks mapped to it. The FFN rank is subgroup rank 0.</p><p class="g-more">Read more: <a href="../concepts/topology.html">Topology and role ranks: the AFD world</a></p></dd>
+<dt id="term-patch">patch <span class="g-alias">also: compat patch</span></dt><dd><p class="g-short">A compat module that replaces a vLLM function at load time. The plugin applies a small set of patches.</p><p class="g-more">Read more: <a href="../concepts/compat-patches.html">Compat patches: how AFD changes vLLM without editing it</a></p></dd>
+<dt id="term-pd-disaggregation">prefill/decode disaggregation <span class="g-alias">also: PD disaggregation, prefill-decode disaggregation</span></dt><dd><p class="g-short">A serving layout that runs prefill and decode in separate processes. Each process still runs the whole model. It splits by phase, not by model part.</p><p class="g-more">Read more: <a href="../learn/what-is-afd.html">What is AFD?</a></p></dd>
+<dt id="term-pynccl">PyNccl <span class="g-alias">also: PyNcclCommunicator</span></dt><dd><p class="g-short">vLLM&#x27;s thin NCCL wrapper, PyNcclCommunicator. The GPU P2P connector uses it to send and receive tensors.</p><p>The class is defined in vLLM (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/distributed/device_communicators/pynccl.py#L91" target="_blank" rel="noopener" title="vllm:vllm/distributed/device_communicators/pynccl.py:91 at vLLM ced6857"><code>vllm:vllm/distributed/device_communicators/pynccl.py:91</code></a>).</p><p class="g-more">Read more: <a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a></p></dd>
+</dl>
+<h2 id="letter-r">R<a class="h-anchor" href="#letter-r" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-register-afd">register_afd() <span class="g-alias">also: register_afd</span></dt><dd><p class="g-short">The plugin entry function. It applies the compat patches and registers the routing strategy, the DBO op and the model wrappers.</p><p>Defined in the package init (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L142" target="_blank" rel="noopener" title="afd_plugin/__init__.py:142 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:142</code></a>); it guards against a second run.</p><p class="g-more">Read more: <a href="../concepts/plugin-entry-point.html">The plugin entry point: register_afd</a></p></dd>
+<dt id="term-remote-experts">remote experts <span class="g-alias">also: remote experts shell, AFDDeepseekV2RemoteExpertsMoE</span></dt><dd><p class="g-short">A parameter-free MoE shell on the attention role. It keeps the native MoE forward but sends the expert compute to the FFN role.</p><p>On CUDA, every MoE layer on the attention side builds <code>AFDDeepseekV2RemoteExpertsMoE</code>, a native <code>DeepseekV2MoE</code> with its experts replaced by a proxy (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L277-L335" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:277-335 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:277-335</code></a>).</p><p class="g-more">Read more: <a href="../concepts/model-wrappers.html">Model wrappers: the role-aware decoder layer</a></p></dd>
+<dt id="term-remote-ffn-proxy">RemoteFFNProxy </dt><dd><p class="g-short">A parameter-free module on the attention side. It replaces the FFN stage of a decoder layer and uses the connector instead.</p><p>Defined for DeepSeek-V2 at <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L117" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:117 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:117</code></a>.</p><p class="g-more">Read more: <a href="../concepts/model-wrappers.html">Model wrappers: the role-aware decoder layer</a></p></dd>
+<dt id="term-rendezvous">rendezvous </dt><dd><p class="g-short">The host and port where the two roles meet to set up the connector process groups. Both servers use the same host and port.</p><p>The connector opens a TCP store at <code>host:port</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L271" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:271 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:271</code></a>).</p><p class="g-more">Read more: <a href="../reference/afd-config.html">AFD config reference: the additional_config[&quot;afd&quot;] keys</a></p></dd>
+<dt id="term-role-rank">role rank </dt><dd><p class="g-short">The rank of a process inside its own role group. It comes from the DP, PCP and TP placement.</p><p>Resolved by <code>resolve_role_rank</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed/topology.py#L61" target="_blank" rel="noopener" title="afd_plugin/distributed/topology.py:61 at afd-plugin 7452d52"><code>afd_plugin/distributed/topology.py:61</code></a>).</p><p class="g-more">Read more: <a href="../concepts/topology.html">Topology and role ranks: the AFD world</a></p></dd>
+</dl>
+<h2 id="letter-s">S<a class="h-anchor" href="#letter-s" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-scoped-patch">scoped patch <span class="g-alias">also: scoped monkey-patch, context-manager patch</span></dt><dd><p class="g-short">A patch that is active only inside a context manager, for the time of one AFD call. The code restores the original function on exit.</p><p>Example: <code>use_gpu_mrv2_ubatch_factory</code> and <code>use_gpu_mrv2_dbo_dispatch</code> scope the DP1 DBO seams (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/gpu_mrv2_ubatching.py#L263-L282" target="_blank" rel="noopener" title="afd_plugin/compat/patches/gpu_mrv2_ubatching.py:263-282 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/gpu_mrv2_ubatching.py:263-282</code></a>).</p><p class="g-more">Read more: <a href="../concepts/compat-patches.html">Compat patches: how AFD changes vLLM without editing it</a></p></dd>
+<dt id="term-stage">stage </dt><dd><p class="g-short">The DBO ubatch index of one transfer on the wire. A connector sends one transfer per layer and stage.</p><p>The transfer metadata carries <code>stage_idx</code> next to <code>layer_idx</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/metadata.py#L188-L190" target="_blank" rel="noopener" title="afd_plugin/connectors/metadata.py:188-190 at afd-plugin 7452d52"><code>afd_plugin/connectors/metadata.py:188-190</code></a>).</p><p class="g-more">Read more: <a href="../concepts/wire-data.html">Data on the wire: tensors per layer and stage</a></p></dd>
+<dt id="term-step">step </dt><dd><p class="g-short">One engine iteration on the attention server: the scheduler picks a batch, the model runs all layers once, and vLLM samples. The FFN server follows each step.</p><p>The attention-side EngineCore runs one step in EngineCore.step (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/engine/core.py#L589-L601" target="_blank" rel="noopener" title="vllm:vllm/v1/engine/core.py:589-601 at vLLM ced6857"><code>vllm:vllm/v1/engine/core.py:589-601</code></a>). The control plane runs once per step; the data plane runs once per layer and stage.</p><p class="g-more">Read more: <a href="../tours/one-decode-step.html">Tour: One decode step</a></p></dd>
+</dl>
+<h2 id="letter-u">U<a class="h-anchor" href="#letter-u" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-ubatch">ubatch <span class="g-alias">also: microbatch</span></dt><dd><p class="g-short">A microbatch: one of the two token groups that DBO runs at the same time. On the wire its index is the stage.</p><p class="g-more">Read more: <a href="../concepts/dbo.html">Dual-batch overlap (DBO): two stages per step</a></p></dd>
+</dl>
+<h2 id="letter-v">V<a class="h-anchor" href="#letter-v" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-version-gate">version gate <span class="g-alias">also: is_target_vllm_compatible, install gate</span></dt><dd><p class="g-short">A check that decides whether a patch installs. is_target_vllm_compatible allows the target vLLM release and any dev build; on a mismatch, no patch installs.</p><p>Defined in <code>is_target_vllm_compatible</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/vllm.py#L53-L68" target="_blank" rel="noopener" title="afd_plugin/compat/vllm.py:53-68 at afd-plugin 7452d52"><code>afd_plugin/compat/vllm.py:53-68</code></a>). Different from the strict start-up check <code>assert_vllm_version_supported</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/vllm.py#L38-L50" target="_blank" rel="noopener" title="afd_plugin/compat/vllm.py:38-50 at afd-plugin 7452d52"><code>afd_plugin/compat/vllm.py:38-50</code></a>).</p><p class="g-more">Read more: <a href="../concepts/compat-patches.html">Compat patches: how AFD changes vLLM without editing it</a></p></dd>
+</dl>
+<h2 id="letter-w">W<a class="h-anchor" href="#letter-w" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-worker-cls">worker_cls </dt><dd><p class="g-short">The vLLM parallel-config field that names the worker class. The plugin rewrites it, but only when it is &quot;auto&quot;.</p><p class="g-more">Read more: <a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a></p></dd>
+</dl>
+<h2 id="letter-x">X<a class="h-anchor" href="#letter-x" aria-label="Link to this section">#</a></h2><dl class="glossary">
+<dt id="term-xayf">xAyF <span class="g-alias">also: 2A2F, 4A4F</span></dt><dd><p class="g-short">A topology name: x attention ranks and y FFN ranks, for example 2A2F. Use it only in topology names, not in prose.</p><p class="g-more">Read more: <a href="../concepts/topology.html">Topology and role ranks: the AFD world</a></p></dd>
+</dl>
+
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../reference/faq.html"><span class="pn-dir">← Previous</span><span class="pn-title">FAQ</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#letter-a">A</a></li><li class="toc-l2"><a href="#letter-b">B</a></li><li class="toc-l2"><a href="#letter-c">C</a></li><li class="toc-l2"><a href="#letter-d">D</a></li><li class="toc-l2"><a href="#letter-e">E</a></li><li class="toc-l2"><a href="#letter-f">F</a></li><li class="toc-l2"><a href="#letter-g">G</a></li><li class="toc-l2"><a href="#letter-h">H</a></li><li class="toc-l2"><a href="#letter-l">L</a></li><li class="toc-l2"><a href="#letter-m">M</a></li><li class="toc-l2"><a href="#letter-p">P</a></li><li class="toc-l2"><a href="#letter-r">R</a></li><li class="toc-l2"><a href="#letter-s">S</a></li><li class="toc-l2"><a href="#letter-u">U</a></li><li class="toc-l2"><a href="#letter-v">V</a></li><li class="toc-l2"><a href="#letter-w">W</a></li><li class="toc-l2"><a href="#letter-x">X</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+
+</body>
+</html>

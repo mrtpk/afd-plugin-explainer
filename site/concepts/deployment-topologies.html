@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deployment topologies: how to place the roles · AFD Plugin Explained</title>
+<meta name="description" content="The GPU recipes place the attention and FFN roles in five shapes: 2A2F and 4A4F colocation, 2P1A1F prefill/decode disaggregation with a proxy, a k8s multipod split, and the Qwen3.5 4A2F multipod. This page gives the process count, GPUs, ranks, flags, start order and ports of each.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="concepts/deployment-topologies">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a class="current" aria-current="page" href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>AFD concepts</span><span class="sep">›</span><span>Deploy and tune</span><span class="sep">›</span><span aria-current="page">Deployment topologies</span></nav>
+<h1 class="page-title">Deployment topologies: how to place the roles</h1>
+<div class="page-meta"><span class="level level-intermediate" title="Level">Intermediate</span><span class="meta-sec">AFD concepts</span><span class="meta-time">about 7 min read + 2 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../concepts/topology.html">Topology and role ranks: the AFD world</a> <span class="level level-advanced level-sm">Advanced</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">AFD runs as two or more <code>vllm serve</code> processes. A topology says how many
+<a class="term" href="../reference/glossary.html#term-attention-role" data-term="attention role" data-def="The side that runs attention and sends hidden states to the FFN side. The default role of a process.">attention</a> and <a class="term" href="../reference/glossary.html#term-ffn-role" data-term="FFN role" data-def="The side that runs the feed-forward and MoE experts. It receives hidden states, computes, and sends the result back.">FFN</a> ranks there are, and where they run.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p>AFD splits one model into an attention role and an FFN role. Each role is a separate
+<a class="term" href="../reference/glossary.html#term-attention-server" data-term="attention server" data-def="The vllm serve process that plays the attention role. It owns the API server, the scheduler and the KV cache.">server</a> process. A topology name <code>xAyF</code> gives the counts: <code>x</code>
+attention ranks and <code>y</code> FFN ranks (<a class="term" href="../reference/glossary.html#term-xayf" data-term="xAyF" data-def="A topology name: x attention ranks and y FFN ranks, for example 2A2F. Use it only in topology names, not in prose.">xAyF</a>). The GPU recipes ship five shapes of this
+split.</p>
+<p>Two rules fix the rank counts. For each role, the rank count must equal <code>DP &times; TP</code>: the
+attention ranks equal the attention server's data-parallel size times its tensor-parallel size, and the same
+for FFN (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L107-L117" target="_blank" rel="noopener" title="afd_plugin/validation.py:107-117 at afd-plugin 7452d52"><code>afd_plugin/validation.py:107-117</code></a>). The attention ranks must also be at least the FFN ranks,
+<code>A &gt;= F</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed/topology.py#L52-L58" target="_blank" rel="noopener" title="afd_plugin/distributed/topology.py:52-58 at afd-plugin 7452d52"><code>afd_plugin/distributed/topology.py:52-58</code></a>).</p>
+<p><strong>An everyday comparison.</strong> Think of a kitchen with a front counter and a back kitchen. The
+counter takes orders (attention); the kitchen cooks (FFN). You can add counters or cooks, but you need at
+least as many counters as cooks, and each team's size is set when you open. The comparison stops at the wire:
+the two teams talk only through the <a class="term" href="../reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">connector</a>.</p>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<figure class="diagram" id="fig-b5_deployment_topologies"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Three panels. Panel 1, colocation 2A2F: an attention-server box (role attention, GPUs 0 and 1, DP1 TP2, ranks A0 and A1, HTTP 18305) on the left, a neutral connector arrow in the middle, and an FFN-server box (role ffn, GPUs 2 and 3, DP1 TP2, ranks F0 and F1, no real scheduler, no KV) on the right. Panel 2, disaggregation 2P1A1F: a violet proxy box (HTTP 18305), a neutral two-prefillers box (GPU0, GPU1, NIXL kv_producer), a blue decode-attention box (GPU2, 18303) with an arrow down to an emerald decode-FFN box (GPU3, 18304), and a violet callout that the proxy and prefillers do prefill/decode, not the attention/FFN split. Panel 3, multipod: a 2A2F multipod box (POD ATTENTION_0 or FFN_0, two pods), a Qwen3.5 122B FP8 4A2F box (ATTENTION_0 plus ATTENTION_1 plus FFN_0, three pods), and an amber rule box (attention A equals DP times TP, ffn F equals DP times TP, A greater than or equal to F). A legend marks attention role, FFN role, proxy, the validation rule, and neutral."><svg role="img" aria-label="Three panels. Panel 1, colocation 2A2F: an attention-server box (role attention, GPUs 0 and 1, DP1 TP2, ranks A0 and A1, HTTP 18305) on the left, a neutral connector arrow in the middle, and an FFN-server box (role ffn, GPUs 2 and 3, DP1 TP2, ranks F0 and F1, no real scheduler, no KV) on the right. Panel 2, disaggregation 2P1A1F: a violet proxy box (HTTP 18305), a neutral two-prefillers box (GPU0, GPU1, NIXL kv_producer), a blue decode-attention box (GPU2, 18303) with an arrow down to an emerald decode-FFN box (GPU3, 18304), and a violet callout that the proxy and prefillers do prefill/decode, not the attention/FFN split. Panel 3, multipod: a 2A2F multipod box (POD ATTENTION_0 or FFN_0, two pods), a Qwen3.5 122B FP8 4A2F box (ATTENTION_0 plus ATTENTION_1 plus FFN_0, three pods), and an amber rule box (attention A equals DP times TP, ffn F equals DP times TP, A greater than or equal to F). A legend marks attention role, FFN role, proxy, the validation rule, and neutral." xmlns="http://www.w3.org/2000/svg" width="1100" height="822" viewBox="0 0 1100 822">
+<defs><marker id="dg-b5_deployment_topologies-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#9ca3af"/></marker></defs>
+<rect width="1100" height="822" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">AFD deployment topologies</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">One model, two or more vllm serve processes  ·  topology name xAyF  ·  GPU P2P connector</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">role ranks == DP * TP   ·   num_attention_ranks &gt;= num_ffn_ranks</text>
+<rect x="20.0" y="112.0" width="1060.0" height="176.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="138.0" r="13" fill="#111827"/>
+<text x="46.0" y="142.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="143.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Colocation (2A2F): two servers, four GPUs</text>
+<text x="68.0" y="162.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">One attention server and one FFN server. A0-&gt;F0, A1-&gt;F1 over AFD port 6269.</text>
+<rect x="46.0" y="182.0" width="440.0" height="80.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="58.0" y="202.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Attention server</text>
+<text x="58.0" y="220.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">role=attention  ·  GPUs 0,1</text>
+<text x="58.0" y="235.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">DP1 TP2 -&gt; ranks A0, A1</text>
+<text x="58.0" y="250.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">HTTP 18305  ·  --enable-dbo</text>
+<line x1="486.0" y1="222.0" x2="612.0" y2="222.0" stroke="#9ca3af" stroke-width="1.6" marker-end="url(#dg-b5_deployment_topologies-m0)"/>
+<text x="549.0" y="212.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#6b7280" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">connector</text>
+<rect x="614.0" y="182.0" width="440.0" height="80.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="626.0" y="202.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN server</text>
+<text x="626.0" y="220.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">role=ffn  ·  GPUs 2,3</text>
+<text x="626.0" y="235.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">DP1 TP2 -&gt; ranks F0, F1</text>
+<text x="626.0" y="250.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">HTTP 18305  ·  no real scheduler, no KV</text>
+<rect x="20.0" y="308.0" width="1060.0" height="212.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="334.0" r="13" fill="#111827"/>
+<text x="46.0" y="338.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="339.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Disaggregation (2P1A1F): add prefillers and a proxy</text>
+<text x="68.0" y="358.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Five processes. The proxy prefills on a prefiller, then the decode pair (attention + FFN) decodes.</text>
+<rect x="46.0" y="378.0" width="320.0" height="56.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="58.0" y="398.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Proxy (tools/proxy_server.py)</text>
+<text x="58.0" y="416.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">client endpoint  ·  HTTP 18305</text>
+<rect x="382.0" y="378.0" width="320.0" height="56.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="394.0" y="398.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">2 prefillers</text>
+<text x="394.0" y="416.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">GPU0, GPU1  ·  NIXL kv_producer</text>
+<rect x="718.0" y="378.0" width="336.0" height="56.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="730.0" y="398.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Decode attention</text>
+<text x="730.0" y="416.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">GPU2  ·  role=attention  ·  18303</text>
+<line x1="886.0" y1="434.0" x2="886.0" y2="454.0" stroke="#9ca3af" stroke-width="1.6" marker-end="url(#dg-b5_deployment_topologies-m0)"/>
+<rect x="718.0" y="454.0" width="336.0" height="52.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="730.0" y="474.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Decode FFN</text>
+<text x="730.0" y="492.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">GPU3  ·  role=ffn  ·  18304</text>
+<rect x="46.0" y="454.0" width="656.0" height="52.0" rx="8" fill="#ffffff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="60.0" y="484.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Not the A/F split:</text>
+<text x="180.5" y="484.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">the proxy and prefillers handle prefill/decode (NIXL KV), not attention/FFN.</text>
+<rect x="20.0" y="540.0" width="1060.0" height="168.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="566.0" r="13" fill="#111827"/>
+<text x="46.0" y="570.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="68.0" y="571.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Multipod (k8s): one pod per role, gated on POD</text>
+<text x="68.0" y="590.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Each vllm serve is wrapped in if [ &quot;$POD&quot; == ... ]. With POD unset, nothing runs.</text>
+<rect x="46.0" y="610.0" width="320.0" height="70.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="58.0" y="630.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">2A2F multipod</text>
+<text x="58.0" y="648.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">POD=ATTENTION_0 | FFN_0</text>
+<text x="58.0" y="663.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">DP1 TP2 each  ·  2 pods</text>
+<rect x="382.0" y="610.0" width="340.0" height="70.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="394.0" y="630.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Qwen3.5 122B FP8 (4A2F)</text>
+<text x="394.0" y="648.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">ATTENTION_0 + ATTENTION_1 + FFN_0</text>
+<text x="394.0" y="663.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">DP4 (DP2 local x2) / DP2  ·  3 pods</text>
+<rect x="738.0" y="610.0" width="316.0" height="70.0" rx="8" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.5"/>
+<text x="750.0" y="630.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#d97706" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">The rule</text>
+<text x="750.0" y="648.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention: A = DP x TP</text>
+<text x="750.0" y="663.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">ffn: F = DP x TP  ·  A &gt;= F</text>
+<text x="30.0" y="743.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="732.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="743.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention role</text>
+<rect x="225.1" y="732.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="246.1" y="743.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN role</text>
+<rect x="321.4" y="732.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="342.4" y="743.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">prefill/decode proxy</text>
+<rect x="484.6" y="732.0" width="14.0" height="14.0" rx="3" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<text x="505.6" y="743.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">validation rule</text>
+<rect x="613.2" y="732.0" width="14.0" height="14.0" rx="3" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<text x="634.2" y="743.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">non-AFD / neutral</text>
+<text x="30.0" y="772.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Eager variants pass --enforce-eager; graph variants pass --compilation-config cudagraph_mode=FULL_DECODE_ONLY.</text>
+<text x="30.0" y="790.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Start order: launch both roles, wait for &#x27;Application startup complete&#x27; in each log, then send traffic to the attention HTTP port.</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: the five GPU shapes. Colocation puts both roles on one host; disaggregation adds prefillers and a proxy; multipod puts one role per k8s pod. The rank rule A = DP x TP, F = DP x TP, A >= F holds in every shape.</figcaption><a class="diagram-open" href="../diagrams/b5_deployment_topologies.svg" target="_blank">Open full size ↗</a></div></figure>
+<p>Read the three panels top to bottom. Panel 1 is the common case, two servers on one host. Panel 2 adds a
+separate prefill stage and a proxy. Panel 3 splits the same roles across k8s pods. The blue boxes are the
+attention role, the emerald boxes the FFN role.</p>
+
+<h2 id="in-the-code">In the code<a class="h-anchor" href="#in-the-code" aria-label="Link to this section">#</a></h2>
+
+<h3 id="step-1-the-rank-rule-a-dp-x-tp-f-dp-x-tp">Step 1: The rank rule (A = DP x TP, F = DP x TP)<a class="h-anchor" href="#step-1-the-rank-rule-a-dp-x-tp-f-dp-x-tp" aria-label="Link to this section">#</a></h3>
+<p>The validator reads the role's rank count and compares it with <code>DP &times; TP</code> of that server. A
+mismatch raises before the run starts (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L107-L117" target="_blank" rel="noopener" title="afd_plugin/validation.py:107-117 at afd-plugin 7452d52"><code>afd_plugin/validation.py:107-117</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L107-L117" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/validation.py:107-117</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L107-L117" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">107</span><span class="ln">108</span><span class="ln">109</span><span class="ln">110</span><span class="ln hl">111</span><span class="ln hl">112</span><span class="ln hl">113</span><span class="ln hl">114</span><span class="ln hl">115</span><span class="ln hl">116</span><span class="ln hl">117</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(4 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(5 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(7 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(8 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(9 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(10 * var(--code-lh))"></span><pre><code class="language-python">    configured_ranks = (
+        afd_config.num_attention_ranks
+        if expected_role == &quot;attention&quot;
+        else afd_config.num_ffn_ranks
+    )
+    distributed_ranks = parallel.data_parallel_size * parallel.tensor_parallel_size
+    if configured_ranks != distributed_ranks:
+        raise RuntimeError(
+            f&quot;AFD ModelRunnerV2 {expected_role} ranks must match DP * TP: &quot;
+            f&quot;configured={configured_ranks}, distributed={distributed_ranks}&quot;,
+        )</code></pre></div></div></div><figcaption class="code-caption">The configured ranks must equal data-parallel size times tensor-parallel size.</figcaption></figure>
+<p>So a 2A2F topology has two ways to reach two attention ranks: <code>DP1 TP2</code> or <code>DP2 TP1</code>.
+Both give <code>2 = DP &times; TP</code>. The <a href="../concepts/topology.html">Topology and role ranks: the AFD world</a> page covers how a role rank maps to a
+world rank.</p>
+
+<h3 id="step-2-colocation-2a2f-two-servers-four-gpus">Step 2: Colocation 2A2F (two servers, four GPUs)<a class="h-anchor" href="#step-2-colocation-2a2f-two-servers-four-gpus" aria-label="Link to this section">#</a></h3>
+<p>The simplest recipe runs one attention server on GPUs 0 and 1, and one FFN server on GPUs 2 and 3. Each
+server sets <code>num_attention_ranks: 2</code> and <code>num_ffn_ranks: 2</code>, so the topology is 2A2F
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L7-L32" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-32 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-32</code></a>).</p>
+<figure class="code-excerpt" data-lang="bash"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L7-L20" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-20</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L7-L20" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln hl">7</span><span class="ln hl">8</span><span class="ln hl">9</span><span class="ln">10</span><span class="ln">11</span><span class="ln">12</span><span class="ln hl">13</span><span class="ln">14</span><span class="ln">15</span><span class="ln">16</span><span class="ln hl">17</span><span class="ln hl">18</span><span class="ln">19</span><span class="ln">20</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(0 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(1 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(10 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(11 * var(--code-lh))"></span><pre><code class="language-bash">CUDA_VISIBLE_DEVICES=0,1 uv run vllm serve &quot;$MODEL_PATH&quot; \
+    --data-parallel-size 1 \
+    --tensor-parallel-size 2 \
+    --enable-expert-parallel \
+    --additional-config &#x27;{
+        &quot;afd&quot;: {
+            &quot;role&quot;: &quot;attention&quot;,
+            &quot;connector&quot;: &quot;P2pNcclAFDConnector&quot;,
+            &quot;host&quot;: &quot;127.0.0.1&quot;,
+            &quot;port&quot;: 6269,
+            &quot;num_attention_ranks&quot;: 2,
+            &quot;num_ffn_ranks&quot;: 2
+        }
+    }&#x27; \</code></pre></div></div></div><figcaption class="code-caption">The attention server: GPUs 0,1, DP1 TP2, role attention, 2A2F.</figcaption></figure>
+<p>The DP/TP split is a choice. The <code>dp1tp2</code> variant uses <code>DP1 TP2</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L8-L9" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:8-9 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:8-9</code></a>);
+the <code>dp2tp1</code> variant uses <code>DP2 TP1</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp2tp1.sh#L8-L9" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp2tp1.sh:8-9 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp2tp1.sh:8-9</code></a>).
+Both give two ranks per role.</p>
+
+<h3 id="step-3-colocation-4a4f-double-both-roles">Step 3: Colocation 4A4F (double both roles)<a class="h-anchor" href="#step-3-colocation-4a4f-double-both-roles" aria-label="Link to this section">#</a></h3>
+<p>The 4A4F recipe doubles both sides: four attention ranks on GPUs 0-3, four FFN ranks on GPUs 4-7, each
+server <code>DP2 TP2</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/4a4f_graph_dbo_dp2tp2.sh#L7-L18" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/4a4f_graph_dbo_dp2tp2.sh:7-18 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/4a4f_graph_dbo_dp2tp2.sh:7-18</code></a>).</p>
+<figure class="code-excerpt" data-lang="bash"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/4a4f_graph_dbo_dp2tp2.sh#L7-L18" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/4a4f_graph_dbo_dp2tp2.sh:7-18</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/4a4f_graph_dbo_dp2tp2.sh#L7-L18" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln hl">7</span><span class="ln hl">8</span><span class="ln hl">9</span><span class="ln">10</span><span class="ln">11</span><span class="ln">12</span><span class="ln">13</span><span class="ln">14</span><span class="ln">15</span><span class="ln">16</span><span class="ln hl">17</span><span class="ln hl">18</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(0 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(1 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(10 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(11 * var(--code-lh))"></span><pre><code class="language-bash">CUDA_VISIBLE_DEVICES=0,1,2,3 uv run vllm serve &quot;$MODEL_PATH&quot; \
+    --data-parallel-size 2 \
+    --tensor-parallel-size 2 \
+    --enable-expert-parallel \
+    --additional-config &#x27;{
+        &quot;afd&quot;: {
+            &quot;role&quot;: &quot;attention&quot;,
+            &quot;connector&quot;: &quot;P2pNcclAFDConnector&quot;,
+            &quot;host&quot;: &quot;127.0.0.1&quot;,
+            &quot;port&quot;: 6269,
+            &quot;num_attention_ranks&quot;: 4,
+            &quot;num_ffn_ranks&quot;: 4</code></pre></div></div></div><figcaption class="code-caption">4A4F: eight GPUs, DP2 TP2 per role, four ranks each.</figcaption></figure>
+
+<h3 id="step-4-disaggregation-2p1a1f-prefillers-and-a-proxy">Step 4: Disaggregation 2P1A1F (prefillers and a proxy)<a class="h-anchor" href="#step-4-disaggregation-2p1a1f-prefillers-and-a-proxy" aria-label="Link to this section">#</a></h3>
+<p>The disaggregation recipe adds a prefill stage. It runs five processes: two prefillers, one attention
+decode server, one FFN decode server, and a proxy
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md#L40-L50" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50</code></a>). The attention and FFN servers each
+use <code>1A1F</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh#L56-L98" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:56-98 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:56-98</code></a>).</p>
+<figure class="code-excerpt" data-lang="bash"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh#L110-L125" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:110-125</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh#L110-L125" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">110</span><span class="ln">111</span><span class="ln">112</span><span class="ln">113</span><span class="ln">114</span><span class="ln">115</span><span class="ln">116</span><span class="ln">117</span><span class="ln hl">118</span><span class="ln">119</span><span class="ln">120</span><span class="ln">121</span><span class="ln">122</span><span class="ln">123</span><span class="ln">124</span><span class="ln">125</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(8 * var(--code-lh))"></span><pre><code class="language-bash"># ----- Disaggregation proxy (client-facing endpoint, HTTP 18305) -----
+# vLLM-native NIXL load-balance proxy. For each request it prefills on a
+# prefiller (do_remote_decode), reads back the prefiller&#x27;s NIXL handshake
+# metadata (remote_engine_id / remote_block_ids / remote_host / remote_port) in
+# kv_transfer_params, then hands it to the decoder with do_remote_prefill so the
+# decoder pulls the KV. Send benchmark/client traffic to 18305, NOT to 18303.
+# Wait for the prefill/attn/ffn servers to print &quot;Application startup complete&quot;
+# before this proxy starts accepting traffic.
+uv run python &quot;$SCRIPT_DIR/../../../../../tools/proxy_server.py&quot; \
+    --host 127.0.0.1 \
+    --port 18305 \
+    --prefiller-hosts 127.0.0.1 127.0.0.1 \
+    --prefiller-ports 18301 18302 \
+    --decoder-hosts 127.0.0.1 \
+    --decoder-ports 18303 \
+    &gt; proxy.log 2&gt;&amp;1</code></pre></div></div></div><figcaption class="code-caption">The proxy: a NIXL load-balance proxy in front of the prefillers and the decode pair.</figcaption></figure>
+<aside class="callout callout-warning"><p class="callout-title">The proxy and prefillers are not the A/F split</p><div class="callout-body"><p>The proxy is
+<code>tools/proxy_server.py</code>, copied from vLLM-Ascend (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tools/proxy_server.py#L1" target="_blank" rel="noopener" title="tools/proxy_server.py:1 at afd-plugin 7452d52"><code>tools/proxy_server.py:1</code></a>). It splits
+prefill and decode with a NIXL KV transfer, not attention and FFN. The attention/FFN split still happens on the
+decode pair, over AFD port 6269 (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh#L81-L85" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:81-85 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:81-85</code></a>).</p></div></aside>
+
+<h3 id="step-5-multipod-on-kubernetes">Step 5: Multipod on Kubernetes<a class="h-anchor" href="#step-5-multipod-on-kubernetes" aria-label="Link to this section">#</a></h3>
+<p>The <a class="term" href="../reference/glossary.html#term-multipod" data-term="multipod" data-def="A Kubernetes deployment that puts one AFD role per pod. Each vllm serve is gated on a POD environment variable, so with POD unset nothing runs.">multipod</a> recipes put one role per pod. Each <code>vllm serve</code> is wrapped in an
+<code>if [ "$POD" == ... ]</code> block, so with <code>POD</code> unset neither block runs
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh#L15-L16" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh:15-16 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh:15-16</code></a>).
+These scripts are for the <code>deploy-afd-k8s</code> skill, not for a local run
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md#L62-L69" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:62-69 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:62-69</code></a>).</p>
+<figure class="code-excerpt" data-lang="bash"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh#L12-L16" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh:12-16</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh#L12-L16" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">12</span><span class="ln">13</span><span class="ln">14</span><span class="ln hl">15</span><span class="ln">16</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(3 * var(--code-lh))"></span><pre><code class="language-bash">AFD_CONNECTOR_HOST=${AFD_CONNECTOR_HOST:-vllm-ffn-p2p-service}
+AFD_CONNECTOR_PORT=${AFD_CONNECTOR_PORT:-6269}
+
+if [ &quot;$POD&quot; == &quot;ATTENTION_0&quot; ]; then
+  CUDA_VISIBLE_DEVICES=0,1 uv run vllm serve &quot;$MODEL_PATH&quot; \</code></pre></div></div></div><figcaption class="code-caption">The POD gate and the connector host, resolved inside the cluster.</figcaption></figure>
+<p>The Qwen3.5 122B FP8 recipe is a three-pod 4A2F split: two attention pods and one FFN pod. The second
+attention pod sets <code>ATTENTION_HEADLESS=1</code> and <code>ATTENTION_DP_START_RANK=2</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh#L6-L8" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:6-8 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:6-8</code></a>).
+Each attention pod runs <code>--data-parallel-size 4</code> with <code>--data-parallel-size-local 2</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh#L33-L34" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:33-34 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:33-34</code></a>).
+So the two pods together hold the four attention ranks: global <code>DP4</code>, two local ranks per pod, with the
+second pod starting at rank 2
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh#L27-L28" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:27-28 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:27-28</code></a>).
+The FFN pod runs <code>DP2</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh#L70" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:70 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:70</code></a>).</p>
+
+<h2 id="deep-dive">Deep dive<a class="h-anchor" href="#deep-dive" aria-label="Link to this section">#</a></h2>
+
+<details class="deepdive" open><summary><span class="dd-label">Deep dive</span><h3 id="every-gpu-topology-at-a-glance" class="dd-title">Every GPU topology at a glance</h3></summary><div class="dd-body"><p>The table lists the AFD serve processes of each GPU recipe. The <a href="../reference/recipes.html">Recipes reference</a> page generates
+the full table from the scripts.</p>
+<table>
+  <thead><tr><th>Topology</th><th>Processes</th><th>GPUs</th><th>DP x TP (per role)</th>
+    <th>Ranks (A / F)</th><th>Recipe</th></tr></thead>
+  <tbody>
+    <tr><td>2A2F</td><td>2 serve</td><td>0,1 and 2,3</td><td>DP1 TP2 or DP2 TP1</td><td>2 / 2</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L7-L18" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-18 at afd-plugin 7452d52">2a2f_*</a></td></tr>
+    <tr><td>4A4F</td><td>2 serve</td><td>0-3 and 4-7</td><td>DP2 TP2</td><td>4 / 4</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/4a4f_graph_dbo_dp2tp2.sh#L7-L18" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/4a4f_graph_dbo_dp2tp2.sh:7-18 at afd-plugin 7452d52">4a4f_*</a></td></tr>
+    <tr><td>2P1A1F</td><td>5 (2 prefill + A + F + proxy)</td><td>0,1,2,3 + proxy</td><td>DP1 TP1 (decode)</td>
+      <td>1 / 1</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh#L56-L108" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:56-108 at afd-plugin 7452d52">2p1a1f_*</a></td></tr>
+    <tr><td>multipod 2A2F</td><td>2 pods</td><td>0,1 per pod</td><td>DP1 TP2</td><td>2 / 2</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh#L16-L27" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh:16-27 at afd-plugin 7452d52">multipod_2a_2f</a></td></tr>
+    <tr><td>multipod 4A2F (Qwen3.5)</td><td>3 pods</td><td>0,1 per pod</td>
+      <td>A: DP4 TP1 (DP2 local x2); F: DP2 TP1</td><td>4 / 2</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh#L31-L98" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:31-98 at afd-plugin 7452d52">multipod_2a_2a_2f</a></td></tr>
+  </tbody>
+</table>
+<p>The Qwen3.5 topology is the one case where <code>A &gt; F</code> (4 &gt; 2). The attention ranks spread over
+the FFN ranks in blocks that differ in size by at most one (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed/topology.py#L107-L115" target="_blank" rel="noopener" title="afd_plugin/distributed/topology.py:107-115 at afd-plugin 7452d52"><code>afd_plugin/distributed/topology.py:107-115</code></a>).
+See <a href="../concepts/topology.html">Topology and role ranks: the AFD world</a>.</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="eager-and-graph-variants" class="dd-title">Eager and graph variants</h3></summary><div class="dd-body"><p>Each DeepSeek-V2-Lite colocation topology ships an eager and a graph variant. They differ in two flags.</p>
+<ul>
+  <li><strong>Eager.</strong> The <code>*_eager_*</code> scripts pass <code>--enforce-eager</code>
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh#L26" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh:26 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh:26</code></a>).</li>
+  <li><strong>Graph.</strong> The <code>*_graph_*</code> scripts replace it with
+    <code>--max-cudagraph-capture-size 64</code> and
+    <code>--compilation-config '{"cudagraph_mode": "FULL_DECODE_ONLY", "cudagraph_capture_sizes":[64]}'</code>
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L26-L29" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-29 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-29</code></a>).</li>
+</ul>
+<p>On GPU, only <code><a class="term" href="../reference/glossary.html#term-full-decode-only" data-term="FULL_DECODE_ONLY" data-def="The only CUDA graph mode that AFD supports on GPU. Graphs capture decode steps only; other batches run eager.">FULL_DECODE_ONLY</a></code> is allowed
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L20-L21" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:20-21 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:20-21</code></a>). The <a href="../concepts/cuda-graphs.html">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</a> page covers capture and
+replay, and <a href="../concepts/tuning.html">Tuning: the knobs the repo exposes</a> covers the capture size.</p></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="start-order-and-ports" class="dd-title">Start order and ports</h3></summary><div class="dd-body"><p>A recipe backgrounds its serve processes, writes <code>attn.log</code> and <code>ffn.log</code>, then
+<code>wait</code>s (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L29-L61" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:29-61 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:29-61</code></a>).</p>
+<ol>
+  <li>Both roles start together. They meet at the AFD <a class="term" href="../reference/glossary.html#term-rendezvous" data-term="rendezvous" data-def="The host and port where the two roles meet to set up the connector process groups. Both servers use the same host and port.">rendezvous</a> <code>host:port</code>, default
+    <code>127.0.0.1:1239</code>; the recipes set <code>6269</code>
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L15-L16" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:15-16 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:15-16</code></a>).</li>
+  <li>Wait for <code>Application startup complete</code> in each log before you send traffic
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/README.md#L39-L43" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/README.md:39-43 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/README.md:39-43</code></a>).</li>
+  <li>Send requests only to the client-facing HTTP endpoint. In colocation that is the attention server's HTTP
+    port (<code>18305</code>) (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L258-L260" target="_blank" rel="noopener" title="README.md:258-260 at afd-plugin 7452d52"><code>README.md:258-260</code></a>,
+    <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md#L40-L50" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50</code></a>). In disaggregation that is the
+    proxy (<code>18305</code>), not the decode-attention server's own port (<code>18303</code>)
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh#L110-L115" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:110-115 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:110-115</code></a>).</li>
+</ol>
+<p>The two ports differ in meaning. The AFD port (<code>6269</code>) is where the two roles set up the
+connector groups. The client-facing HTTP port (<code>18305</code>) is where clients send requests: the
+attention server in colocation, the proxy in disaggregation.</p></div></details>
+
+<h2 id="what-can-go-wrong">What can go wrong<a class="h-anchor" href="#what-can-go-wrong" aria-label="Link to this section">#</a></h2>
+<aside class="callout callout-simplified"><p class="callout-title">Simplified</p><div class="callout-body"><p>This page shows the GPU recipes. The NPU recipes use different topologies and scales (for
+example 48A16F), covered on <a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a>.</p></div></aside>
+<ul>
+  <li><strong>Rank count does not match DP x TP.</strong> The validator raises when
+    <code>num_attention_ranks != DP &times; TP</code> for the attention server, or the same for FFN
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L107-L117" target="_blank" rel="noopener" title="afd_plugin/validation.py:107-117 at afd-plugin 7452d52"><code>afd_plugin/validation.py:107-117</code></a>).</li>
+  <li><strong>A &lt; F.</strong> The GPU connector requires <code>num_attention_ranks &gt;= num_ffn_ranks</code>
+    and raises otherwise (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed/topology.py#L52-L58" target="_blank" rel="noopener" title="afd_plugin/distributed/topology.py:52-58 at afd-plugin 7452d52"><code>afd_plugin/distributed/topology.py:52-58</code></a>).</li>
+  <li><strong>A multipod script run locally.</strong> With <code>POD</code> unset, neither serve block runs, so
+    nothing starts (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh#L15-L16" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh:15-16 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/multipod_2a_2f_graph_dbo_dp1tp2.sh:15-16</code></a>).</li>
+  <li><strong>A host or port mismatch between the roles.</strong> Both roles must use the same AFD
+    <code>host:port</code>, or the group setup hangs until the timeout
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L271" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:271 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:271</code></a>).</li>
+</ul>
+<p><strong>Why it matters.</strong> The topology fixes the process count, the GPU count and the rank mapping.
+A wrong rank count or a wrong host stops the run before the first token.</p>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>A 2A2F topology can use which two DP/TP splits per role?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p><code>DP1 TP2</code> or <code>DP2 TP1</code>. Both give two ranks, because the rank count must
+      equal <code>DP &times; TP</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L107-L117" target="_blank" rel="noopener" title="afd_plugin/validation.py:107-117 at afd-plugin 7452d52"><code>afd_plugin/validation.py:107-117</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>How many <code>vllm serve</code> processes does the 2P1A1F recipe start, and what are they?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Five: two prefillers, one attention decode server, one FFN decode server, and a proxy
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md#L40-L50" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:40-50</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>What does the proxy in 2P1A1F do, and why is it not part of the attention/FFN split?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>It load-balances prefill and decode with a NIXL KV transfer (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tools/proxy_server.py#L1" target="_blank" rel="noopener" title="tools/proxy_server.py:1 at afd-plugin 7452d52"><code>tools/proxy_server.py:1</code></a>). The
+      attention/FFN split happens on the decode pair over AFD port 6269, a different path
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh#L81-L85" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:81-85 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_disaggregation/2p1a1f_eager_dbo.sh:81-85</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>In the Qwen3.5 multipod recipe, how do two attention pods make four attention ranks?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Each pod runs <code>--data-parallel-size 4 --data-parallel-size-local 2</code>, so each holds two of
+      the four global DP ranks; the second pod sets <code>ATTENTION_DP_START_RANK=2</code> to start at rank 2. The
+      FFN pod runs <code>DP2</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh#L33-L34" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:33-34 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:33-34</code></a>,
+      <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh#L6-L8" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:6-8 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:6-8</code></a>,
+      <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh#L70" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:70 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/qwen3_5_122b_a10b_fp8/prefill_decode_colocation/multipod_2a_2a_2f_graph.sh:70</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>The graph variants replace one flag. Which flag, with what, and which graph mode is allowed on
+    GPU?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>They replace <code>--enforce-eager</code> with <code>--max-cudagraph-capture-size 64</code> and a
+      <code>--compilation-config</code> that sets <code>cudagraph_mode</code> to <code>FULL_DECODE_ONLY</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L26-L29" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-29 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:26-29</code></a>).
+      GPU AFD allows only <code>FULL_DECODE_ONLY</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L20-L21" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:20-21 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:20-21</code></a>).</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/tuning.html">Tuning: the knobs the repo exposes</a><span class="rel-sum">What afd-plugin lets you tune, and only what its code and READMEs state: the A:F rank ratio, DBO thresholds, CUDA graph capture, the group timeout, gate placement, the NPU CAM capacity, the profiler, the routing simulator and the benchmark tools. Every number is cited.</span></li><li><a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a><span class="rel-sum">AFD runs the attention part and the FFN part as two server processes. This page shows what each role owns, and why the FFN side has no real scheduler, no KV cache and no sampler.</span></li><li><a href="../tours/run-a-recipe.html">Tour: Run a recipe</a><span class="rel-sum">Read the 2a2f_graph_dbo_dp1tp2 recipe line by line. Each flag, the afd block, the FFN server, the start order, and how to send and benchmark a request, all cited to the script.</span></li><li><a href="../reference/recipes.html">Recipes reference</a><span class="rel-sum">Every recipe script under recipe/, generated from the source, with hardware, connector, model, topology, role, DP/TP, mode, DBO thresholds and ports. Hand notes cover the parts the parser cannot read.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../concepts/dbo.html"><span class="pn-dir">← Previous</span><span class="pn-title">Dual-batch overlap (DBO): two stages per step</span></a><a class="pn pn-next" href="../concepts/tuning.html"><span class="pn-dir">Next →</span><span class="pn-title">Tuning: the knobs the repo exposes</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#in-the-code">In the code</a></li><li class="toc-l3"><a href="#step-1-the-rank-rule-a-dp-x-tp-f-dp-x-tp">Step 1: The rank rule (A = DP x TP, F = DP x TP)</a></li><li class="toc-l3"><a href="#step-2-colocation-2a2f-two-servers-four-gpus">Step 2: Colocation 2A2F (two servers, four GPUs)</a></li><li class="toc-l3"><a href="#step-3-colocation-4a4f-double-both-roles">Step 3: Colocation 4A4F (double both roles)</a></li><li class="toc-l3"><a href="#step-4-disaggregation-2p1a1f-prefillers-and-a-proxy">Step 4: Disaggregation 2P1A1F (prefillers and a proxy)</a></li><li class="toc-l3"><a href="#step-5-multipod-on-kubernetes">Step 5: Multipod on Kubernetes</a></li><li class="toc-l2"><a href="#deep-dive">Deep dive</a></li><li class="toc-l3"><a href="#every-gpu-topology-at-a-glance">Every GPU topology at a glance</a></li><li class="toc-l3"><a href="#eager-and-graph-variants">Eager and graph variants</a></li><li class="toc-l3"><a href="#start-order-and-ports">Start order and ports</a></li><li class="toc-l2"><a href="#what-can-go-wrong">What can go wrong</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

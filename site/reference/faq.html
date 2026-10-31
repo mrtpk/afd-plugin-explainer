@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAQ · AFD Plugin Explained</title>
+<meta name="description" content="Short answers with citations. Where docs and code disagree, known open questions, and common practical questions about running and understanding AFD.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="reference/faq">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a class="current" aria-current="page" href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>Reference</span><span class="sep">›</span><span aria-current="page">FAQ</span></nav>
+<h1 class="page-title">FAQ</h1>
+<div class="page-meta"><span class="level level-intermediate" title="Level">Intermediate</span><span class="meta-sec">Reference</span><span class="meta-time">about 6 min read</span></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>You do not need to read other pages first.</p></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">Short answers to common questions about afd-plugin, each with a citation. Longer answers link to the
+concept page that covers the topic.</p></div>
+
+<h2 id="where-do-docs-and-code-disagree">Where do docs and code disagree?<a class="h-anchor" href="#where-do-docs-and-code-disagree" aria-label="Link to this section">#</a></h2>
+<p>The design docs under <code>docs/design/module/</code> were written against an older plugin commit, so
+their line numbers are stale. These pages cite the code at the pinned commit. The differences below are the
+ones a reader is most likely to meet.</p>
+<table>
+  <thead><tr><th>The docs say</th><th>The code does</th><th>Source</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>The README says both roles "require <code>VLLM_USE_V2_MODEL_RUNNER=1</code>"
+        (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L204" target="_blank" rel="noopener" title="README.md:204 at afd-plugin 7452d52"><code>README.md:204</code></a>).</td>
+      <td>vLLM picks Model Runner V2 by default when the variable is unset. The validator raises only when V2
+        resolves to off. The recipes still set it to <code>1</code> to be explicit.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/vllm.py#L692-L694" target="_blank" rel="noopener" title="vllm:vllm/config/vllm.py:692-694 at vLLM ced6857"><code>vllm:vllm/config/vllm.py:692-694</code></a>, <a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L90-L91" target="_blank" rel="noopener" title="afd_plugin/validation.py:90-91 at afd-plugin 7452d52"><code>afd_plugin/validation.py:90-91</code></a></td>
+    </tr>
+    <tr>
+      <td>The README model table names "Qwen3.5 / Qwen3.6 MoE" (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L51" target="_blank" rel="noopener" title="README.md:51 at afd-plugin 7452d52"><code>README.md:51</code></a>).</td>
+      <td>One architecture string is registered: <code>Qwen3_5MoeForConditionalGeneration</code>, mapped to
+        <code>AFDQwen3_5MoeForConditionalGeneration</code>.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L96-L131" target="_blank" rel="noopener" title="afd_plugin/__init__.py:96-131 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:96-131</code></a></td>
+    </tr>
+    <tr>
+      <td>The design docs cite plugin commit <code>36dadb4</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/docs/design/module/index.md#L38" target="_blank" rel="noopener" title="docs/design/module/index.md:38 at afd-plugin 7452d52"><code>docs/design/module/index.md:38</code></a>).</td>
+      <td>The plugin is pinned at a later commit. Line numbers in the design docs do not match the current
+        code; read the code.</td>
+      <td>7452d52</td>
+    </tr>
+    <tr>
+      <td>Every other connector config key is snake_case.</td>
+      <td>The async CAM connector accepts a camelCase wire key <code>dynamicQuant</code> for its field
+        <code>dynamic_quant</code>.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L182-L184" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:182-184 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:182-184</code></a></td>
+    </tr>
+    <tr>
+      <td>The DeepSeek-V2-Lite README benchmark step runs
+        <code>bash tools/benchmarks/benchmark.sh</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md#L111" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:111 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/README.md:111</code></a>).</td>
+      <td>No <code>tools/benchmarks/benchmark.sh</code> exists at the pinned commit. The benchmark harness is
+        <code>tools/benchmarks/request_generator.sh</code>, a wrapper around <code>vllm bench serve</code>.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tools/benchmarks/request_generator.sh#L1-L27" target="_blank" rel="noopener" title="tools/benchmarks/request_generator.sh:1-27 at afd-plugin 7452d52"><code>tools/benchmarks/request_generator.sh:1-27</code></a></td>
+    </tr>
+    <tr>
+      <td>The decode-bench script header points to
+        <code>tools/benchmarks/2a2f_graph_dbo_dp2tp1_decode_bench.sh</code> and
+        <code>tools/benchmarks/vllm_bench.sh</code>
+        (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tools/benchmarks/decode_bench_server.sh#L26-L30" target="_blank" rel="noopener" title="tools/benchmarks/decode_bench_server.sh:26-30 at afd-plugin 7452d52"><code>tools/benchmarks/decode_bench_server.sh:26-30</code></a>).</td>
+      <td>Neither file exists at the pinned commit. The present scripts are
+        <code>decode_bench_server.sh</code> and <code>request_generator.sh</code>.</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tools/benchmarks" target="_blank" rel="noopener"><code>tools/benchmarks/</code></a></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="known-open-questions">Known open questions<a class="h-anchor" href="#known-open-questions" aria-label="Link to this section">#</a></h2>
+<p>These facts are not in either repository. The pages that need them mark them as inferred.</p>
+<ul>
+  <li><strong>DeepSeek-V2-Lite model shape.</strong> The worked examples use hidden size <strong>2048</strong>,
+    dtype <strong>bf16</strong>, and <strong>27</strong> decoder layers (layer 0 dense). These come from the
+    DeepSeek-V2-Lite checkpoint config, not from afd-plugin or vLLM. A unit test fixture uses a synthetic
+    40-layer value, which is not the real model (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tests/unit/connectors/test_p2p_connector.py#L136" target="_blank" rel="noopener" title="tests/unit/connectors/test_p2p_connector.py:136 at afd-plugin 7452d52"><code>tests/unit/connectors/test_p2p_connector.py:136</code></a>).</li>
+  <li><strong>The 32,768-byte per-layer transfer.</strong> The figure <code>8 × 2048 × 2 bytes</code> on the
+    connector pages is derived from the inferred hidden size and bf16, for one decode step of 8 tokens. It is
+    an example, not a repository constant.</li>
+  <li><strong>v0.30 NPU hardware validation.</strong> The recipe index lists both NPU connectors as
+    "integrated v0.30 hardware validation pending"; the measured numbers are from older runtimes
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/README.md#L36-L38" target="_blank" rel="noopener" title="recipe/README.md:36-38 at afd-plugin 7452d52"><code>recipe/README.md:36-38</code></a>). See <a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a>.</li>
+</ul>
+
+<h2 id="practical-questions">Practical questions<a class="h-anchor" href="#practical-questions" aria-label="Link to this section">#</a></h2>
+
+<h3 id="does-afd-change-the-vllm-source">Does AFD change the vLLM source?<a class="h-anchor" href="#does-afd-change-the-vllm-source" aria-label="Link to this section">#</a></h3>
+<p>No. AFD is a vLLM general plugin. It registers models, a worker class, a routing strategy and a DBO op, and
+it installs monkey-patches on vLLM functions at import. The vLLM checkout is unchanged
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L142-L216" target="_blank" rel="noopener" title="afd_plugin/__init__.py:142-216 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:142-216</code></a>). See <a href="../concepts/compat-patches.html">Compat patches: how AFD changes vLLM without editing it</a>.</p>
+
+<h3 id="why-does-the-ffn-server-reject-a-request">Why does the FFN server reject a request?<a class="h-anchor" href="#why-does-the-ffn-server-reject-a-request" aria-label="Link to this section">#</a></h3>
+<p>The FFN worker is connector-driven, not scheduler-driven. If vLLM's scheduler ever calls the FFN worker's
+<code>execute_model</code>, it raises at once, so a misrouted request fails fast
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L122-L131" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:122-131 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:122-131</code></a>). Send requests only to the attention API server
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L258-L260" target="_blank" rel="noopener" title="README.md:258-260 at afd-plugin 7452d52"><code>README.md:258-260</code></a>). See <a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a>.</p>
+
+<h3 id="why-does-the-ffn-server-have-no-scheduler">Why does the FFN server have no scheduler?<a class="h-anchor" href="#why-does-the-ffn-server-have-no-scheduler" aria-label="Link to this section">#</a></h3>
+<p>The FFN role runs no KV cache and no request scheduler. Its EngineCore returns after the executor is built,
+and it installs a no-op scheduler stand-in so the native readiness handshake still works
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/patches/engine_core.py#L599-L623" target="_blank" rel="noopener" title="afd_plugin/compat/patches/engine_core.py:599-623 at afd-plugin 7452d52"><code>afd_plugin/compat/patches/engine_core.py:599-623</code></a>). The connector receive loop drives the FFN side
+instead. See <a href="../concepts/ffn-runtime.html">The FFN runtime: a connector-driven server loop</a>.</p>
+
+<h3 id="can-the-attention-ranks-be-fewer-than-the-ffn-ranks-a-f">Can the attention ranks be fewer than the FFN ranks (A &lt; F)?<a class="h-anchor" href="#can-the-attention-ranks-be-fewer-than-the-ffn-ranks-a-f" aria-label="Link to this section">#</a></h3>
+<p>No, not for the GPU connector. The P2P topology requires
+<code>num_attention_ranks &gt;= num_ffn_ranks</code>, and raises otherwise
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed/topology.py#L52-L58" target="_blank" rel="noopener" title="afd_plugin/distributed/topology.py:52-58 at afd-plugin 7452d52"><code>afd_plugin/distributed/topology.py:52-58</code></a>). See <a href="../concepts/deployment-topologies.html">Deployment topologies: how to place the roles</a>.</p>
+
+<h3 id="how-do-the-rank-counts-relate-to-dp-and-tp">How do the rank counts relate to DP and TP?<a class="h-anchor" href="#how-do-the-rank-counts-relate-to-dp-and-tp" aria-label="Link to this section">#</a></h3>
+<p>For each role, the rank count must equal <code>DP &times; TP</code>: <code>num_attention_ranks</code> for the
+attention role, <code>num_ffn_ranks</code> for the FFN role. The validator raises when they do not match
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L107-L117" target="_blank" rel="noopener" title="afd_plugin/validation.py:107-117 at afd-plugin 7452d52"><code>afd_plugin/validation.py:107-117</code></a>). See <a href="../concepts/deployment-topologies.html">Deployment topologies: how to place the roles</a>.</p>
+
+<h3 id="which-cuda-graph-modes-are-allowed">Which CUDA graph modes are allowed?<a class="h-anchor" href="#which-cuda-graph-modes-are-allowed" aria-label="Link to this section">#</a></h3>
+<p>On GPU, only <code>FULL_DECODE_ONLY</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L20-L21" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:20-21 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:20-21</code></a>). The recipes
+pass <code>--compilation-config '{"cudagraph_mode": "FULL_DECODE_ONLY", ...}'</code> for the graph variants.
+See <a href="../concepts/cuda-graphs.html">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</a> and <a href="../concepts/tuning.html">Tuning: the knobs the repo exposes</a>.</p>
+
+<h3 id="where-does-sampling-run">Where does sampling run?<a class="h-anchor" href="#where-does-sampling-run" aria-label="Link to this section">#</a></h3>
+<p>On the attention side. The attention runner does not override <code>sample_tokens</code>, so it samples
+natively in vLLM's call (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/gpu/model_runner.py#L2048-L2050" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050 at vLLM ced6857"><code>vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050</code></a>). The FFN runner's
+<code>sample_tokens</code> raises (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L405-L406" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:405-406 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:405-406</code></a>). See
+<a href="../tours/life-of-a-request.html">Tour: Life of a request</a>.</p>
+
+<h3 id="why-are-there-two-vllm-version-checks">Why are there two vLLM version checks?<a class="h-anchor" href="#why-are-there-two-vllm-version-checks" aria-label="Link to this section">#</a></h3>
+<p>The first check, at registration, warns on a version mismatch but does not stop
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/vllm.py#L29-L50" target="_blank" rel="noopener" title="afd_plugin/compat/vllm.py:29-50 at afd-plugin 7452d52"><code>afd_plugin/compat/vllm.py:29-50</code></a>). The second, at patch install, is a stricter gate that tolerates a
+<code>dev</code> suffix and installs the patches only on a matching version
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/vllm.py#L53-L68" target="_blank" rel="noopener" title="afd_plugin/compat/vllm.py:53-68 at afd-plugin 7452d52"><code>afd_plugin/compat/vllm.py:53-68</code></a>). See <a href="../concepts/compat-patches.html">Compat patches: how AFD changes vLLM without editing it</a>.</p>
+
+<h3 id="what-happens-on-a-different-vllm-version">What happens on a different vLLM version?<a class="h-anchor" href="#what-happens-on-a-different-vllm-version" aria-label="Link to this section">#</a></h3>
+<p>The patch gate fails, so no patch installs and <code>worker_cls</code> is never rewritten; AFD does not take
+effect. The registration still adds the models, the routing strategy and the DBO op
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L162-L216" target="_blank" rel="noopener" title="afd_plugin/__init__.py:162-216 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:162-216</code></a>). See <a href="../reference/compat-patches.html">Reference: compat patches</a>.</p>
+
+<h3 id="which-models-does-afd-support">Which models does AFD support?<a class="h-anchor" href="#which-models-does-afd-support" aria-label="Link to this section">#</a></h3>
+<p>DeepSeek V2/V3/V3.2, GLM-style DeepSeek, Qwen3-MoE and the Qwen3.5 family, each registered as an
+<code>AFD&lt;arch&gt;</code> wrapper (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L96-L131" target="_blank" rel="noopener" title="afd_plugin/__init__.py:96-131 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:96-131</code></a>). DeepSeek-V4 and the NPU wrappers
+are device-gated. See <a href="../concepts/model-registration.html">Model registration: the AFD&lt;arch&gt; wrappers</a>.</p>
+
+<h3 id="which-connector-is-the-default-and-on-which-device">Which connector is the default, and on which device?<a class="h-anchor" href="#which-connector-is-the-default-and-on-which-device" aria-label="Link to this section">#</a></h3>
+<p>The default is <code>P2pNcclAFDConnector</code>, the GPU connector (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L52" target="_blank" rel="noopener" title="afd_plugin/config.py:52 at afd-plugin 7452d52"><code>afd_plugin/config.py:52</code></a>). The
+two NPU connectors are <code>CAMP2pAFDConnector</code> (sync) and <code>CAMAsyncAFDConnector</code> (async).
+See <a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a> and <a href="../concepts/npu-overview.html">Ascend NPU overview: the same contract, different transports</a>.</p>
+
+<h3 id="how-do-i-benchmark-a-recipe">How do I benchmark a recipe?<a class="h-anchor" href="#how-do-i-benchmark-a-recipe" aria-label="Link to this section">#</a></h3>
+<p>Start a recipe, then drive load against the attention HTTP port with
+<code>tools/benchmarks/request_generator.sh</code>, a wrapper around <code>vllm bench serve</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/tools/benchmarks/request_generator.sh#L44-L57" target="_blank" rel="noopener" title="tools/benchmarks/request_generator.sh:44-57 at afd-plugin 7452d52"><code>tools/benchmarks/request_generator.sh:44-57</code></a>). For a Kubernetes run, the repository ships a
+<code>run-vllm-bench-k8s</code> contributor skill
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/.agents/skills/run-vllm-bench-k8s/SKILL.md#L1-L6" target="_blank" rel="noopener" title=".agents/skills/run-vllm-bench-k8s/SKILL.md:1-6 at afd-plugin 7452d52"><code>.agents/skills/run-vllm-bench-k8s/SKILL.md:1-6</code></a>). See <a href="../concepts/tuning.html">Tuning: the knobs the repo exposes</a>.</p>
+
+<h3 id="why-two-servers-for-one-model">Why two servers for one model?<a class="h-anchor" href="#why-two-servers-for-one-model" aria-label="Link to this section">#</a></h3>
+<p>AFD splits the model into an attention role and an FFN role, each a separate <code>vllm serve</code>
+process. The attention side owns the request and the KV cache; the FFN side runs the feed-forward and MoE
+experts and answers over the connector (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L258-L260" target="_blank" rel="noopener" title="README.md:258-260 at afd-plugin 7452d52"><code>README.md:258-260</code></a>). See <a href="../learn/what-is-afd.html">What is AFD?</a> and
+<a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a>.</p>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/roles.html">Attention and FFN roles: what each server owns</a><span class="rel-sum">AFD runs the attention part and the FFN part as two server processes. This page shows what each role owns, and why the FFN side has no real scheduler, no KV cache and no sampler.</span></li><li><a href="../concepts/deployment-topologies.html">Deployment topologies: how to place the roles</a><span class="rel-sum">The GPU recipes place the attention and FFN roles in five shapes: 2A2F and 4A4F colocation, 2P1A1F prefill/decode disaggregation with a proxy, a k8s multipod split, and the Qwen3.5 4A2F multipod. This page gives the process count, GPUs, ranks, flags, start order and ports of each.</span></li><li><a href="../concepts/tuning.html">Tuning: the knobs the repo exposes</a><span class="rel-sum">What afd-plugin lets you tune, and only what its code and READMEs state: the A:F rank ratio, DBO thresholds, CUDA graph capture, the group timeout, gate placement, the NPU CAM capacity, the profiler, the routing simulator and the benchmark tools. Every number is cited.</span></li><li><a href="../reference/afd-config.html">AFD config reference: the additional_config[&quot;afd&quot;] keys</a><span class="rel-sum">Every key of --additional-config &quot;afd&quot;, with its alias, type, default and validation, plus the connector_extra_config keys per connector and a worked example from a real recipe.</span></li><li><a href="../reference/compat-patches.html">Reference: compat patches</a><span class="rel-sum">Every AFD compat patch, its vLLM target at the pinned commit, how and when it installs, what it changes, and the page that explains it. Hand-checked, one row per replaced function.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../reference/compat-patches.html"><span class="pn-dir">← Previous</span><span class="pn-title">Reference: compat patches</span></a><a class="pn pn-next" href="../reference/glossary.html"><span class="pn-dir">Next →</span><span class="pn-title">Glossary</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#where-do-docs-and-code-disagree">Where do docs and code disagree?</a></li><li class="toc-l2"><a href="#known-open-questions">Known open questions</a></li><li class="toc-l2"><a href="#practical-questions">Practical questions</a></li><li class="toc-l3"><a href="#does-afd-change-the-vllm-source">Does AFD change the vLLM source?</a></li><li class="toc-l3"><a href="#why-does-the-ffn-server-reject-a-request">Why does the FFN server reject a request?</a></li><li class="toc-l3"><a href="#why-does-the-ffn-server-have-no-scheduler">Why does the FFN server have no scheduler?</a></li><li class="toc-l3"><a href="#can-the-attention-ranks-be-fewer-than-the-ffn-ranks-a-f">Can the attention ranks be fewer than the FFN ranks (A &lt; F)?</a></li><li class="toc-l3"><a href="#how-do-the-rank-counts-relate-to-dp-and-tp">How do the rank counts relate to DP and TP?</a></li><li class="toc-l3"><a href="#which-cuda-graph-modes-are-allowed">Which CUDA graph modes are allowed?</a></li><li class="toc-l3"><a href="#where-does-sampling-run">Where does sampling run?</a></li><li class="toc-l3"><a href="#why-are-there-two-vllm-version-checks">Why are there two vLLM version checks?</a></li><li class="toc-l3"><a href="#what-happens-on-a-different-vllm-version">What happens on a different vLLM version?</a></li><li class="toc-l3"><a href="#which-models-does-afd-support">Which models does AFD support?</a></li><li class="toc-l3"><a href="#which-connector-is-the-default-and-on-which-device">Which connector is the default, and on which device?</a></li><li class="toc-l3"><a href="#how-do-i-benchmark-a-recipe">How do I benchmark a recipe?</a></li><li class="toc-l3"><a href="#why-two-servers-for-one-model">Why two servers for one model?</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+
+</body>
+</html>

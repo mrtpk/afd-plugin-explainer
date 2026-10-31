@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AFD config reference: the additional_config[&quot;afd&quot;] keys · AFD Plugin Explained</title>
+<meta name="description" content="Every key of --additional-config &quot;afd&quot;, with its alias, type, default and validation, plus the connector_extra_config keys per connector and a worked example from a real recipe.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="reference/afd-config">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a class="current" aria-current="page" href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>Reference</span><span class="sep">›</span><span aria-current="page">AFD config reference</span></nav>
+<h1 class="page-title">AFD config reference: the additional_config[&quot;afd&quot;] keys</h1>
+<div class="page-meta"><span class="level level-intermediate" title="Level">Intermediate</span><span class="meta-sec">Reference</span><span class="meta-time">about 6 min read</span></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../concepts/afd-config.html">AFD configuration: additional_config[&quot;afd&quot;]</a> <span class="level level-intermediate level-sm">Intermediate</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">This page lists every <a class="term" href="../reference/glossary.html#term-afd-config" data-term="AFDConfig" data-def="The plugin&#x27;s own configuration object. It holds the role, the connector name, the topology sizes and the rendezvous host/port.">AFD config</a> key, its alias, type, default and
+validation, and the <a class="term" href="../reference/glossary.html#term-connector-extra-config" data-term="connector_extra_config" data-def="A mapping of connector-specific options inside the AFD config. Each connector declares which keys it accepts, and rejects the rest.">connector_extra_config</a> keys that each <a class="term" href="../reference/glossary.html#term-connector" data-term="connector" data-def="The object that moves hidden states between the attention role and the FFN role. Each connector picks one transport.">connector</a> accepts.</p></div>
+
+<h2 id="how-the-config-is-passed">How the config is passed<a class="h-anchor" href="#how-the-config-is-passed" aria-label="Link to this section">#</a></h2>
+<p>You give AFD config to vLLM under one key. Each <code>vllm serve</code> process gets
+<code>--additional-config '{"afd": { ... }}'</code>. vLLM stores the outer mapping on its
+<a class="term" href="../reference/glossary.html#term-additional-config" data-term="additional_config" data-def="A vLLM config field. The plugin reads its &quot;afd&quot; key for the role, the connector, the topology sizes and the host/port.">additional_config</a> field (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/vllm.py#L434" target="_blank" rel="noopener" title="vllm:vllm/config/vllm.py:434 at vLLM ced6857"><code>vllm:vllm/config/vllm.py:434</code></a>). The plugin reads the inner
+<code>"afd"</code> mapping and builds an <a class="term" href="../reference/glossary.html#term-afd-config" data-term="AFDConfig" data-def="The plugin&#x27;s own configuration object. It holds the role, the connector name, the topology sizes and the rendezvous host/port.">AFDConfig</a> dataclass
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L42" target="_blank" rel="noopener" title="afd_plugin/config.py:42 at afd-plugin 7452d52"><code>afd_plugin/config.py:42</code></a>).</p>
+<p>The two tables in the next section are generated from the source. The validation, read-site and example
+tables that follow are hand-written, each row with a citation.</p>
+
+<h2 id="the-keys">The keys<a class="h-anchor" href="#the-keys" aria-label="Link to this section">#</a></h2>
+<p>The build generates the tables below from <code>AFDConfig</code> and the connector source, so the names,
+types, defaults and lines stay correct at the pinned commit. Run
+<code>python3 tools/gen_afd_config.py</code> to refresh them.</p>
+
+<!-- BEGIN GENERATED afd-config -->
+<p><em>Generated by <code>tools/gen_afd_config.py</code> from <code>afd_plugin/config.py</code> and the connector source. Do not edit between the markers.</em></p>
+<h3 id="the-afd-keys">The <code>afd</code> keys<a class="h-anchor" href="#the-afd-keys" aria-label="Link to this section">#</a></h3>
+<table><thead><tr><th>Key</th><th>Alias</th><th>Type</th><th>Default</th><th>What it is</th><th>Source</th></tr></thead><tbody><tr><td><code>connector</code></td><td><code>afd_connector</code></td><td><code>str</code></td><td><code>&#x27;P2pNcclAFDConnector&#x27;</code></td><td>Connector implementation name used to create the backend data path.</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L52" target="_blank" rel="noopener" title="afd_plugin/config.py:52 at afd-plugin 7452d52"><code>afd_plugin/config.py:52</code></a></td></tr><tr><td><code>async_dp</code></td><td><code>async</code></td><td><code>bool</code></td><td><code>False</code></td><td>Whether AFD owns async data-parallel runtime patches for this process.</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L54" target="_blank" rel="noopener" title="afd_plugin/config.py:54 at afd-plugin 7452d52"><code>afd_plugin/config.py:54</code></a></td></tr><tr><td><code>role</code></td><td><code>afd_role</code></td><td><code>AFDRole</code></td><td><code>&#x27;attention&#x27;</code></td><td>Role owned by this process: Attention sends hidden states; FFN receives.</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L56" target="_blank" rel="noopener" title="afd_plugin/config.py:56 at afd-plugin 7452d52"><code>afd_plugin/config.py:56</code></a></td></tr><tr><td><code>port</code></td><td><code>afd_port</code></td><td><code>int</code></td><td><code>1239</code></td><td>Port used by the AFD connector rendezvous/control path.</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L58" target="_blank" rel="noopener" title="afd_plugin/config.py:58 at afd-plugin 7452d52"><code>afd_plugin/config.py:58</code></a></td></tr><tr><td><code>host</code></td><td><code>afd_host</code></td><td><code>str</code></td><td><code>&#x27;127.0.0.1&#x27;</code></td><td>Host used by the AFD connector rendezvous/control path.</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L60" target="_blank" rel="noopener" title="afd_plugin/config.py:60 at afd-plugin 7452d52"><code>afd_plugin/config.py:60</code></a></td></tr><tr><td><code>num_attention_ranks</code></td><td>&mdash;</td><td><code>int</code></td><td><code>1</code></td><td>Number of AFD Attention ranks participating in this topology.</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L62" target="_blank" rel="noopener" title="afd_plugin/config.py:62 at afd-plugin 7452d52"><code>afd_plugin/config.py:62</code></a></td></tr><tr><td><code>num_ffn_ranks</code></td><td>&mdash;</td><td><code>int</code></td><td><code>1</code></td><td>Number of AFD FFN ranks participating in this topology.</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L64" target="_blank" rel="noopener" title="afd_plugin/config.py:64 at afd-plugin 7452d52"><code>afd_plugin/config.py:64</code></a></td></tr><tr><td><code>compute_gate_on_attention</code></td><td>&mdash;</td><td><code>bool</code></td><td><code>False</code></td><td>Whether Attention computes MoE gate outputs before sending to FFN.</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L66" target="_blank" rel="noopener" title="afd_plugin/config.py:66 at afd-plugin 7452d52"><code>afd_plugin/config.py:66</code></a></td></tr><tr><td><code>afd_process_group_timeout_s</code></td><td>&mdash;</td><td><code>int</code></td><td><code>120</code></td><td>Timeout, in seconds, for the AFD world process group rendezvous. The right value depends on rank count, placement, and model size, so it is left to the caller (deployment tooling) rather than derived here.</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L70" target="_blank" rel="noopener" title="afd_plugin/config.py:70 at afd-plugin 7452d52"><code>afd_plugin/config.py:70</code></a></td></tr><tr><td><code>connector_extra_config</code></td><td>&mdash;</td><td><code>dict[str, Any]</code></td><td><code>{} (empty mapping)</code></td><td></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L71" target="_blank" rel="noopener" title="afd_plugin/config.py:71 at afd-plugin 7452d52"><code>afd_plugin/config.py:71</code></a></td></tr></tbody></table>
+<h3 id="connector-extra-config-by-connector"><code>connector_extra_config</code> by connector<a class="h-anchor" href="#connector-extra-config-by-connector" aria-label="Link to this section">#</a></h3>
+<p><strong><code>P2pNcclAFDConnector</code> (GPU):</strong> no keys. A non-empty <code>connector_extra_config</code> raises <code>ValueError</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L155" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:155 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:155</code></a>).</p>
+<h4><code>CAMP2pAFDConnector</code> (NPU)</h4>
+<table><thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Source</th></tr></thead><tbody><tr><td><code>core_num</code></td><td><code>int &gt; 0</code></td><td><code>8</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/camp2p.py#L116" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/camp2p.py:116 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/camp2p.py:116</code></a></td></tr><tr><td><code>attn_core_num</code></td><td><code>int &gt; 0, or null</code></td><td><code>None</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/camp2p.py#L120" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/camp2p.py:120 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/camp2p.py:120</code></a></td></tr><tr><td><code>ffn_core_num</code></td><td><code>int &gt; 0, or null</code></td><td><code>None</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/camp2p.py#L124" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/camp2p.py:124 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/camp2p.py:124</code></a></td></tr><tr><td><code>compute_gate_on_attention</code></td><td><code>bool</code></td><td><code>False</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/camp2p.py#L128" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/camp2p.py:128 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/camp2p.py:128</code></a></td></tr><tr><td><code>hccl_buffer_size</code></td><td><code>int &gt; 0, or null</code></td><td><code>None</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/camp2p.py#L132" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/camp2p.py:132 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/camp2p.py:132</code></a></td></tr><tr><td><code>quant_mode</code></td><td><code>int</code></td><td><code>0</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/camp2p.py#L136" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/camp2p.py:136 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/camp2p.py:136</code></a></td></tr></tbody></table>
+<h4><code>CAMAsyncAFDConnector</code> (NPU)</h4>
+<p>The async connector accepts the wire key <code>dynamicQuant</code> for its typed field <code>dynamic_quant</code>.</p>
+<table><thead><tr><th>Key</th><th>Type</th><th>Default</th><th>Source</th></tr></thead><tbody><tr><td><code>dynamicQuant</code></td><td><code>int</code></td><td><code>0</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L183" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:183 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:183</code></a></td></tr><tr><td><code>attn_ranks_per_dp</code></td><td><code>int &gt; 0</code></td><td><code>1</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L187" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:187 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:187</code></a></td></tr><tr><td><code>hccl_buffer_size</code></td><td><code>int &gt; 0, or null</code></td><td><code>None</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L191" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:191 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:191</code></a></td></tr><tr><td><code>ffn_two_stream</code></td><td><code>bool</code></td><td><code>False</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L195" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:195 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:195</code></a></td></tr><tr><td><code>ffn_compute_aic_num</code></td><td><code>int &gt; 0</code></td><td><code>12</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L198" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:198 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:198</code></a></td></tr><tr><td><code>ffn_compute_aiv_num</code></td><td><code>int &gt; 0</code></td><td><code>24</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L201" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:201 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:201</code></a></td></tr><tr><td><code>ffn_combine_aiv_num</code></td><td><code>int &gt; 0</code></td><td><code>24</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/npu/async_cam.py#L204" target="_blank" rel="noopener" title="afd_plugin/connectors/npu/async_cam.py:204 at afd-plugin 7452d52"><code>afd_plugin/connectors/npu/async_cam.py:204</code></a></td></tr></tbody></table>
+<!-- END GENERATED afd-config -->
+
+<h2 id="validation-rules">Validation rules<a class="h-anchor" href="#validation-rules" aria-label="Link to this section">#</a></h2>
+<p>The plugin coerces each value to its type, then validates it. Coercion happens in
+<code>_normalize_mapping</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L120-L176" target="_blank" rel="noopener" title="afd_plugin/config.py:120-176 at afd-plugin 7452d52"><code>afd_plugin/config.py:120-176</code></a>); validation happens in
+<code>validate_afd_config</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L311-L350" target="_blank" rel="noopener" title="afd_plugin/config.py:311-350 at afd-plugin 7452d52"><code>afd_plugin/config.py:311-350</code></a>). An invalid value raises before the
+run starts.</p>
+<table>
+  <thead><tr><th>Rule</th><th>Applies to</th><th>Source</th></tr></thead>
+  <tbody>
+    <tr><td>Unknown <code>afd</code> key raises <code>ValueError</code></td><td>any key not a field or alias</td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L134-L139" target="_blank" rel="noopener" title="afd_plugin/config.py:134-139 at afd-plugin 7452d52"><code>afd_plugin/config.py:134-139</code></a></td></tr>
+    <tr><td>An alias and its canonical key together raise <code>ValueError</code></td><td>for example
+      <code>role</code> and <code>afd_role</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L140-L144" target="_blank" rel="noopener" title="afd_plugin/config.py:140-144 at afd-plugin 7452d52"><code>afd_plugin/config.py:140-144</code></a></td></tr>
+    <tr><td><code>role</code> must be <code>"attention"</code> or <code>"ffn"</code></td><td><code>role</code></td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L318-L321" target="_blank" rel="noopener" title="afd_plugin/config.py:318-321 at afd-plugin 7452d52"><code>afd_plugin/config.py:318-321</code></a></td></tr>
+    <tr><td><code>connector</code> must be one of the three registered names</td><td><code>connector</code></td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L326-L330" target="_blank" rel="noopener" title="afd_plugin/config.py:326-330 at afd-plugin 7452d52"><code>afd_plugin/config.py:326-330</code></a></td></tr>
+    <tr><td><code>async_dp=true</code> needs <code>connector="CAMAsyncAFDConnector"</code></td>
+      <td><code>async_dp</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L331-L334" target="_blank" rel="noopener" title="afd_plugin/config.py:331-334 at afd-plugin 7452d52"><code>afd_plugin/config.py:331-334</code></a></td></tr>
+    <tr><td><code>host</code> must be non-empty</td><td><code>host</code></td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L339-L340" target="_blank" rel="noopener" title="afd_plugin/config.py:339-340 at afd-plugin 7452d52"><code>afd_plugin/config.py:339-340</code></a></td></tr>
+    <tr><td><code>port</code> must be in <code>1..65535</code></td><td><code>port</code></td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L341-L342" target="_blank" rel="noopener" title="afd_plugin/config.py:341-342 at afd-plugin 7452d52"><code>afd_plugin/config.py:341-342</code></a></td></tr>
+    <tr><td><code>num_attention_ranks</code> and <code>num_ffn_ranks</code> must be positive</td>
+      <td>both rank counts</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L343-L350" target="_blank" rel="noopener" title="afd_plugin/config.py:343-350 at afd-plugin 7452d52"><code>afd_plugin/config.py:343-350</code></a></td></tr>
+    <tr><td>For <code>P2pNcclAFDConnector</code>: <code>num_attention_ranks &gt;= num_ffn_ranks</code></td>
+      <td>GPU P2P only</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed/topology.py#L52-L58" target="_blank" rel="noopener" title="afd_plugin/distributed/topology.py:52-58 at afd-plugin 7452d52"><code>afd_plugin/distributed/topology.py:52-58</code></a></td></tr>
+    <tr><td>Booleans accept <code>true/false</code>, <code>1/0</code>, <code>yes/no</code>, <code>on/off</code></td>
+      <td><code>async_dp</code>, <code>compute_gate_on_attention</code></td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config_utils.py#L8-L24" target="_blank" rel="noopener" title="afd_plugin/config_utils.py:8-24 at afd-plugin 7452d52"><code>afd_plugin/config_utils.py:8-24</code></a></td></tr>
+    <tr><td>Integers reject <code>bool</code> and <code>float</code> inputs</td>
+      <td><code>port</code>, rank counts</td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config_utils.py#L35-L45" target="_blank" rel="noopener" title="afd_plugin/config_utils.py:35-45 at afd-plugin 7452d52"><code>afd_plugin/config_utils.py:35-45</code></a></td></tr>
+  </tbody>
+</table>
+<aside class="callout callout-note"><p class="callout-title">The connector also validates its own extra config</p><div class="callout-body"><p>Each connector parses
+<code>connector_extra_config</code> in its own <code>parse_extra_config</code> hook, and rejects unknown keys
+there (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L64-L72" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:64-72 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:64-72</code></a>). The GPU connector accepts no keys at all
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L146-L158" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:146-158 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:146-158</code></a>).</p></div></aside>
+
+<h2 id="where-each-value-is-read-and-what-it-changes">Where each value is read, and what it changes<a class="h-anchor" href="#where-each-value-is-read-and-what-it-changes" aria-label="Link to this section">#</a></h2>
+<p>The table lists the main GPU read site of each key. The NPU connectors read the same keys through their own
+code.</p>
+<table>
+  <thead><tr><th>Key</th><th>Read at (GPU)</th><th>What it changes</th></tr></thead>
+  <tbody>
+    <tr><td><code>connector</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/factory.py#L57-L60" target="_blank" rel="noopener" title="afd_plugin/connectors/factory.py:57-60 at afd-plugin 7452d52"><code>afd_plugin/connectors/factory.py:57-60</code></a></td>
+      <td>Which connector class the factory builds.</td></tr>
+    <tr><td><code>role</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L350-L354" target="_blank" rel="noopener" title="afd_plugin/validation.py:350-354 at afd-plugin 7452d52"><code>afd_plugin/validation.py:350-354</code></a></td>
+      <td>The expected worker class, so attention or FFN. The worker runs the matching runner.</td></tr>
+    <tr><td><code>host</code>, <code>port</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L271" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:271 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:271</code></a></td>
+      <td>The TCP <a class="term" href="../reference/glossary.html#term-rendezvous" data-term="rendezvous" data-def="The host and port where the two roles meet to set up the connector process groups. Both servers use the same host and port.">rendezvous</a> where the two roles set up the connector groups.</td></tr>
+    <tr><td><code>num_attention_ranks</code>, <code>num_ffn_ranks</code></td>
+      <td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed/topology.py#L46-L49" target="_blank" rel="noopener" title="afd_plugin/distributed/topology.py:46-49 at afd-plugin 7452d52"><code>afd_plugin/distributed/topology.py:46-49</code></a></td>
+      <td>The world size and the per-FFN <a class="term" href="../reference/glossary.html#term-p2p-subgroup" data-term="P2P subgroup" data-def="In the GPU P2P connector, one FFN rank plus the attention ranks mapped to it. The FFN rank is subgroup rank 0.">subgroups</a>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed/topology.py#L118-L146" target="_blank" rel="noopener" title="afd_plugin/distributed/topology.py:118-146 at afd-plugin 7452d52"><code>afd_plugin/distributed/topology.py:118-146</code></a>).</td></tr>
+    <tr><td><code>async_dp</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L303-L308" target="_blank" rel="noopener" title="afd_plugin/config.py:303-308 at afd-plugin 7452d52"><code>afd_plugin/config.py:303-308</code></a></td>
+      <td>Selects AFD async mode through <code>is_afd_async_dp</code>. It gates the NPU async-DP patches
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/compat/npu/runtime.py#L44-L53" target="_blank" rel="noopener" title="afd_plugin/compat/npu/runtime.py:44-53 at afd-plugin 7452d52"><code>afd_plugin/compat/npu/runtime.py:44-53</code></a>); on GPU it must be false.</td></tr>
+    <tr><td><code>compute_gate_on_attention</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L211-L215" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:211-215 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:211-215</code></a></td>
+      <td>Whether the attention side computes the MoE gate; the FFN side then runs only the expert layers.</td></tr>
+    <tr><td><code>afd_process_group_timeout_s</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/gpu/p2p.py#L275" target="_blank" rel="noopener" title="afd_plugin/connectors/gpu/p2p.py:275 at afd-plugin 7452d52"><code>afd_plugin/connectors/gpu/p2p.py:275</code></a></td>
+      <td>How long the world process-group rendezvous waits before it fails.</td></tr>
+    <tr><td><code>connector_extra_config</code></td><td><a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/connectors/base.py#L105-L107" target="_blank" rel="noopener" title="afd_plugin/connectors/base.py:105-107 at afd-plugin 7452d52"><code>afd_plugin/connectors/base.py:105-107</code></a></td>
+      <td>The per-connector options; stored on <code>extra_info</code> after the connector parses it.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="where-the-final-value-is-set">Where the final value is set<a class="h-anchor" href="#where-the-final-value-is-set" aria-label="Link to this section">#</a></h2>
+<p>Lesson from the fact checks: a default is not final until the code sets it. Trace each value through four
+steps. A missing key takes the dataclass default; a present key is coerced, stored, then validated.</p>
+<figure class="diagram" id="fig-s2_config_resolution"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: A four-step pipeline, left to right. Step 1, recipe JSON, in blue: the key num_attention_ranks set to 2, at config.py line 189. Step 2, _normalize_mapping, in violet: alias rewrite and integer coercion, at config.py lines 120 to 176. Step 3, AFDConfig field, in emerald: the default is 1 when the key is absent, at config.py line 62. Step 4, validate_afd_config, in amber: the value must be greater than zero and attention ranks must be at least FFN ranks, at config.py line 343 and topology.py line 52. A legend names the four stages."><svg role="img" aria-label="A four-step pipeline, left to right. Step 1, recipe JSON, in blue: the key num_attention_ranks set to 2, at config.py line 189. Step 2, _normalize_mapping, in violet: alias rewrite and integer coercion, at config.py lines 120 to 176. Step 3, AFDConfig field, in emerald: the default is 1 when the key is absent, at config.py line 62. Step 4, validate_afd_config, in amber: the value must be greater than zero and attention ranks must be at least FFN ranks, at config.py line 343 and topology.py line 52. A legend names the four stages." xmlns="http://www.w3.org/2000/svg" width="1100" height="428" viewBox="0 0 1100 428">
+<defs><marker id="dg-s2_config_resolution-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/></marker></defs>
+<rect width="1100" height="428" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Where an AFD config value is finally set</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Example key: num_attention_ranks. The recipe value is coerced, then stored, then validated.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_plugin/config.py  ·  distributed/topology.py  ·  canvas 1100</text>
+<rect x="20.0" y="120.0" width="1060.0" height="196.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="146.0" r="13" fill="#111827"/>
+<text x="46.0" y="150.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="151.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Trace one key from the recipe to the validated config</text>
+<text x="68.0" y="170.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">A missing key takes the dataclass default; a present key is coerced to its type.</text>
+<rect x="24.0" y="190.0" width="230.0" height="84.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="139.0" y="210.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">recipe JSON</text>
+<text x="139.0" y="228.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">num_attention_ranks: 2</text>
+<text x="139.0" y="243.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">config.py:189</text>
+<rect x="289.0" y="190.0" width="230.0" height="84.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="404.0" y="210.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">_normalize_mapping</text>
+<text x="404.0" y="228.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">alias + coerce_int</text>
+<text x="404.0" y="243.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">config.py:120-176</text>
+<line x1="256.0" y1="232.0" x2="287.0" y2="232.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-s2_config_resolution-m0)"/>
+<rect x="554.0" y="190.0" width="230.0" height="84.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="669.0" y="210.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">AFDConfig field</text>
+<text x="669.0" y="228.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">default 1 if absent</text>
+<text x="669.0" y="243.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">config.py:62</text>
+<line x1="521.0" y1="232.0" x2="552.0" y2="232.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-s2_config_resolution-m0)"/>
+<rect x="819.0" y="190.0" width="230.0" height="84.0" rx="8" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.5"/>
+<text x="934.0" y="210.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#d97706" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">validate_afd_config</text>
+<text x="934.0" y="228.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">must be &gt; 0; A &gt;= F</text>
+<text x="934.0" y="243.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="middle" xml:space="preserve" style="white-space:pre">config.py:343 / topology.py:52</text>
+<line x1="786.0" y1="232.0" x2="817.0" y2="232.0" stroke="#6b7280" stroke-width="1.6" marker-end="url(#dg-s2_config_resolution-m0)"/>
+<text x="30.0" y="349.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="338.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="118.3" y="349.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">deployment value</text>
+<rect x="241.7" y="338.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="262.7" y="349.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">alias + coercion</text>
+<rect x="376.6" y="338.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="397.6" y="349.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">dataclass default</text>
+<rect x="523.5" y="338.0" width="14.0" height="14.0" rx="3" fill="#fffbeb" fill-opacity="1.0" stroke="#d97706" stroke-width="1.4"/>
+<text x="544.5" y="349.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">validation</text>
+<text x="30.0" y="378.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The alias map (config.py:32-38) rewrites afd_role -&gt; role, async -&gt; async_dp, and so on before coercion.</text>
+<text x="30.0" y="396.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Only P2pNcclAFDConnector adds the A &gt;= F check (topology.py:52-58); every connector gets the other checks.</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: one key from the recipe to the validated config. The dataclass default applies only when the recipe omits the key.</figcaption><a class="diagram-open" href="../diagrams/s2_config_resolution.svg" target="_blank">Open full size ↗</a></div></figure>
+<ol>
+  <li><strong>Recipe or CLI.</strong> The <code>--additional-config</code> JSON gives the raw mapping. vLLM
+    stores it on <code>additional_config</code> (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/config/vllm.py#L434" target="_blank" rel="noopener" title="vllm:vllm/config/vllm.py:434 at vLLM ced6857"><code>vllm:vllm/config/vllm.py:434</code></a>).</li>
+  <li><strong>Normalize.</strong> <code>_normalize_mapping</code> rewrites aliases, splits out
+    <code>connector_extra_config</code>, and coerces <code>port</code>, the rank counts, the timeout and the
+    booleans (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L147-L174" target="_blank" rel="noopener" title="afd_plugin/config.py:147-174 at afd-plugin 7452d52"><code>afd_plugin/config.py:147-174</code></a>).</li>
+  <li><strong>Construct.</strong> <code>AFDConfig(**normalized)</code> fills any absent key with the dataclass
+    default (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L189-L190" target="_blank" rel="noopener" title="afd_plugin/config.py:189-190 at afd-plugin 7452d52"><code>afd_plugin/config.py:189-190</code></a>). So the defaults in the table apply only to keys the recipe
+    omits.</li>
+  <li><strong>Validate.</strong> <code>validate_afd_config</code> raises on a bad value
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/config.py#L311-L350" target="_blank" rel="noopener" title="afd_plugin/config.py:311-350 at afd-plugin 7452d52"><code>afd_plugin/config.py:311-350</code></a>). The worker re-parses and re-validates through
+    <code>assert_compatible_afd_stack</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L328" target="_blank" rel="noopener" title="afd_plugin/validation.py:328 at afd-plugin 7452d52"><code>afd_plugin/validation.py:328</code></a>).</li>
+</ol>
+
+<h2 id="worked-example-the-recipe-s-afd-block">Worked example: the recipe's afd block<a class="h-anchor" href="#worked-example-the-recipe-s-afd-block" aria-label="Link to this section">#</a></h2>
+<p>This block is the attention server from the simplest GPU recipe, <code>2a2f_eager_dbo_dp1tp2.sh</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh#L11-L20" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh:11-20 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_eager_dbo_dp1tp2.sh:11-20</code></a>).
+The FFN server uses the same block with <code>"role": "ffn"</code>. The tour <a href="../tours/life-of-a-request.html">Tour: Life of a request</a>
+follows a request through this recipe.</p>
+<pre><code class="language-json">{
+  "afd": {
+    "role": "attention",
+    "connector": "P2pNcclAFDConnector",
+    "host": "127.0.0.1",
+    "port": 6269,
+    "num_attention_ranks": 2,
+    "num_ffn_ranks": 2
+  }
+}</code></pre>
+<table>
+  <thead><tr><th>Key</th><th>Value</th><th>Effect for this recipe</th></tr></thead>
+  <tbody>
+    <tr><td><code>role</code></td><td><code>"attention"</code></td>
+      <td>This server runs the attention worker and the API server. The FFN server sets <code>"ffn"</code>.</td></tr>
+    <tr><td><code>connector</code></td><td><code>"P2pNcclAFDConnector"</code></td>
+      <td>The GPU connector. It takes no <code>connector_extra_config</code>.</td></tr>
+    <tr><td><code>host</code>, <code>port</code></td><td><code>"127.0.0.1"</code>, <code>6269</code></td>
+      <td>Both servers meet at this address. The value overrides the default port <code>1239</code>.</td></tr>
+    <tr><td><code>num_attention_ranks</code></td><td><code>2</code></td>
+      <td>Two attention ranks (A0, A1). The server runs <code>--tensor-parallel-size 2</code>.</td></tr>
+    <tr><td><code>num_ffn_ranks</code></td><td><code>2</code></td>
+      <td>Two FFN ranks (F0, F1). A0 maps to F0 and A1 maps to F1
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed/topology.py#L135-L136" target="_blank" rel="noopener" title="afd_plugin/distributed/topology.py:135-136 at afd-plugin 7452d52"><code>afd_plugin/distributed/topology.py:135-136</code></a>).</td></tr>
+  </tbody>
+</table>
+<p>The recipe omits five keys, so they take their defaults: <code>async_dp=false</code>,
+<code>compute_gate_on_attention=false</code>, <code>afd_process_group_timeout_s=120</code>, an empty
+<code>connector_extra_config</code>, and the coerced <code>port</code> and rank integers. The A&nbsp;&gt;=&nbsp;F
+rule holds because both counts are 2 (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed/topology.py#L52-L58" target="_blank" rel="noopener" title="afd_plugin/distributed/topology.py:52-58 at afd-plugin 7452d52"><code>afd_plugin/distributed/topology.py:52-58</code></a>).</p>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/afd-config.html">AFD configuration: additional_config[&quot;afd&quot;]</a><span class="rel-sum">AFD reads one key, additional_config[&quot;afd&quot;]. This page shows its schema, the compatibility aliases, how values are normalized and coerced, the validation rules, and the rule that AFD is active only when the key is present.</span></li><li><a href="../concepts/connector-contract.html">The connector contract: the Attention/FFN transport</a><span class="rel-sum">One base class sets the contract that every AFD connector follows. This page shows the lifecycle, the four data-path calls, the optional control plane, the config hook and the factory.</span></li><li><a href="../concepts/topology.html">Topology and role ranks: the AFD world</a><span class="rel-sum">The P2P connector builds one world, [F0..A0..], from the role ranks. This page shows how the role rank, the subgroups and the DP-metadata routes come from the topology sizes.</span></li><li><a href="../tours/run-a-recipe.html">Tour: Run a recipe</a><span class="rel-sum">Read the 2a2f_graph_dbo_dp1tp2 recipe line by line. Each flag, the afd block, the FFN server, the start order, and how to send and benchmark a request, all cited to the script.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../code/deepseek-v2-py.html"><span class="pn-dir">← Previous</span><span class="pn-title">model_executor/models/deepseek_v2.py: the DeepSeek wrapper</span></a><a class="pn pn-next" href="../reference/env-vars.html"><span class="pn-dir">Next →</span><span class="pn-title">Environment variables reference</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#how-the-config-is-passed">How the config is passed</a></li><li class="toc-l2"><a href="#the-keys">The keys</a></li><li class="toc-l3"><a href="#the-afd-keys">The afd keys</a></li><li class="toc-l3"><a href="#connector-extra-config-by-connector">connector_extra_config by connector</a></li><li class="toc-l2"><a href="#validation-rules">Validation rules</a></li><li class="toc-l2"><a href="#where-each-value-is-read-and-what-it-changes">Where each value is read, and what it changes</a></li><li class="toc-l2"><a href="#where-the-final-value-is-set">Where the final value is set</a></li><li class="toc-l2"><a href="#worked-example-the-recipe-s-afd-block">Worked example: the recipe&#x27;s afd block</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tour: One decode step · AFD Plugin Explained</title>
+<meta name="description" content="Follow one decode step on 2A2F with DBO and FULL_DECODE_ONLY graphs: one control-plane publish, graph replay on both sides, two stages of send and receive per layer, then one native sampling call.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/viz/viz.css">
+</head>
+<body data-root="../" data-page="tours/one-decode-step">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a class="current" aria-current="page" href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>Guided tours</span><span class="sep">›</span><span aria-current="page">One decode step</span></nav>
+<h1 class="page-title">Tour: One decode step</h1>
+<div class="page-meta"><span class="level level-advanced" title="Level">Advanced</span><span class="meta-sec">Guided tours</span><span class="meta-time">about 7 min read + 1 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../tours/life-of-a-request.html">Tour: Life of a request</a> <span class="level level-intermediate level-sm">Intermediate</span></li><li><a href="../concepts/dbo.html">Dual-batch overlap (DBO): two stages per step</a> <span class="level level-advanced level-sm">Advanced</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">Follow one decode <a class="term" href="../reference/glossary.html#term-step" data-term="step" data-def="One engine iteration on the attention server: the scheduler picks a batch, the model runs all layers once, and vLLM samples. The FFN server follows each step.">step</a> on 2A2F with <a class="term" href="../reference/glossary.html#term-dbo" data-term="DBO" data-def="Dual-batch overlap. The step is split into two microbatches so compute and communication overlap. AFD uses exactly two.">DBO</a> and <a class="term" href="../reference/glossary.html#term-full-decode-only" data-term="FULL_DECODE_ONLY" data-def="The only CUDA graph mode that AFD supports on GPU. Graphs capture decode steps only; other batches run eager.">FULL_DECODE_ONLY</a> graphs. The <a class="term" href="../reference/glossary.html#term-control-plane" data-term="control plane" data-def="The path that carries DP metadata (per-stage token counts) from the attention side to the FFN side. It is optional.">control plane</a> publishes once; each layer runs two <a class="term" href="../reference/glossary.html#term-stage" data-term="stage" data-def="The DBO ubatch index of one transfer on the wire. A connector sends one transfer per layer and stage.">stages</a>.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p>One decode step produces one new token per request. On AFD, the attention side runs the step and the FFN side
+answers each layer. With DBO, each layer runs two <a class="term" href="../reference/glossary.html#term-stage" data-term="stage" data-def="The DBO ubatch index of one transfer on the wire. A connector sends one transfer per layer and stage.">stages</a> that overlap. With graphs, both sides
+replay instead of running eager.</p>
+<p>This tour follows the graph recipe: 2A2F, DP1, TP2, DBO on, <code>FULL_DECODE_ONLY</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh#L7-L29" target="_blank" rel="noopener" title="recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-29 at afd-plugin 7452d52"><code>recipe/gpu/P2pNcclAFDConnector/deepseek_v2_lite/prefill_decode_colocation/2a2f_graph_dbo_dp1tp2.sh:7-29</code></a>).
+Rank A0 maps to F0 and A1 to F1 (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/distributed/topology.py#L135-L136" target="_blank" rel="noopener" title="afd_plugin/distributed/topology.py:135-136 at afd-plugin 7452d52"><code>afd_plugin/distributed/topology.py:135-136</code></a>).</p>
+<p>Keep the two frequencies apart. The control plane publishes <a class="term" href="../reference/glossary.html#term-dp-metadata" data-term="DP metadata" data-def="The per-step data-parallel metadata the attention side sends to the FFN side on the control plane. It carries the per-stage token counts that set the tensor shapes.">DP metadata</a>
+<strong>once per step</strong>, before the layer loop. The <a class="term" href="../reference/glossary.html#term-data-plane" data-term="data plane" data-def="The path that carries the hidden-state tensors between the two roles. It is the connector&#x27;s send and receive calls.">data plane</a> sends tensors
+<strong>once per layer and stage</strong>. Sampling runs <strong>once per step</strong>, after the last layer.</p>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<figure class="diagram" id="fig-b4_one_decode_step"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Two panels. Panel 1, once per step: card 1, the control-plane publish on the attention side; card 2, the FFN side receives one DP-metadata payload; card 3, sample_tokens after the last layer, native. Panel 2, per layer and per stage: an attention row with graph replay showing stage 0 send, a DBO yield, stage 1 send, then recv of both stages; an FFN row with graph key lookup and replay showing recv_attn_output per stage, compute, and send_ffn_output, with dashed arrows between the two rows. A legend marks control plane or yield, attention, and FFN."><svg role="img" aria-label="Two panels. Panel 1, once per step: card 1, the control-plane publish on the attention side; card 2, the FFN side receives one DP-metadata payload; card 3, sample_tokens after the last layer, native. Panel 2, per layer and per stage: an attention row with graph replay showing stage 0 send, a DBO yield, stage 1 send, then recv of both stages; an FFN row with graph key lookup and replay showing recv_attn_output per stage, compute, and send_ffn_output, with dashed arrows between the two rows. A legend marks control plane or yield, attention, and FFN." xmlns="http://www.w3.org/2000/svg" width="1100" height="606" viewBox="0 0 1100 606">
+<defs><marker id="dg-b4_one_decode_step-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker><marker id="dg-b4_one_decode_step-m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker></defs>
+<rect width="1100" height="606" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">One decode step on 2A2F with DBO</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The control plane publishes once. Then every layer runs two stages of send/receive. Sampling runs once at the end.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention_metadata.py  ·  ffn_model_runner.py  ·  canvas 1100</text>
+<rect x="20.0" y="124.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="150.0" r="13" fill="#111827"/>
+<text x="46.0" y="154.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="155.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Once per step, before and after the layer loop</text>
+<text x="68.0" y="174.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">One control-plane publish; the FFN loop receives one payload; sampling is a separate native call.</text>
+<rect x="46.0" y="194.0" width="320.0" height="56.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<rect x="46.0" y="194.0" width="6.0" height="56.0" rx="3" fill="#7c3aed" fill-opacity="1.0" stroke="none"/>
+<circle cx="68.0" cy="211.0" r="10" fill="#7c3aed"/>
+<text x="68.0" y="215.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="84.0" y="216.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">control plane publish</text>
+<rect x="278.4" y="202.0" width="79.6" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1"/>
+<text x="318.2" y="215.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#7c3aed" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">once/step</text>
+<text x="84.0" y="236.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">attn</text>
+<text x="118.0" y="236.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention_metadata.py:115-116</text>
+<rect x="390.0" y="194.0" width="320.0" height="56.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<rect x="390.0" y="194.0" width="6.0" height="56.0" rx="3" fill="#7c3aed" fill-opacity="1.0" stroke="none"/>
+<circle cx="412.0" cy="211.0" r="10" fill="#7c3aed"/>
+<text x="412.0" y="215.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="428.0" y="216.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN recv DP metadata</text>
+<rect x="622.4" y="202.0" width="79.6" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1"/>
+<text x="662.2" y="215.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#7c3aed" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">once/step</text>
+<text x="428.0" y="236.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">ffn</text>
+<text x="462.0" y="236.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">ffn_worker.py:176</text>
+<rect x="734.0" y="194.0" width="320.0" height="56.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<rect x="734.0" y="194.0" width="6.0" height="56.0" rx="3" fill="#2563eb" fill-opacity="1.0" stroke="none"/>
+<circle cx="756.0" cy="211.0" r="10" fill="#2563eb"/>
+<text x="756.0" y="215.2" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="772.0" y="216.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">sample_tokens (after layers)</text>
+<rect x="966.4" y="202.0" width="79.6" height="19.0" rx="9.5" fill="#ffffff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1"/>
+<text x="1006.2" y="215.5" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#2563eb" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">once/step</text>
+<text x="772.0" y="236.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11" fill="#6b7280" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">native</text>
+<text x="806.0" y="236.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">gpu/model_runner.py:2048-2050</text>
+<line x1="366.0" y1="222.0" x2="388.0" y2="222.0" stroke="#7c3aed" stroke-width="1.6" marker-end="url(#dg-b4_one_decode_step-m0)"/>
+<text x="722.0" y="264.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">after the last layer only</text>
+<rect x="20.0" y="294.0" width="1060.0" height="210.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="320.0" r="13" fill="#111827"/>
+<text x="46.0" y="324.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="325.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Per layer, per stage: the data plane</text>
+<text x="68.0" y="344.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Graphs replay per side; each stage sends hidden states, yields, and receives the FFN output.</text>
+<text x="46.0" y="354.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">attention  (graph replay, :270-303)</text>
+<rect x="46.0" y="360.0" width="220.0" height="44.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="58.0" y="380.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">stage 0: send</text>
+<text x="58.0" y="398.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">deepseek_v2.py:146</text>
+<rect x="286.0" y="360.0" width="180.0" height="44.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="298.0" y="380.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">DBO yield</text>
+<text x="298.0" y="398.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">dbo.py</text>
+<rect x="486.0" y="360.0" width="220.0" height="44.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="498.0" y="380.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">stage 1: send</text>
+<text x="498.0" y="398.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">deepseek_v2.py:146</text>
+<rect x="726.0" y="360.0" width="328.0" height="44.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="738.0" y="380.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">recv s0, recv s1</text>
+<text x="738.0" y="398.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">deepseek_v2.py:155</text>
+<text x="46.0" y="434.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN  (graph key lookup + replay, :166-176)</text>
+<rect x="46.0" y="440.0" width="320.0" height="44.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="58.0" y="460.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">recv_attn_output (per stage)</text>
+<text x="58.0" y="478.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">ffn_model_runner.py:236</text>
+<rect x="400.0" y="440.0" width="300.0" height="44.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="412.0" y="460.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">compute</text>
+<text x="412.0" y="478.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">experts / FFN  :251-267</text>
+<rect x="734.0" y="440.0" width="320.0" height="44.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="746.0" y="460.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">send_ffn_output</text>
+<text x="746.0" y="478.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">ffn_model_runner.py:268</text>
+<line x1="366.0" y1="462.0" x2="398.0" y2="462.0" stroke="#059669" stroke-width="1.6" marker-end="url(#dg-b4_one_decode_step-m1)"/>
+<line x1="700.0" y1="462.0" x2="732.0" y2="462.0" stroke="#059669" stroke-width="1.6" marker-end="url(#dg-b4_one_decode_step-m1)"/>
+<line x1="156.0" y1="404.0" x2="156.0" y2="438.0" stroke="#059669" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#dg-b4_one_decode_step-m1)"/>
+<line x1="820.0" y1="440.0" x2="860.0" y2="404.0" stroke="#059669" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#dg-b4_one_decode_step-m1)"/>
+<text x="30.0" y="533.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="522.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="118.3" y="533.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">control plane / yield</text>
+<rect x="258.6" y="522.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="279.6" y="533.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">attention</text>
+<rect x="360.1" y="522.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="381.1" y="533.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">FFN</text>
+<text x="30.0" y="556.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Graphs replay only for pure-decode steps (FULL_DECODE_ONLY). The control plane does not publish again inside the layer loop.</text>
+<text x="30.0" y="574.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">2A2F: A0 maps to F0 and A1 to F1 (topology.py:135-136). Times are not shown.</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: the control plane publishes once. Then every layer runs two stages of send and receive, with graph replay on each side. Sampling runs once after the last layer.</figcaption><a class="diagram-open" href="../diagrams/b4_one_decode_step.svg" target="_blank">Open full size ↗</a></div></figure>
+<p>Read the top panel as the once-per-step work and the bottom panel as the per-layer, per-stage work. The visual
+below steps through the same send, yield, compute and receive events.</p>
+
+<figure class="viz" id="viz-dbo-timeline"><div class="viz-head"><span class="viz-badge">Interactive</span><span class="viz-title">Step through the decode step</span></div><div class="viz-mount" data-viz="dbo-timeline" role="region" aria-label="Step through the decode step"><div class="viz-fallback"><p>This interactive visual steps through the events of one step. It needs JavaScript. The stops below say the
+same thing in text.</p></div></div><figcaption class="viz-caption">Pick the number of layers, then press <em>Step</em>. Watch columns t2 and t3, where attention and FFN work overlap.</figcaption></figure>
+<aside class="callout callout-simplified"><p class="callout-title">Simplified</p><div class="callout-body"><p>The visual shows the event order, not real timing. It leaves out the control-plane publish
+before the loop, the graph replay, the per-peer split, and sampling. The stops give those, with citations.</p></div></aside>
+
+<section class="stop" id="stop-1"><h2 id="1the-scheduler-builds-one-step" class="stop-title"><span class="stop-num">1</span>The scheduler builds one step<a class="h-anchor" href="#1the-scheduler-builds-one-step" aria-label="Link to this section">#</a></h2><p>The attention server's <a class="term" href="../reference/glossary.html#term-enginecore" data-term="EngineCore" data-def="The vLLM v1 engine core process. On the FFN role it returns early after the executor is built: no scheduler, no loop.">EngineCore</a> and scheduler build one step, then the executor runs
+it (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/engine/core.py#L600-L601" target="_blank" rel="noopener" title="vllm:vllm/v1/engine/core.py:600-601 at vLLM ced6857"><code>vllm:vllm/v1/engine/core.py:600-601</code></a>). This is native vLLM. The FFN server has no such loop; it is
+connector-driven (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L32-L38" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:32-38 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:32-38</code></a>).</p></section>
+
+<section class="stop" id="stop-2"><h2 id="2the-runner-wraps-native-execute-model" class="stop-title"><span class="stop-num">2</span>The runner wraps native execute_model<a class="h-anchor" href="#2the-runner-wraps-native-execute-model" aria-label="Link to this section">#</a></h2><p>The executor calls the AFD runner's <code>execute_model</code>. It wraps the native method in an AFD execution
+context, then delegates (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L569-L595" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:569-595 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:569-595</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L580-L594" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/attention_model_runner_v2.py:580-594</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L580-L594" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">580</span><span class="ln">581</span><span class="ln hl">582</span><span class="ln">583</span><span class="ln">584</span><span class="ln">585</span><span class="ln hl">586</span><span class="ln">587</span><span class="ln">588</span><span class="ln">589</span><span class="ln">590</span><span class="ln">591</span><span class="ln">592</span><span class="ln">593</span><span class="ln">594</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><pre><code class="language-python">        # ### PATCH START: scope AFD metadata provider/replay and profiler step.
+        step_afd_gpu_profiler(self.prof)
+        with _use_afd_execution_context(
+            self,
+            int(scheduler_output.total_num_scheduled_tokens),
+        ):
+            return super().execute_model(
+                scheduler_output,
+                intermediate_tensors,
+                dummy_run=dummy_run,
+                skip_attn_for_dummy_run=skip_attn_for_dummy_run,
+                is_profile=is_profile,
+                context_len=context_len,
+                valid_dummy_state_slots=valid_dummy_state_slots,
+            )</code></pre></div></div></div><figcaption class="code-caption">execute_model: scope the AFD context, then call native execute_model.</figcaption></figure>
+<p>Native code still does the request, attention and KV work. The wrapper adds AFD state around it. See
+<a href="../concepts/attention-runtime.html">The attention runtime: a seam over Model Runner V2</a>.</p></section>
+
+<section class="stop" id="stop-3"><h2 id="3the-afd-context-installs-the-provider-and-the-replay-hook" class="stop-title"><span class="stop-num">3</span>The AFD context installs the provider and the replay hook<a class="h-anchor" href="#3the-afd-context-installs-the-provider-and-the-replay-hook" aria-label="Link to this section">#</a></h2><p>The context scopes four things: the DP1 DBO dispatch seam, the FULL replay hook, the ubatch prepare seam, and
+the metadata provider (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L340-L349" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:340-349 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:340-349</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L341-L349" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/attention_model_runner_v2.py:341-349</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L341-L349" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">341</span><span class="ln">342</span><span class="ln hl">343</span><span class="ln">344</span><span class="ln hl">345</span><span class="ln">346</span><span class="ln">347</span><span class="ln">348</span><span class="ln">349</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(2 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(4 * var(--code-lh))"></span><pre><code class="language-python">        with (
+            use_gpu_mrv2_dbo_dispatch(),
+            replay_scope,
+            _use_afd_ubatch_preparation(runner),
+            use_afd_metadata_provider(
+                runner.install_afd_metadata_on_forward_context,
+            ),
+        ):
+            yield</code></pre></div></div></div><figcaption class="code-caption">_use_afd_execution_context: the replay hook and the metadata provider.</figcaption></figure>
+<p>The replay hook is used only in <code>FULL_DECODE_ONLY</code> mode with a graph manager
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L323-L327" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:323-327 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:323-327</code></a>). See <a href="../concepts/cuda-graphs.html">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</a>.</p></section>
+
+<section class="stop" id="stop-4"><h2 id="4the-control-plane-publishes-dp-metadata-once" class="stop-title"><span class="stop-num">4</span>The control plane publishes DP metadata once<a class="h-anchor" href="#4the-control-plane-publishes-dp-metadata-once" aria-label="Link to this section">#</a></h2><p>Before the layer loop, the attention side publishes the <a class="term" href="../reference/glossary.html#term-dp-metadata" data-term="DP metadata" data-def="The per-step data-parallel metadata the attention side sends to the FFN side on the control plane. It carries the per-stage token counts that set the tensor shapes.">DP metadata</a>. With DBO, the
+ubatch prepare seam sends it after it slices the step into two stages
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L153-L157" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:153-157 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:153-157</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L153-L158" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/attention_model_runner_v2.py:153-158</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L153-L158" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">153</span><span class="ln">154</span><span class="ln">155</span><span class="ln hl">156</span><span class="ln hl">157</span><span class="ln">158</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(3 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(4 * var(--code-lh))"></span><pre><code class="language-python">        runner.install_mrv2_ubatch_metadata(
+            prepared.slices, prepared.forward_contexts, input_batch.num_tokens
+        )
+        if runner.connector.control_plane is not None:
+            runner.send_dp_metadata(None, prepared.slices)
+        return prepared</code></pre></div></div></div><figcaption class="code-caption">The prepare seam sends the DP metadata once, after slicing into stages.</figcaption></figure>
+<p>That call updates the local control state and sends one payload
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_metadata.py#L115-L116" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_metadata.py:115-116 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_metadata.py:115-116</code></a>). It is the first thing that crosses the connector
+each step. See <a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a>.</p>
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="the-two-publish-paths-both-once-per-step" class="dd-title">The two publish paths, both once per step</h3></summary><div class="dd-body"><p>There are two code paths to the same publish, chosen by whether the step uses DBO. Both run once per step,
+before the layer loop.</p>
+<ol>
+  <li><strong>With DBO.</strong> The ubatch prepare seam calls <code>send_dp_metadata</code> after it slices the
+    step into two stages (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L153-L157" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:153-157 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:153-157</code></a>).</li>
+  <li><strong>Without ubatching.</strong> The metadata provider calls it from
+    <code>install_afd_metadata_on_forward_context</code>
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_metadata.py#L252-L257" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_metadata.py:252-257 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_metadata.py:252-257</code></a>).</li>
+</ol>
+<p>The FFN side waits for exactly one payload per step either way
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L176" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:176 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:176</code></a>). A per-step call must not be folded into the per-layer
+sequence. The payload carries the per-stage token counts that set the tensor shapes. See
+<a href="../concepts/wire-data.html">Data on the wire: tensors per layer and stage</a>.</p></div></details></section>
+
+<section class="stop" id="stop-5"><h2 id="5the-attention-side-replays-its-graph" class="stop-title"><span class="stop-num">5</span>The attention side replays its graph<a class="h-anchor" href="#5the-attention-side-replays-its-graph" aria-label="Link to this section">#</a></h2><p>For a pure-decode step, native FULL replay runs. The replay hook publishes one padded control payload just
+before the replay (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L286-L303" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:286-303 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:286-303</code></a>). For a DBO step with two
+stages, the prepare seam already sent the full two-stage payload, so the hook asserts and delegates
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L275-L280" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:275-280 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:275-280</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L275-L280" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/attention_model_runner_v2.py:275-280</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L275-L280" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">275</span><span class="ln">276</span><span class="ln">277</span><span class="ln">278</span><span class="ln">279</span><span class="ln">280</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">        if desc.num_ubatches &gt; 1:
+            # Native execute_model already prepared live stage inputs and our
+            # prepare seam sent their complete control payload.
+            assert runner._afd_pending_metadata is not None
+            assert runner._afd_pending_metadata.num_stages == desc.num_ubatches
+            return original_run_fullgraph(desc)</code></pre></div></div></div><figcaption class="code-caption">The replay hook with two stages: the full payload was already sent.</figcaption></figure></section>
+
+<section class="stop" id="stop-6"><h2 id="6per-layer-and-stage-send-yield-the-other-stage" class="stop-title"><span class="stop-num">6</span>Per layer and stage: send, yield, the other stage<a class="h-anchor" href="#6per-layer-and-stage-send-yield-the-other-stage" aria-label="Link to this section">#</a></h2><p>Inside each layer, the <a class="term" href="../reference/glossary.html#term-remote-ffn-proxy" data-term="RemoteFFNProxy" data-def="A parameter-free module on the attention side. It replaces the FFN stage of a decoder layer and uses the connector instead.">proxy</a> sends its hidden states, yields, then receives. The
+yield lets the other stage run while this one waits
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L146-L158" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:146-158 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:146-158</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L146-L158" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/model_executor/models/deepseek_v2.py:146-158</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L146-L158" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln hl">146</span><span class="ln">147</span><span class="ln">148</span><span class="ln">149</span><span class="ln">150</span><span class="ln hl">151</span><span class="ln">152</span><span class="ln">153</span><span class="ln">154</span><span class="ln hl">155</span><span class="ln">156</span><span class="ln">157</span><span class="ln">158</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(0 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(5 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(9 * var(--code-lh))"></span><pre><code class="language-python">        afd_metadata.connector.send_attn_output(
+            hidden_states,
+            context,
+            **send_kwargs,
+        )
+        hidden_states = maybe_apply_dbo_yield(
+            hidden_states,
+            role=&quot;attention&quot;,
+        )
+        return afd_metadata.connector.recv_ffn_output(
+            ref_tensor=hidden_states,
+            ubatch_idx=stage_idx,
+        )</code></pre></div></div></div><figcaption class="code-caption">_send_and_receive: send_attn_output, DBO yield, recv_ffn_output.</figcaption></figure>
+<p>This runs once per layer and once per <a class="term" href="../reference/glossary.html#term-stage" data-term="stage" data-def="The DBO ubatch index of one transfer on the wire. A connector sends one transfer per layer and stage.">stage</a>. With DBO there are two stages per layer. See
+<a href="../concepts/dbo.html">Dual-batch overlap (DBO): two stages per step</a>.</p></section>
+
+<section class="stop" id="stop-7"><h2 id="7the-ffn-side-receives-one-dp-metadata-payload-per-step" class="stop-title"><span class="stop-num">7</span>The FFN side receives one DP-metadata payload per step<a class="h-anchor" href="#7the-ffn-side-receives-one-dp-metadata-payload-per-step" aria-label="Link to this section">#</a></h2><p>The <a class="term" href="../reference/glossary.html#term-ffn-server-loop" data-term="FFN server loop" data-def="The connector-driven daemon thread on the FFN worker. It waits for DP metadata, then runs the FFN compute for one step. No scheduler drives it.">FFN server loop</a> blocks on the control plane for exactly one payload per step
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L176" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:176 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:176</code></a>), then dispatches to execute or capture
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L182-L196" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:182-196 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:182-196</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L176-L196" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/ffn_worker.py:176-196</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L176-L196" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln hl">176</span><span class="ln">177</span><span class="ln">178</span><span class="ln">179</span><span class="ln">180</span><span class="ln">181</span><span class="ln">182</span><span class="ln">183</span><span class="ln">184</span><span class="ln">185</span><span class="ln">186</span><span class="ln">187</span><span class="ln">188</span><span class="ln">189</span><span class="ln">190</span><span class="ln hl">191</span><span class="ln">192</span><span class="ln">193</span><span class="ln">194</span><span class="ln">195</span><span class="ln">196</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(0 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(15 * var(--code-lh))"></span><pre><code class="language-python">            payload = self.model_runner.connector.control_plane.recv_dp_metadata_list()
+            dp_metadata_list = payload.dp_metadata_list
+            is_attn_graph_capturing = payload.is_graph_capturing
+            is_warmup = payload.is_warmup
+            is_graph_replaying = payload.is_graph_replaying
+
+            if self.model_runner.use_cuda_graph and (
+                is_warmup or is_attn_graph_capturing
+            ):
+                self.model_runner.capture_model(
+                    dp_metadata_list=dp_metadata_list,
+                    is_warmup=is_warmup,
+                    is_attn_graph_capturing=is_attn_graph_capturing,
+                )
+            else:
+                self.model_runner.execute_model(
+                    dp_metadata_list=dp_metadata_list,
+                    is_graph_capturing=is_attn_graph_capturing,
+                    is_warmup=is_warmup,
+                    is_graph_replaying=is_graph_replaying,
+                )</code></pre></div></div></div><figcaption class="code-caption">The FFN loop: one recv per step, then execute_model or capture_model.</figcaption></figure>
+<p>So the control plane runs once per step on the FFN side too, matching the attention side.</p></section>
+
+<section class="stop" id="stop-8"><h2 id="8the-ffn-side-looks-up-and-replays-its-graph" class="stop-title"><span class="stop-num">8</span>The FFN side looks up and replays its graph<a class="h-anchor" href="#8the-ffn-side-looks-up-and-replays-its-graph" aria-label="Link to this section">#</a></h2><p>The FFN runner builds the <a class="term" href="../reference/glossary.html#term-ffn-graph-key" data-term="FFN graph key" data-def="A hashable key built from the per-stage DP metadata. The FFN runner uses it to store and look up one captured CUDA graph per token shape.">FFN graph key</a> from the DP metadata and replays the stored
+graph for a pure-decode step (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L166-L177" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:166-177 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:166-177</code></a>). If no graph matches
+the key, it runs eager instead.</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L166-L184" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/ffn_model_runner.py:166-184</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L166-L184" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln hl">166</span><span class="ln">167</span><span class="ln">168</span><span class="ln">169</span><span class="ln">170</span><span class="ln">171</span><span class="ln">172</span><span class="ln">173</span><span class="ln">174</span><span class="ln hl">175</span><span class="ln">176</span><span class="ln">177</span><span class="ln">178</span><span class="ln hl">179</span><span class="ln">180</span><span class="ln">181</span><span class="ln">182</span><span class="ln">183</span><span class="ln">184</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(0 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(9 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(13 * var(--code-lh))"></span><pre><code class="language-python">        graph_key = make_ffn_graph_key(dp_metadata_list)
+        cuda_graph_info = self._cuda_graphs.get(graph_key)
+        run_mode = graph_run_mode(
+            is_warmup=is_warmup,
+            is_graph_capturing=is_graph_capturing,
+            is_graph_replaying=is_graph_replaying,
+            graph_enabled=bool(self.use_cuda_graph),
+            graph_exists=cuda_graph_info is not None,
+        )
+        if run_mode is AFDGraphRunMode.REPLAY:
+            self._cuda_graphs[graph_key][&quot;graph&quot;].replay()
+            return None
+
+        self._ffn_forward(
+            dp_metadata_list=dp_metadata_list,
+            is_graph_capturing=is_graph_capturing,
+            is_warmup=is_warmup,
+        )
+        return None</code></pre></div></div></div><figcaption class="code-caption">execute_model: build the key, replay the stored graph, or run the forward.</figcaption></figure>
+<p>See <a href="../concepts/cuda-graphs.html">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</a>.</p></section>
+
+<section class="stop" id="stop-9"><h2 id="9per-layer-and-stage-recv-compute-send" class="stop-title"><span class="stop-num">9</span>Per layer and stage: recv, compute, send<a class="h-anchor" href="#9per-layer-and-stage-recv-compute-send" aria-label="Link to this section">#</a></h2><p>The eager path, <code>_ffn_forward</code>, loops over layers and stages. For each pair it receives the hidden
+states, runs the FFN or MoE compute, and sends the result back
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L222-L269" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:222-269 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:222-269</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L230-L268" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/v1/worker/ffn_model_runner.py:230-268</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L230-L268" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">230</span><span class="ln">231</span><span class="ln">232</span><span class="ln">233</span><span class="ln">234</span><span class="ln">235</span><span class="ln hl">236</span><span class="ln">237</span><span class="ln">238</span><span class="ln">239</span><span class="ln">240</span><span class="ln">241</span><span class="ln">242</span><span class="ln">243</span><span class="ln">244</span><span class="ln">245</span><span class="ln">246</span><span class="ln">247</span><span class="ln">248</span><span class="ln">249</span><span class="ln">250</span><span class="ln">251</span><span class="ln">252</span><span class="ln">253</span><span class="ln">254</span><span class="ln">255</span><span class="ln">256</span><span class="ln">257</span><span class="ln">258</span><span class="ln">259</span><span class="ln">260</span><span class="ln">261</span><span class="ln">262</span><span class="ln hl">263</span><span class="ln">264</span><span class="ln">265</span><span class="ln">266</span><span class="ln">267</span><span class="ln hl">268</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(6 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(33 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(38 * var(--code-lh))"></span><pre><code class="language-python">                for stage_idx in stage_ids:
+                    recv_kwargs: dict[str, Any] = {}
+                    if routing_spec is not None:
+                        recv_kwargs[&quot;routing_spec&quot;] = routing_spec
+                    if recv_input_ids:
+                        recv_kwargs[&quot;recv_input_ids&quot;] = True
+                    payload = self.connector.recv_attn_output(
+                        ubatch_idx=stage_idx,
+                        **recv_kwargs,
+                    )
+                    hidden_states = payload.hidden_states
+                    context = payload.context
+                    metadata = context.metadata
+                    metadata.layer_idx = layer_idx
+                    metadata.stage_idx = stage_idx
+                    if forward_context is not None:
+                        forward_context.dp_metadata = ffn_dp_metadata_list[
+                            metadata.stage_idx
+                        ]
+                        forward_context.additional_kwargs[&quot;afd_metadata&quot;] = metadata
+                        _set_moe_layer_index(forward_context, layer_idx)
+                    if (
+                        uses_remote_experts
+                        and self.afd_config.compute_gate_on_attention
+                    ):
+                        router_logits = payload.router_logits
+                        assert router_logits is not None
+                        rank_ffn_output = model.compute_experts_output(
+                            hidden_states,
+                            layer_idx,
+                            router_logits,
+                        )
+                    else:
+                        rank_ffn_output = self._execute_eager_mode(
+                            hidden_states,
+                            layer_idx,
+                            input_ids=payload.input_ids,
+                        )
+                    self.connector.send_ffn_output(rank_ffn_output, context)</code></pre></div></div></div><figcaption class="code-caption">The inner loop: recv_attn_output, compute, send_ffn_output.</figcaption></figure>
+<p>When the FFN side replays a graph, this same work is recorded in the graph instead of run step by step. See
+<a href="../concepts/ffn-runtime.html">The FFN runtime: a connector-driven server loop</a>.</p></section>
+
+<section class="stop" id="stop-10"><h2 id="10after-the-last-layer-sample-then-output" class="stop-title"><span class="stop-num">10</span>After the last layer: sample, then output<a class="h-anchor" href="#10after-the-last-layer-sample-then-output" aria-label="Link to this section">#</a></h2><p>After the forward pass, the worker makes a separate native call, <code>sample_tokens</code>
+(<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/gpu_worker.py#L1142-L1147" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/gpu_worker.py:1142-1147 at vLLM ced6857"><code>vllm:vllm/v1/worker/gpu_worker.py:1142-1147</code></a>). Native Model Runner V2 computes the logits and samples
+there (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/gpu/model_runner.py#L2048-L2050" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050 at vLLM ced6857"><code>vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050</code></a>). The AFD attention runner does not override
+this method, so it samples natively.</p>
+<p>The FFN runner has no sampler; its <code>sample_tokens</code> raises
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L405-L406" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:405-406 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:405-406</code></a>). So sampling runs once per step, on the attention
+side. The step is done; the next step repeats the whole path.</p></section>
+
+<h2 id="what-can-go-wrong">What can go wrong<a class="h-anchor" href="#what-can-go-wrong" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li><strong>Folding the per-step publish into the layer loop.</strong> The control plane publishes once, before
+    the layers; it does not publish again inside the loop
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_metadata.py#L115-L116" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_metadata.py:115-116 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_metadata.py:115-116</code></a>).</li>
+  <li><strong>A shape that no captured graph covers.</strong> The FFN side runs that step eager instead of
+    replaying (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/cuda_graph.py#L148-L150" target="_blank" rel="noopener" title="afd_plugin/v1/worker/cuda_graph.py:148-150 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/cuda_graph.py:148-150</code></a>).</li>
+  <li><strong>A step too small for DBO.</strong> A step below the threshold runs as one stage, with no overlap
+    (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/ubatch_utils.py#L144-L149" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/ubatch_utils.py:144-149 at vLLM ced6857"><code>vllm:vllm/v1/worker/ubatch_utils.py:144-149</code></a>).</li>
+  <li><strong>Expecting the FFN side to sample.</strong> It never does; its <code>sample_tokens</code> raises
+    (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L405-L406" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:405-406 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:405-406</code></a>).</li>
+</ul>
+<p><strong>Why it matters.</strong> One step has one control-plane publish, then every layer and stage of send
+and receive, then one sampling call. The frequencies must not be mixed, or the two roles fall out of step.</p>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>How many times does the control plane publish per step?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Once, before the layer loop. The attention side sends one DP-metadata payload
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_metadata.py#L115-L116" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_metadata.py:115-116 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_metadata.py:115-116</code></a>); the FFN loop receives one
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_worker.py#L176" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_worker.py:176 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_worker.py:176</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>What does the FFN runner do when a graph matches the key?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>It calls <code>graph.replay()</code> and returns, instead of running the layers eager
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L175-L177" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:175-177 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:175-177</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>In a DBO step, why does the FULL replay hook not send a new control payload?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Because the ubatch prepare seam already sent the full two-stage payload. The hook asserts the staged
+      metadata and delegates to the native replay
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_model_runner_v2.py#L275-L280" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_model_runner_v2.py:275-280 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_model_runner_v2.py:275-280</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>Which side samples the token, and when?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>The attention side, once per step, after the last layer. The AFD runner inherits the native
+      <code>sample_tokens</code> (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/v1/worker/gpu/model_runner.py#L2048-L2050" target="_blank" rel="noopener" title="vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050 at vLLM ced6857"><code>vllm:vllm/v1/worker/gpu/model_runner.py:2048-2050</code></a>); the FFN runner's
+      raises (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L405-L406" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:405-406 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:405-406</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>List the per-stage data-plane calls for one layer, in order, across both roles.</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>Attention <code>send_attn_output</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L146" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:146 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:146</code></a>);
+      DBO yield; FFN <code>recv_attn_output</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L236" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:236 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:236</code></a>); FFN
+      compute; FFN <code>send_ffn_output</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/ffn_model_runner.py#L268" target="_blank" rel="noopener" title="afd_plugin/v1/worker/ffn_model_runner.py:268 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/ffn_model_runner.py:268</code></a>); attention
+      <code>recv_ffn_output</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/deepseek_v2.py#L155" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/deepseek_v2.py:155 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/deepseek_v2.py:155</code></a>). This runs for
+      each of the two stages.</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/cuda-graphs.html">CUDA graphs in AFD: FULL_DECODE_ONLY on both roles</a><span class="rel-sum">AFD supports one CUDA graph mode, FULL_DECODE_ONLY. The attention side wraps native capture and replay to publish control; the FFN side keeps its own graph per token shape.</span></li><li><a href="../concepts/control-plane.html">The control plane: DP metadata once per step</a><span class="rel-sum">Before each layer loop, the attention side sends per-stage token counts to the FFN side. This page shows what the control plane carries, both publish paths, the wire format and the receive side.</span></li><li><a href="../concepts/attention-runtime.html">The attention runtime: a seam over Model Runner V2</a><span class="rel-sum">The attention runner is a thin subclass of the native vLLM GPU Model Runner V2. It overrides a few seams for the connector and the control plane, and delegates the model forward, sampling and output to the native class.</span></li><li><a href="../concepts/ffn-runtime.html">The FFN runtime: a connector-driven server loop</a><span class="rel-sum">The FFN side has no real scheduler (a no-op stand-in) and no KV cache. A daemon thread reads one control payload per step and drives the FFN model runner, which runs the FFN or experts for each layer and stage.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../tours/life-of-a-request.html"><span class="pn-dir">← Previous</span><span class="pn-title">Tour: Life of a request</span></a><a class="pn pn-next" href="../tours/run-a-recipe.html"><span class="pn-dir">Next →</span><span class="pn-title">Tour: Run a recipe</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#1the-scheduler-builds-one-step">1The scheduler builds one step</a></li><li class="toc-l2"><a href="#2the-runner-wraps-native-execute-model">2The runner wraps native execute_model</a></li><li class="toc-l2"><a href="#3the-afd-context-installs-the-provider-and-the-replay-hook">3The AFD context installs the provider and the replay hook</a></li><li class="toc-l2"><a href="#4the-control-plane-publishes-dp-metadata-once">4The control plane publishes DP metadata once</a></li><li class="toc-l3"><a href="#the-two-publish-paths-both-once-per-step">The two publish paths, both once per step</a></li><li class="toc-l2"><a href="#5the-attention-side-replays-its-graph">5The attention side replays its graph</a></li><li class="toc-l2"><a href="#6per-layer-and-stage-send-yield-the-other-stage">6Per layer and stage: send, yield, the other stage</a></li><li class="toc-l2"><a href="#7the-ffn-side-receives-one-dp-metadata-payload-per-step">7The FFN side receives one DP-metadata payload per step</a></li><li class="toc-l2"><a href="#8the-ffn-side-looks-up-and-replays-its-graph">8The FFN side looks up and replays its graph</a></li><li class="toc-l2"><a href="#9per-layer-and-stage-recv-compute-send">9Per layer and stage: recv, compute, send</a></li><li class="toc-l2"><a href="#10after-the-last-layer-sample-then-output">10After the last layer: sample, then output</a></li><li class="toc-l2"><a href="#what-can-go-wrong">What can go wrong</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="../assets/viz/dbo-timeline.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>

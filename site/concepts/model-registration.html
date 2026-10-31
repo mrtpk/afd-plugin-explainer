@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model registration: the AFD&lt;arch&gt; wrappers · AFD Plugin Explained</title>
+<meta name="description" content="AFD registers each supported architecture under an AFD&lt;arch&gt; name, as a lazy string. At build time it swaps the model to its AFD identity with a deepcopy. This page shows the registration, the identity swap, and which architectures map to which wrapper.">
+<script>try{var t=localStorage.getItem("explainer-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&amp;display=swap">
+<link rel="stylesheet" href="../assets/site.css">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body data-root="../" data-page="concepts/model-registration">
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <button type="button" class="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span></button>
+  <a class="brand" href="../index.html"><span class="brand-mark" aria-hidden="true">AF</span><span class="brand-name">AFD Plugin Explained</span></a>
+  <div class="search" role="search">
+    <input type="search" id="search-input" placeholder="Search  ( / )" aria-label="Search the site" autocomplete="off" spellcheck="false">
+    <div class="search-results" id="search-results" role="listbox" hidden></div>
+  </div>
+  <button type="button" class="theme-btn" aria-label="Switch between light and dark mode" title="Light / dark mode">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div class="layout">
+<aside class="sidebar" id="sidebar" aria-label="Site navigation">
+<nav>
+<a class="nav-home" href="../index.html">Home</a>
+<details class="nav-sec"><summary><span class="nav-sec-title">Learn the basics</span><span class="nav-count" title="3 of 3 pages written">3/3</span></summary>
+<ul>
+<li><a href="../learn/what-is-afd.html">What is AFD?</a></li>
+<li><a href="../learn/vllm-plugins.html">How vLLM plugins work</a></li>
+<li><a href="../learn/vllm-v1-map.html">The vLLM v1 map</a></li>
+</ul>
+</details>
+<details class="nav-sec" open><summary><span class="nav-sec-title">AFD concepts</span><span class="nav-count" title="19 of 19 pages written">19/19</span></summary>
+<p class="nav-group">Plugin boundary</p>
+<ul>
+<li><a href="../concepts/plugin-entry-point.html">Plugin entry point</a></li>
+<li><a href="../concepts/afd-config.html">AFD configuration</a></li>
+<li><a href="../concepts/worker-selection.html">Worker selection</a></li>
+<li><a class="current" aria-current="page" href="../concepts/model-registration.html">Model registration</a></li>
+<li><a href="../concepts/compat-patches.html">Compat patches</a></li>
+</ul>
+<p class="nav-group">Roles and topology</p>
+<ul>
+<li><a href="../concepts/roles.html">Attention and FFN roles</a></li>
+<li><a href="../concepts/topology.html">Topology and role ranks</a></li>
+</ul>
+<p class="nav-group">Connectors</p>
+<ul>
+<li><a href="../concepts/connector-contract.html">The connector contract</a></li>
+<li><a href="../concepts/control-plane.html">The control plane</a></li>
+<li><a href="../concepts/wire-data.html">Data on the wire</a></li>
+</ul>
+<p class="nav-group">Model split</p>
+<ul>
+<li><a href="../concepts/model-wrappers.html">Model wrappers</a></li>
+<li><a href="../concepts/moe-handoff.html">The MoE handoff</a></li>
+</ul>
+<p class="nav-group">Execution</p>
+<ul>
+<li><a href="../concepts/attention-runtime.html">Attention runtime</a></li>
+<li><a href="../concepts/ffn-runtime.html">FFN runtime</a></li>
+<li><a href="../concepts/cuda-graphs.html">CUDA graphs</a></li>
+<li><a href="../concepts/dbo.html">Dual-batch overlap</a></li>
+</ul>
+<p class="nav-group">Deploy and tune</p>
+<ul>
+<li><a href="../concepts/deployment-topologies.html">Deployment topologies</a></li>
+<li><a href="../concepts/tuning.html">Tuning</a></li>
+</ul>
+<p class="nav-group">Ascend NPU</p>
+<ul>
+<li><a href="../concepts/npu-overview.html">Ascend NPU overview</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Guided tours</span><span class="nav-count" title="4 of 4 pages written">4/4</span></summary>
+<ul>
+<li><a href="../tours/start-up.html">Start-up</a></li>
+<li><a href="../tours/life-of-a-request.html">Life of a request</a></li>
+<li><a href="../tours/one-decode-step.html">One decode step</a></li>
+<li><a href="../tours/run-a-recipe.html">Run a recipe</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Code map</span><span class="nav-count" title="9 of 9 pages written">9/9</span></summary>
+<p class="nav-group">Overview</p>
+<ul>
+<li><a href="../code/index.html">Folder tree</a></li>
+</ul>
+<p class="nav-group">Modules</p>
+<ul>
+<li><a href="../code/init-py.html">afd_plugin/__init__.py</a></li>
+<li><a href="../code/config-py.html">config.py</a></li>
+<li><a href="../code/validation-py.html">validation.py</a></li>
+<li><a href="../code/connectors-core.html">connectors/base.py</a></li>
+<li><a href="../code/p2p-py.html">connectors/gpu/p2p.py</a></li>
+<li><a href="../code/attention-worker.html">attention_worker.py</a></li>
+<li><a href="../code/ffn-worker.html">ffn_worker.py</a></li>
+<li><a href="../code/deepseek-v2-py.html">deepseek_v2.py</a></li>
+</ul>
+</details>
+<details class="nav-sec"><summary><span class="nav-sec-title">Reference</span><span class="nav-count" title="6 of 6 pages written">6/6</span></summary>
+<ul>
+<li><a href="../reference/afd-config.html">AFD config reference</a></li>
+<li><a href="../reference/env-vars.html">Environment variables</a></li>
+<li><a href="../reference/recipes.html">Recipes</a></li>
+<li><a href="../reference/compat-patches.html">Compat patches</a></li>
+<li><a href="../reference/faq.html">FAQ</a></li>
+<li><a href="../reference/glossary.html">Glossary</a></li>
+</ul>
+</details>
+</nav>
+</aside>
+<div class="scrim" hidden></div>
+<main id="main" class="main">
+<article class="article">
+<nav class="breadcrumbs" aria-label="Breadcrumbs"><a href="../index.html">Home</a><span class="sep">›</span><span>AFD concepts</span><span class="sep">›</span><span>Plugin boundary</span><span class="sep">›</span><span aria-current="page">Model registration</span></nav>
+<h1 class="page-title">Model registration: the AFD&lt;arch&gt; wrappers</h1>
+<div class="page-meta"><span class="level level-intermediate" title="Level">Intermediate</span><span class="meta-sec">AFD concepts</span><span class="meta-time">about 4 min read + 1 min deep dives</span><button type="button" class="dd-toggle-all">Open all deep dives</button></div>
+<p class="code-version">Code version: afd-plugin @ <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener" title="7452d52748fec2a858b63e4cb22941dadd7a3ee3"><code>7452d52</code></a> · 2026-10-27 · vLLM @ <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener" title="ced6857afa0ea7b2e3f0846a62e1394e90f15607"><code>ced6857</code></a></p>
+<aside class="before-read"><p class="before-read-title">Before you read</p><p>This page uses ideas from these pages:</p><ul><li><a href="../concepts/plugin-entry-point.html">The plugin entry point: register_afd</a> <span class="level level-intermediate level-sm">Intermediate</span></li></ul></aside>
+<div class="one-sentence"><p class="one-sentence-label">In one sentence</p><p class="one-sentence-text">AFD registers each supported model under an <code>AFD&lt;arch&gt;</code> name. At build time it swaps the model config to that <a class="term" href="../reference/glossary.html#term-model-wrapper" data-term="model wrapper" data-def="An AFD&lt;arch&gt; model class that makes a model role-aware. On the attention side the FFN stage becomes a remote proxy.">AFD identity</a>.</p></div>
+
+<h2 id="the-idea">The idea<a class="h-anchor" href="#the-idea" aria-label="Link to this section">#</a></h2>
+<p><a class="term" href="../reference/glossary.html#term-afd" data-term="AFD" data-def="Attention-FFN Disaggregation. The attention part and the feed-forward (FFN/MoE) part of a model run in separate server processes and exchange hidden states.">AFD</a> needs a role-aware version of each model, so the attention side can replace the FFN
+stage with a remote proxy. It supplies one <code>AFD&lt;arch&gt;</code> class per architecture. It
+registers these classes with vLLM's <a class="term" href="../reference/glossary.html#term-model-registry" data-term="ModelRegistry" data-def="vLLM&#x27;s registry of model architectures. A plugin adds a model with register_model, using a lazy &quot;module:Class&quot; string.">ModelRegistry</a>, as lazy
+<code>"module:Class"</code> strings, so vLLM imports a class only when it is needed.</p>
+<p>The model config names a plain architecture, for example <code>DeepseekV2ForCausalLM</code>. At
+build time, the AFD worker swaps that name to <code>AFDDeepseekV2ForCausalLM</code>, so vLLM builds
+the AFD class instead of the native one. The swap copies the config, so the native config is left
+unchanged.</p>
+<p><strong>An everyday comparison.</strong> Think of a catalogue with an "AFD" edition of each item.
+You order by the plain name; the clerk swaps in the AFD edition. The comparison stops here: the
+swap keeps one hidden link intact, so vLLM Ascend can still tell a text model from a multimodal one.</p>
+
+<h2 id="the-picture">The picture<a class="h-anchor" href="#the-picture" aria-label="Link to this section">#</a></h2>
+<figure class="diagram" id="fig-b1_model_registration"><div class="diagram-card"><button type="button" class="diagram-zoom" aria-label="Zoom diagram: Three panels. Panel 1: a _MODEL_REGISTRATIONS box mapping arch to a module:Class string, an arrow labelled AFD+arch, and a ModelRegistry.register_model box with a lazy string. Panel 2: a has_afd_model_registration box that checks arch minus the AFD prefix is in the map, and a get_afd_model_config box that deepcopies and sets architectures to AFD+arch while keeping hf_text_config is hf_config. Panel 3: three mappings, DeepseekV32 reuses the V3 class, DeepseekV4 picks NPU or GPU by torch_npu, and Qwen3_5 is CUDA only."><svg role="img" aria-label="Three panels. Panel 1: a _MODEL_REGISTRATIONS box mapping arch to a module:Class string, an arrow labelled AFD+arch, and a ModelRegistry.register_model box with a lazy string. Panel 2: a has_afd_model_registration box that checks arch minus the AFD prefix is in the map, and a get_afd_model_config box that deepcopies and sets architectures to AFD+arch while keeping hf_text_config is hf_config. Panel 3: three mappings, DeepseekV32 reuses the V3 class, DeepseekV4 picks NPU or GPU by torch_npu, and Qwen3_5 is CUDA only." xmlns="http://www.w3.org/2000/svg" width="1100" height="718" viewBox="0 0 1100 718">
+<defs><marker id="dg-b1_model_registration-m0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/></marker></defs>
+<rect width="1100" height="718" fill="#ffffff"/>
+<text x="30.0" y="42.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="26" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Registering AFD model wrappers</text>
+<text x="30.0" y="68.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">Each base architecture name is registered as AFD&lt;arch&gt;, as a lazy string, then swapped in at build time.</text>
+<text x="30.0" y="88.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">afd_plugin/__init__.py:96-214  ·  model_utils.py:16-46</text>
+<rect x="20.0" y="118.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="144.0" r="13" fill="#111827"/>
+<text x="46.0" y="148.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">1</text>
+<text x="68.0" y="149.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">At plugin load: register each AFD&lt;arch&gt; name</text>
+<text x="68.0" y="168.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The value is a &#x27;module:Class&#x27; string, so vLLM imports the class only when it is needed.</text>
+<rect x="60.0" y="188.0" width="430.0" height="60.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="72.0" y="208.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">_MODEL_REGISTRATIONS</text>
+<text x="72.0" y="226.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">arch -&gt; &quot;module:Class&quot;</text>
+<line x1="494.0" y1="218.0" x2="598.0" y2="218.0" stroke="#6b7280" stroke-width="2" marker-end="url(#dg-b1_model_registration-m0)"/>
+<text x="546.0" y="208.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="11.5" fill="#6b7280" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">AFD + arch</text>
+<rect x="600.0" y="188.0" width="440.0" height="60.0" rx="8" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.5"/>
+<text x="612.0" y="208.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#0d9488" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">ModelRegistry.register_model</text>
+<text x="612.0" y="226.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">(&quot;AFD&quot;+arch, lazy string)</text>
+<rect x="20.0" y="288.0" width="1060.0" height="160.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="314.0" r="13" fill="#111827"/>
+<text x="46.0" y="318.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">2</text>
+<text x="68.0" y="319.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">At build time: find and swap the model identity</text>
+<text x="68.0" y="338.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The worker asks model_utils whether the model is AFD, then rewrites the architecture name.</text>
+<rect x="60.0" y="358.0" width="470.0" height="72.0" rx="8" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.5"/>
+<text x="72.0" y="378.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#059669" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">has_afd_model_registration</text>
+<text x="72.0" y="396.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">arch.removeprefix(&quot;AFD&quot;) in the map</text>
+<rect x="560.0" y="358.0" width="480.0" height="72.0" rx="8" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.5"/>
+<text x="572.0" y="378.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#2563eb" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">get_afd_model_config</text>
+<text x="572.0" y="396.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">deepcopy, architectures = [&quot;AFD&quot;+arch]</text>
+<text x="572.0" y="411.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">keeps hf_text_config is hf_config</text>
+<rect x="20.0" y="468.0" width="1060.0" height="150.0" rx="14" fill="#fafafa" fill-opacity="1.0" stroke="#e5e7eb" stroke-width="1"/>
+<circle cx="46.0" cy="494.0" r="13" fill="#111827"/>
+<text x="46.0" y="498.9" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#fff" font-weight="bold" text-anchor="middle" xml:space="preserve" style="white-space:pre">3</text>
+<text x="68.0" y="499.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Three mappings to remember</text>
+<text x="68.0" y="518.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">The README names families loosely; the code registers these exact strings.</text>
+<rect x="50.0" y="538.0" width="320.0" height="64.0" rx="8" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="62.0" y="558.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#9ca3af" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">DeepseekV32ForCausalLM</text>
+<text x="62.0" y="576.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">-&gt; AFDDeepseekV3</text>
+<text x="62.0" y="591.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">reuses the V3 class</text>
+<rect x="390.0" y="538.0" width="320.0" height="64.0" rx="8" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="402.0" y="558.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#7c3aed" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">DeepseekV4ForCausalLM</text>
+<text x="402.0" y="576.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">-&gt; NPU or GPU class</text>
+<text x="402.0" y="591.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">chosen by torch_npu</text>
+<rect x="730.0" y="538.0" width="320.0" height="64.0" rx="8" fill="#fdf2f8" fill-opacity="1.0" stroke="#db2777" stroke-width="1.5"/>
+<text x="742.0" y="558.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" fill="#db2777" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Qwen3_5MoeFor...Generation</text>
+<text x="742.0" y="576.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">-&gt; AFDQwen3_5...</text>
+<text x="742.0" y="591.0" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="11.5" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">CUDA execution only</text>
+<text x="30.0" y="647.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#111827" font-weight="bold" text-anchor="start" xml:space="preserve" style="white-space:pre">Legend</text>
+<rect x="97.3" y="636.0" width="14.0" height="14.0" rx="3" fill="#e5e7eb" fill-opacity="1.0" stroke="#9ca3af" stroke-width="1.4"/>
+<text x="118.3" y="647.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">map / base arch</text>
+<rect x="235.3" y="636.0" width="14.0" height="14.0" rx="3" fill="#f0fdfa" fill-opacity="1.0" stroke="#0d9488" stroke-width="1.4"/>
+<text x="256.3" y="647.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">register</text>
+<rect x="330.4" y="636.0" width="14.0" height="14.0" rx="3" fill="#ecfdf5" fill-opacity="1.0" stroke="#059669" stroke-width="1.4"/>
+<text x="351.4" y="647.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">detect</text>
+<rect x="415.6" y="636.0" width="14.0" height="14.0" rx="3" fill="#eff6ff" fill-opacity="1.0" stroke="#2563eb" stroke-width="1.4"/>
+<text x="436.6" y="647.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">rewrite identity</text>
+<rect x="557.1" y="636.0" width="14.0" height="14.0" rx="3" fill="#f5f3ff" fill-opacity="1.0" stroke="#7c3aed" stroke-width="1.4"/>
+<text x="578.1" y="647.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">NPU</text>
+<rect x="627.2" y="636.0" width="14.0" height="14.0" rx="3" fill="#fdf2f8" fill-opacity="1.0" stroke="#db2777" stroke-width="1.4"/>
+<text x="648.2" y="647.5" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#111827" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">CUDA only</text>
+<text x="30.0" y="670.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">deepcopy keeps aliasing, so hf_text_config is hf_config stays true; vLLM Ascend uses that identity to tell text models from multimodal (model_utils.py:39-43).</text>
+<text x="30.0" y="688.0" font-family="Inter,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#6b7280" font-weight="normal" text-anchor="start" xml:space="preserve" style="white-space:pre">get_afd_model_config raises for Qwen3.5/3.6 when device_type is not cuda (model_utils.py:34-38).</text>
+</svg></button></div><div class="diagram-meta"><figcaption>Figure: registration by name (panel 1), the build-time identity swap (panel 2), and three mappings to remember (panel 3).</figcaption><a class="diagram-open" href="../diagrams/b1_model_registration.svg" target="_blank">Open full size ↗</a></div></figure>
+<p>Read panel 1 as load time: register the names. Read panel 2 as build time: detect and swap the
+identity. Read panel 3 as the exact mappings. The <a href="../concepts/model-wrappers.html">Model wrappers: the role-aware decoder layer</a> page shows what
+the wrappers do inside.</p>
+
+<h2 id="in-the-code">In the code<a class="h-anchor" href="#in-the-code" aria-label="Link to this section">#</a></h2>
+
+<h3 id="step-1-register-each-afd-name">Step 1: Register each AFD<arch> name<a class="h-anchor" href="#step-1-register-each-afd-name" aria-label="Link to this section">#</a></h3>
+<p>At the end of <code>register_afd</code>, a loop registers each architecture under the name
+<code>"AFD" + arch</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L211-L214" target="_blank" rel="noopener" title="afd_plugin/__init__.py:211-214 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:211-214</code></a>). The source map holds eight
+architectures (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L96-L139" target="_blank" rel="noopener" title="afd_plugin/__init__.py:96-139 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:96-139</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L211-L214" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/__init__.py:211-214</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L211-L214" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">211</span><span class="ln">212</span><span class="ln">213</span><span class="ln">214</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">    from vllm.model_executor.models import ModelRegistry
+
+    for model_arch, model_cls in _MODEL_REGISTRATIONS.items():
+        ModelRegistry.register_model(f&quot;AFD{model_arch}&quot;, model_cls)</code></pre></div></div></div><figcaption class="code-caption">Register each model under its AFD-prefixed name.</figcaption></figure>
+
+<h3 id="step-2-the-lazy-module-class-form">Step 2: The lazy "module:Class" form<a class="h-anchor" href="#step-2-the-lazy-module-class-form" aria-label="Link to this section">#</a></h3>
+<p>The registered value is a string, not a class. vLLM stores it and imports the class only when the
+model is built (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/model_executor/models/registry.py#L1126-L1141" target="_blank" rel="noopener" title="vllm:vllm/model_executor/models/registry.py:1126-1141 at vLLM ced6857"><code>vllm:vllm/model_executor/models/registry.py:1126-1141</code></a>). So loading the
+plugin does not import every model file.</p>
+
+<h3 id="step-3-detect-an-afd-model">Step 3: Detect an AFD model<a class="h-anchor" href="#step-3-detect-an-afd-model" aria-label="Link to this section">#</a></h3>
+<p><code>has_afd_model_registration</code> returns true when the model's architecture, with any
+<code>AFD</code> prefix removed, is in the map (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L16-L22" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/model_utils.py:16-22 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/model_utils.py:16-22</code></a>).
+The runtime validator uses it to require a registered AFD model
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L136-L141" target="_blank" rel="noopener" title="afd_plugin/validation.py:136-141 at afd-plugin 7452d52"><code>afd_plugin/validation.py:136-141</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L16-L22" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/model_executor/models/model_utils.py:16-22</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L16-L22" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">16</span><span class="ln">17</span><span class="ln">18</span><span class="ln">19</span><span class="ln">20</span><span class="ln">21</span><span class="ln">22</span></div><div class="code-scroll"><div class="code-inner"><pre><code class="language-python">def has_afd_model_registration(model_config: ModelConfig) -&gt; bool:
+    &quot;&quot;&quot;Return whether the model resolves to a registered AFD implementation.&quot;&quot;&quot;
+
+    return any(
+        model_arch.removeprefix(&quot;AFD&quot;) in _MODEL_REGISTRATIONS
+        for model_arch in model_config.hf_config.architectures
+    )</code></pre></div></div></div><figcaption class="code-caption">has_afd_model_registration: is the base arch in the map?</figcaption></figure>
+
+<h3 id="step-4-swap-the-model-identity">Step 4: Swap the model identity<a class="h-anchor" href="#step-4-swap-the-model-identity" aria-label="Link to this section">#</a></h3>
+<p><code>get_afd_model_config</code> finds the architecture in the map, deep-copies the model config,
+and sets its architecture to <code>AFD&lt;arch&gt;</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L25-L46" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/model_utils.py:25-46 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/model_utils.py:25-46</code></a>). The worker then uses the returned
+config (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/v1/worker/attention_worker.py#L75-L80" target="_blank" rel="noopener" title="afd_plugin/v1/worker/attention_worker.py:75-80 at afd-plugin 7452d52"><code>afd_plugin/v1/worker/attention_worker.py:75-80</code></a>).</p>
+<figure class="code-excerpt" data-lang="python"><div class="code-head"><a class="code-path" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L32-L46" target="_blank" rel="noopener" title="Open on GitHub at commit 7452d52">afd_plugin/model_executor/models/model_utils.py:32-46</a><span class="code-actions"><a class="code-gh" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L32-L46" target="_blank" rel="noopener">GitHub ↗</a><button type="button" class="code-copy" aria-label="Copy code">Copy</button></span></div><div class="code-body"><div class="code-gutter" aria-hidden="true"><span class="ln">32</span><span class="ln">33</span><span class="ln">34</span><span class="ln">35</span><span class="ln">36</span><span class="ln">37</span><span class="ln">38</span><span class="ln hl">39</span><span class="ln hl">40</span><span class="ln hl">41</span><span class="ln hl">42</span><span class="ln hl">43</span><span class="ln hl">44</span><span class="ln">45</span><span class="ln">46</span></div><div class="code-scroll"><div class="code-inner"><span class="hl-bar" style="top:calc(7 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(8 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(9 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(10 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(11 * var(--code-lh))"></span><span class="hl-bar" style="top:calc(12 * var(--code-lh))"></span><pre><code class="language-python">    for model_arch in model_config.hf_config.architectures:
+        if model_arch in _MODEL_REGISTRATIONS:
+            if model_arch in _QWEN3_5_MODEL_REGISTRATIONS and device_type != &quot;cuda&quot;:
+                raise ValueError(
+                    &quot;AFD Qwen3.5/3.6 supports CUDA execution only; &quot;
+                    f&quot;got device_type={device_type!r}&quot;,
+                )
+            # deepcopy preserves aliasing within the copied object graph, so
+            # the pure-text identity hf_text_config is hf_config is retained
+            # automatically. vLLM Ascend uses that identity to distinguish
+            # text models from multimodal models.
+            afd_model_config = deepcopy(model_config)
+            afd_model_config.hf_config.architectures = [f&quot;AFD{model_arch}&quot;]
+            return afd_model_config
+    return model_config</code></pre></div></div></div><figcaption class="code-caption">deepcopy the config, then rewrite the architecture name.</figcaption></figure>
+
+<h3 id="step-5-which-architectures-map-to-which-wrapper">Step 5: Which architectures map to which wrapper<a class="h-anchor" href="#step-5-which-architectures-map-to-which-wrapper" aria-label="Link to this section">#</a></h3>
+<p>The map registers these exact strings (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L96-L131" target="_blank" rel="noopener" title="afd_plugin/__init__.py:96-131 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:96-131</code></a>).</p>
+<table>
+  <thead><tr><th>Architecture</th><th>AFD wrapper class</th><th>Note</th></tr></thead>
+  <tbody>
+    <tr><td><code>DeepseekV2ForCausalLM</code></td><td><code>AFDDeepseekV2ForCausalLM</code></td><td>&nbsp;</td></tr>
+    <tr><td><code>DeepseekV3ForCausalLM</code></td><td><code>AFDDeepseekV3ForCausalLM</code></td><td>&nbsp;</td></tr>
+    <tr><td><code>DeepseekV32ForCausalLM</code></td><td><code>AFDDeepseekV3ForCausalLM</code></td><td>V3.2 reuses the V3 class (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L106-L108" target="_blank" rel="noopener" title="afd_plugin/__init__.py:106-108 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:106-108</code></a>).</td></tr>
+    <tr><td><code>DeepseekV4ForCausalLM</code></td><td>NPU or GPU V4 class</td><td>NPU class when <code>torch_npu</code> is importable, else the GPU class (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L109-L113" target="_blank" rel="noopener" title="afd_plugin/__init__.py:109-113 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:109-113</code></a>).</td></tr>
+    <tr><td><code>Qwen3MoeForCausalLM</code></td><td><code>AFDQwen3MoeForCausalLM</code></td><td>&nbsp;</td></tr>
+    <tr><td><code>Qwen3_5MoeForConditionalGeneration</code></td><td><code>AFDQwen3_5MoeForConditionalGeneration</code></td><td>CUDA execution only (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L34-L38" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/model_utils.py:34-38 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/model_utils.py:34-38</code></a>).</td></tr>
+  </tbody>
+</table>
+<p>The map also registers <code>DeepseekForCausalLM</code> and <code>GlmMoeDsaForCausalLM</code>
+(<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L96-L116" target="_blank" rel="noopener" title="afd_plugin/__init__.py:96-116 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:96-116</code></a>).</p>
+
+<h2 id="deep-dive">Deep dive<a class="h-anchor" href="#deep-dive" aria-label="Link to this section">#</a></h2>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="why-deepcopy-and-the-hf-text-config-identity" class="dd-title">Why deepcopy, and the hf_text_config identity</h3></summary><div class="dd-body"><p><code>get_afd_model_config</code> does not change the original config. It deep-copies it, then sets
+the architecture on the copy (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L43-L45" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/model_utils.py:43-45 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/model_utils.py:43-45</code></a>).</p>
+<ul>
+  <li><strong>deepcopy keeps the inner aliasing.</strong> A code comment states the reason: the
+      pure-text identity <code>hf_text_config is hf_config</code> is kept automatically, because
+      deepcopy preserves aliasing within the copied object graph
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L39-L43" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/model_utils.py:39-43 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/model_utils.py:39-43</code></a>).</li>
+  <li><strong>vLLM Ascend reads that identity.</strong> It uses the same-object check to tell a
+      text model from a multimodal model. So the swap must not break it.</li>
+  <li><strong>Only the architecture name changes.</strong> The rest of the config is the copy of the
+      original (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L44" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/model_utils.py:44 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/model_utils.py:44</code></a>).</li>
+</ul></div></details>
+
+<details class="deepdive"><summary><span class="dd-label">Deep dive</span><h3 id="readme-names-a-family-the-code-registers-one-string" class="dd-title">README names a family; the code registers one string</h3></summary><div class="dd-body"><p>The README names model families loosely. The code registers exact architecture strings.</p>
+<ul>
+  <li>The README lists "Qwen3.5 / Qwen3.6 MoE" (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/README.md#L51" target="_blank" rel="noopener" title="README.md:51 at afd-plugin 7452d52"><code>README.md:51</code></a>), but the code registers one
+      architecture, <code>Qwen3_5MoeForConditionalGeneration</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L125-L131" target="_blank" rel="noopener" title="afd_plugin/__init__.py:125-131 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:125-131</code></a>).</li>
+  <li><code>get_afd_model_config</code> raises for that architecture when the device type is not
+      <code>cuda</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L34-L38" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/model_utils.py:34-38 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/model_utils.py:34-38</code></a>). So Qwen3.5
+      and Qwen3.6 run on CUDA only.</li>
+  <li><code>DeepseekV4ForCausalLM</code> resolves to the NPU class or the GPU class, chosen at import
+      by <code>torch_npu</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L109-L113" target="_blank" rel="noopener" title="afd_plugin/__init__.py:109-113 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:109-113</code></a>).</li>
+</ul></div></details>
+
+<h2 id="what-can-go-wrong">What can go wrong<a class="h-anchor" href="#what-can-go-wrong" aria-label="Link to this section">#</a></h2>
+<ul>
+  <li><strong>Model not registered.</strong> A model whose architecture is not in the map fails the
+      runtime check: "AFD ModelRunnerV2 requires a registered AFD model"
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/validation.py#L136-L141" target="_blank" rel="noopener" title="afd_plugin/validation.py:136-141 at afd-plugin 7452d52"><code>afd_plugin/validation.py:136-141</code></a>).</li>
+  <li><strong>Qwen3.5 on NPU.</strong> <code>get_afd_model_config</code> raises for a non-CUDA device
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L34-L38" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/model_utils.py:34-38 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/model_utils.py:34-38</code></a>).</li>
+  <li><strong>Model file import error.</strong> Because the registration is a lazy string, an import
+      error in the model file surfaces when vLLM builds the model, not when the plugin loads
+      (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/model_executor/models/registry.py#L1126-L1141" target="_blank" rel="noopener" title="vllm:vllm/model_executor/models/registry.py:1126-1141 at vLLM ced6857"><code>vllm:vllm/model_executor/models/registry.py:1126-1141</code></a>).</li>
+</ul>
+<p><strong>Why it matters.</strong> The worker runs an AFD model only after the identity swap. If the
+architecture is not registered, the swap does nothing and the runtime check stops start-up.</p>
+
+<section class="quiz"><h2 id="check-yourself">Check yourself<a class="h-anchor" href="#check-yourself" aria-label="Link to this section">#</a></h2><ol class="q-list"><li class="q"><div class="q-text"><span class="q-num">1</span><div>Under what name is <code>Qwen3MoeForCausalLM</code> registered?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p><code>AFDQwen3MoeForCausalLM</code>. The loop registers each key under
+      <code>"AFD" + key</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L211-L214" target="_blank" rel="noopener" title="afd_plugin/__init__.py:211-214 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:211-214</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">2</span><div>Why is the registered value a string, not a class?</div><span class="q-level q-easy">easy</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>So vLLM imports the model class only when it is needed, not when the plugin loads
+      (<a class="cite" href="https://github.com/vllm-project/vllm/blob/ced6857afa0ea7b2e3f0846a62e1394e90f15607/vllm/model_executor/models/registry.py#L1126-L1141" target="_blank" rel="noopener" title="vllm:vllm/model_executor/models/registry.py:1126-1141 at vLLM ced6857"><code>vllm:vllm/model_executor/models/registry.py:1126-1141</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">3</span><div>What does <code>get_afd_model_config</code> change, and what does it keep?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>It deep-copies the config and changes only the architecture name to
+      <code>AFD&lt;arch&gt;</code> (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L43-L45" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/model_utils.py:43-45 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/model_utils.py:43-45</code></a>).
+      It keeps the <code>hf_text_config is hf_config</code> identity
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L39-L43" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/model_utils.py:39-43 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/model_utils.py:39-43</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">4</span><div>The README says "Qwen3.5 / Qwen3.6". Which architecture string does the code
+    register?</div><span class="q-level q-medium">medium</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>One: <code>Qwen3_5MoeForConditionalGeneration</code>
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/__init__.py#L125-L131" target="_blank" rel="noopener" title="afd_plugin/__init__.py:125-131 at afd-plugin 7452d52"><code>afd_plugin/__init__.py:125-131</code></a>).</p></div></details></li><li class="q"><div class="q-text"><span class="q-num">5</span><div>Why does <code>get_afd_model_config</code> use <code>deepcopy</code> instead of
+    editing the architecture in place?</div><span class="q-level q-hard">hard</span></div><details class="q-answer"><summary>Show answer</summary><div class="q-answer-body"><p>To leave the original config unchanged, and because deepcopy preserves the inner aliasing
+      so <code>hf_text_config is hf_config</code> stays true. vLLM Ascend uses that identity to tell a
+      text model from a multimodal one
+      (<a class="cite" href="https://github.com/vllm-project/afd-plugin/blob/7452d52748fec2a858b63e4cb22941dadd7a3ee3/afd_plugin/model_executor/models/model_utils.py#L39-L45" target="_blank" rel="noopener" title="afd_plugin/model_executor/models/model_utils.py:39-45 at afd-plugin 7452d52"><code>afd_plugin/model_executor/models/model_utils.py:39-45</code></a>).</p></div></details></li></ol><p class="quiz-tools"><button type="button" class="quiz-toggle">Show all answers</button></p></section>
+
+<section class="related"><h2 id="related-pages">Related pages</h2><ul><li><a href="../concepts/model-wrappers.html">Model wrappers: the role-aware decoder layer</a><span class="rel-sum">Each supported model gets an AFD wrapper. The wrapper builds a decoder layer that constructs only the modules its role owns, and routes the FFN stage through the connector.</span></li><li><a href="../concepts/worker-selection.html">Worker selection: choosing the role worker</a><span class="rel-sum">AFD chooses a role-specific worker class by rewriting parallel_config.worker_cls, but only when the user left it as &quot;auto&quot;. This page shows the rewrite, the platform-to-worker table, the native resolution, the runner swap and the compatibility check.</span></li><li><a href="../code/init-py.html">afd_plugin/__init__.py: the plugin entry module</a><span class="rel-sum">The package init holds register_afd (the entry point vLLM calls), the AFD model table, and the opt-in spawn override. This page reads it step by step.</span></li><li><a href="../code/deepseek-v2-py.html">model_executor/models/deepseek_v2.py: the DeepSeek wrapper</a><span class="rel-sum">This file holds the DeepSeek AFD wrapper: the role-aware decoder layer, the remote FFN proxies, the remote-experts MoE shell, and the model and causal-LM classes that filter weights by role.</span></li></ul></section>
+<nav class="prevnext" aria-label="Previous and next page"><a class="pn pn-prev" href="../concepts/worker-selection.html"><span class="pn-dir">← Previous</span><span class="pn-title">Worker selection: choosing the role worker</span></a><a class="pn pn-next" href="../concepts/compat-patches.html"><span class="pn-dir">Next →</span><span class="pn-title">Compat patches: how AFD changes vLLM without editing it</span></a></nav>
+<footer class="page-foot"><p class="foot-commit">Code version: afd-plugin <a href="https://github.com/vllm-project/afd-plugin/tree/7452d52748fec2a858b63e4cb22941dadd7a3ee3" target="_blank" rel="noopener"><code class="foot-sha">7452d52748fec2a858b63e4cb22941dadd7a3ee3</code></a> · 2026-10-27 19:15:00 +0800 · “Provide a skill for benchmarking AFD recipes (#465)”<br>vLLM: <a href="https://github.com/vllm-project/vllm/tree/ced6857afa0ea7b2e3f0846a62e1394e90f15607" target="_blank" rel="noopener"><code class="foot-sha">ced6857afa0ea7b2e3f0846a62e1394e90f15607</code></a> · 2026-09-21 15:32:49 -0700 · <a href="../index.html#code-version">How to study this version</a></p><p>Source: <a href="https://github.com/vllm-project/afd-plugin" target="_blank" rel="noopener">vllm-project/afd-plugin</a> · Built 2026-10-29 · Code excerpts are copied from the repo at this commit by the build.</p></footer>
+</article>
+<nav class="toc" aria-label="On this page"><p class="toc-title">On this page</p><ul><li class="toc-l2"><a href="#the-idea">The idea</a></li><li class="toc-l2"><a href="#the-picture">The picture</a></li><li class="toc-l2"><a href="#in-the-code">In the code</a></li><li class="toc-l3"><a href="#step-1-register-each-afd-name">Step 1: Register each AFD name</a></li><li class="toc-l3"><a href="#step-2-the-lazy-module-class-form">Step 2: The lazy &quot;module:Class&quot; form</a></li><li class="toc-l3"><a href="#step-3-detect-an-afd-model">Step 3: Detect an AFD model</a></li><li class="toc-l3"><a href="#step-4-swap-the-model-identity">Step 4: Swap the model identity</a></li><li class="toc-l3"><a href="#step-5-which-architectures-map-to-which-wrapper">Step 5: Which architectures map to which wrapper</a></li><li class="toc-l2"><a href="#deep-dive">Deep dive</a></li><li class="toc-l3"><a href="#why-deepcopy-and-the-hf-text-config-identity">Why deepcopy, and the hf_text_config identity</a></li><li class="toc-l3"><a href="#readme-names-a-family-the-code-registers-one-string">README names a family; the code registers one string</a></li><li class="toc-l2"><a href="#what-can-go-wrong">What can go wrong</a></li><li class="toc-l2"><a href="#check-yourself">Check yourself</a></li><li class="toc-l2"><a href="#related-pages">Related pages</a></li></ul></nav>
+</main>
+</div>
+<div class="lightbox" hidden><div class="lightbox-bar"><span class="lightbox-hint">Scroll to pan. Press Esc to close.</span><button type="button" class="lightbox-close">Close ✕</button></div><div class="lightbox-body"></div></div>
+<div class="tooltip" role="tooltip" id="term-tooltip" hidden></div>
+<script src="../assets/search-index.js" defer></script>
+<script src="../assets/site.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-clike.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-toml.min.js" defer></script>
+</body>
+</html>
